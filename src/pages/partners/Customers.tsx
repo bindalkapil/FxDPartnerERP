@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { User, Search, Filter, Plus, FileText, Trash2, Edit, CreditCard, AlertTriangle } from 'lucide-react';
+import { User, Search, Filter, Eye, Pencil, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 
 interface Customer {
   id: string;
@@ -21,7 +23,7 @@ const mockCustomers: Customer[] = [
     type: 'Retailer',
     contact: '9876543210',
     email: 'abc@retail.com',
-    address: '123 Market Street, City',
+    address: '123 Market Street, City Center',
     creditLimit: 50000,
     currentBalance: 15000,
     status: 'active',
@@ -33,7 +35,7 @@ const mockCustomers: Customer[] = [
     type: 'Wholesaler',
     contact: '8765432109',
     email: 'xyz@wholesale.com',
-    address: '456 Business Hub, City',
+    address: '456 Business Hub, West End',
     creditLimit: 100000,
     currentBalance: 75000,
     status: 'active',
@@ -48,17 +50,17 @@ const mockCustomers: Customer[] = [
     address: '789 Food Street, City',
     creditLimit: 25000,
     currentBalance: 5000,
-    status: 'active',
+    status: 'inactive',
     lastTransaction: '2025-06-16'
   }
 ];
 
 const Customers: React.FC = () => {
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [showModal, setShowModal] = useState(false);
   
   const filteredCustomers = customers.filter(customer => {
     const matchesSearch = 
@@ -71,8 +73,15 @@ const Customers: React.FC = () => {
     
     return matchesSearch && matchesType && matchesStatus;
   });
-  
+
   const customerTypes = Array.from(new Set(customers.map(customer => customer.type)));
+
+  const handleStatusChange = (id: string, newStatus: 'active' | 'inactive') => {
+    setCustomers(prev => prev.map(customer => 
+      customer.id === id ? { ...customer, status: newStatus } : customer
+    ));
+    toast.success(`Customer ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
+  };
   
   return (
     <div className="space-y-6">
@@ -82,10 +91,9 @@ const Customers: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-800">Customer Management</h1>
         </div>
         <button 
-          onClick={() => setShowModal(true)}
-          className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
+          onClick={() => navigate('/customers/new')}
+          className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200"
         >
-          <Plus className="h-4 w-4 mr-1" />
           Add Customer
         </button>
       </div>
@@ -112,29 +120,27 @@ const Customers: React.FC = () => {
               </p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-blue-100 text-blue-600">
-              <CreditCard className="h-5 w-5" />
+              <FileText className="h-5 w-5" />
             </div>
           </div>
         </div>
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">High Credit Usage</p>
+              <p className="text-sm font-medium text-gray-500">Active Customers</p>
               <p className="text-2xl font-bold text-gray-800">
-                {customers.filter(customer => 
-                  (customer.currentBalance / customer.creditLimit) > 0.8
-                ).length}
+                {customers.filter(customer => customer.status === 'active').length}
               </p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-yellow-100 text-yellow-600">
-              <AlertTriangle className="h-5 w-5" />
+              <User className="h-5 w-5" />
             </div>
           </div>
         </div>
       </div>
       
       {/* Filters and Search */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-3 md:space-y-0 md:space-x-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-3 md:space-y-0">
         <div className="relative flex-1 max-w-xs">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search className="h-4 w-4 text-gray-400" />
@@ -226,24 +232,32 @@ const Customers: React.FC = () => {
                     {customer.lastTransaction}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      customer.status === 'active' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {customer.status === 'active' ? 'Active' : 'Inactive'}
-                    </span>
+                    <select
+                      value={customer.status}
+                      onChange={(e) => handleStatusChange(customer.id, e.target.value as 'active' | 'inactive')}
+                      className={`text-sm rounded-full px-3 py-1 ${
+                        customer.status === 'active' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <button className="text-indigo-600 hover:text-indigo-900">
-                        <Edit className="h-4 w-4" />
+                      <button 
+                        onClick={() => navigate(`/customers/view/${customer.id}`)}
+                        className="text-indigo-600 hover:text-indigo-900"
+                      >
+                        <Eye className="h-4 w-4" />
                       </button>
-                      <button className="text-gray-600 hover:text-gray-900">
-                        <FileText className="h-4 w-4" />
-                      </button>
-                      <button className="text-red-600 hover:text-red-900">
-                        <Trash2 className="h-4 w-4" />
+                      <button 
+                        onClick={() => navigate(`/customers/edit/${customer.id}`)}
+                        className="text-gray-600 hover:text-gray-900"
+                      >
+                        <Pencil className="h-4 w-4" />
                       </button>
                     </div>
                   </td>
@@ -259,135 +273,6 @@ const Customers: React.FC = () => {
           </div>
         )}
       </div>
-      
-      {/* Add Customer Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
-                    <User className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                      Add New Customer
-                    </h3>
-                    <div className="mt-4 space-y-4">
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                          <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                            Customer Name
-                          </label>
-                          <input
-                            type="text"
-                            id="name"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="type" className="block text-sm font-medium text-gray-700">
-                            Customer Type
-                          </label>
-                          <select
-                            id="type"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          >
-                            <option value="">Select type</option>
-                            <option value="Retailer">Retailer</option>
-                            <option value="Wholesaler">Wholesaler</option>
-                            <option value="Restaurant">Restaurant</option>
-                            <option value="Other">Other</option>
-                          </select>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                          <label htmlFor="contact" className="block text-sm font-medium text-gray-700">
-                            Contact Number
-                          </label>
-                          <input
-                            type="tel"
-                            id="contact"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                            Email Address
-                          </label>
-                          <input
-                            type="email"
-                            id="email"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-                          Address
-                        </label>
-                        <textarea
-                          id="address"
-                          rows={3}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                        ></textarea>
-                      </div>
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                          <label htmlFor="creditLimit" className="block text-sm font-medium text-gray-700">
-                            Credit Limit
-                          </label>
-                          <div className="mt-1 relative rounded-md shadow-sm">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                              <span className="text-gray-500 sm:text-sm">₹</span>
-                            </div>
-                            <input
-                              type="number"
-                              id="creditLimit"
-                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 pl-7 pr-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label htmlFor="status" className="block text-sm font-medium text-gray-700">
-                            Status
-                          </label>
-                          <select
-                            id="status"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          >
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Add Customer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
