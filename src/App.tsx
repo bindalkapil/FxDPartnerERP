@@ -22,6 +22,7 @@ import Inventory from './pages/inventory/Inventory';
 import Sales from './pages/sales/Sales';
 import Dispatch from './pages/sales/Dispatch';
 import Suppliers from './pages/partners/Suppliers';
+import AddSupplier from './pages/partners/AddSupplier';
 import Customers from './pages/partners/Customers';
 import Ledger from './pages/finance/Ledger';
 import Payments from './pages/finance/Payments';
@@ -71,6 +72,7 @@ function App() {
               <Route path="sales" element={<Sales />} />
               <Route path="dispatch" element={<Dispatch />} />
               <Route path="suppliers" element={<Suppliers />} />
+              <Route path="suppliers/new" element={<AddSupplier />} />
               <Route path="customers" element={<Customers />} />
               <Route path="ledger" element={<Ledger />} />
               <Route path="payments" element={<Payments />} />
