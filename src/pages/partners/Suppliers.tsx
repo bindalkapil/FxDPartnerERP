@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Users, Search, Filter, Eye, Pencil, FileText, Phone, Mail, MapPin } from 'lucide-react';
+import { Users, Search, Filter, Eye, Pencil, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 
 interface Supplier {
   id: string;
@@ -75,6 +76,13 @@ const Suppliers: React.FC = () => {
     return matchesSearch && matchesStatus;
   });
 
+  const handleStatusChange = (id: string, newStatus: 'active' | 'inactive') => {
+    setSuppliers(prev => prev.map(supplier => 
+      supplier.id === id ? { ...supplier, status: newStatus } : supplier
+    ));
+    toast.success(`Supplier ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -84,7 +92,7 @@ const Suppliers: React.FC = () => {
         </div>
         <button 
           onClick={() => navigate('/suppliers/new')}
-          className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
+          className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200"
         >
           Add Supplier
         </button>
@@ -202,18 +210,9 @@ const Suppliers: React.FC = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm">
-                      <div className="flex items-center text-gray-900">
-                        <Phone className="h-4 w-4 mr-1" />
-                        {supplier.phone}
-                      </div>
-                      <div className="flex items-center text-gray-500 mt-1">
-                        <Mail className="h-4 w-4 mr-1" />
-                        {supplier.email}
-                      </div>
-                      <div className="flex items-center text-gray-500 mt-1">
-                        <MapPin className="h-4 w-4 mr-1" />
-                        {supplier.address}
-                      </div>
+                      <div className="text-gray-900">{supplier.contactPerson}</div>
+                      <div className="text-gray-500">{supplier.phone}</div>
+                      <div className="text-gray-500">{supplier.email}</div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -236,24 +235,32 @@ const Suppliers: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      supplier.status === 'active' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {supplier.status.charAt(0).toUpperCase() + supplier.status.slice(1)}
-                    </span>
+                    <select
+                      value={supplier.status}
+                      onChange={(e) => handleStatusChange(supplier.id, e.target.value as 'active' | 'inactive')}
+                      className={`text-sm rounded-full px-3 py-1 ${
+                        supplier.status === 'active' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <button className="text-indigo-600 hover:text-indigo-900">
+                      <button 
+                        onClick={() => navigate(`/suppliers/view/${supplier.id}`)}
+                        className="text-indigo-600 hover:text-indigo-900"
+                      >
                         <Eye className="h-4 w-4" />
                       </button>
-                      <button className="text-gray-600 hover:text-gray-900">
+                      <button 
+                        onClick={() => navigate(`/suppliers/edit/${supplier.id}`)}
+                        className="text-gray-600 hover:text-gray-900"
+                      >
                         <Pencil className="h-4 w-4" />
-                      </button>
-                      <button className="text-gray-600 hover:text-gray-900">
-                        <FileText className="h-4 w-4" />
                       </button>
                     </div>
                   </td>
