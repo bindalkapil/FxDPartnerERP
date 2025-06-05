@@ -108,13 +108,13 @@ const Sidebar: React.FC = () => {
           <NavItem to="/sales" icon={<ShoppingCart size={20} />} label="Sales" closeSidebar={closeSidebar} />
           <NavItem to="/dispatch" icon={<TruckLoading size={20} />} label="Dispatch" closeSidebar={closeSidebar} />
           
-          {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Partners</div>}
-          <NavItem to="/suppliers" icon={<Users size={20} />} label="Suppliers" closeSidebar={closeSidebar} />
-          <NavItem to="/customers" icon={<User size={20} />} label="Customers" closeSidebar={closeSidebar} />
-          
           {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Financials</div>}
           <NavItem to="/ledger" icon={<BookOpen size={20} />} label="Ledger" closeSidebar={closeSidebar} />
           <NavItem to="/payments" icon={<CreditCard size={20} />} label="Payments" closeSidebar={closeSidebar} />
+          
+          {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Partners</div>}
+          <NavItem to="/suppliers" icon={<Users size={20} />} label="Suppliers" closeSidebar={closeSidebar} />
+          <NavItem to="/customers" icon={<User size={20} />} label="Customers" closeSidebar={closeSidebar} />
           
           {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">System</div>}
           <NavItem to="/settings" icon={<Settings size={20} />} label="Settings" closeSidebar={closeSidebar} />
