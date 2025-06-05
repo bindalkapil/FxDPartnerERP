@@ -23,6 +23,8 @@ import Sales from './pages/sales/Sales';
 import Dispatch from './pages/sales/Dispatch';
 import Suppliers from './pages/partners/Suppliers';
 import AddSupplier from './pages/partners/AddSupplier';
+import ViewSupplier from './pages/partners/ViewSupplier';
+import EditSupplier from './pages/partners/EditSupplier';
 import Customers from './pages/partners/Customers';
 import ViewCustomer from './pages/partners/ViewCustomer';
 import EditCustomer from './pages/partners/EditCustomer';
@@ -75,6 +77,8 @@ function App() {
               <Route path="dispatch" element={<Dispatch />} />
               <Route path="suppliers" element={<Suppliers />} />
               <Route path="suppliers/new" element={<AddSupplier />} />
+              <Route path="suppliers/view/:id" element={<ViewSupplier />} />
+              <Route path="suppliers/edit/:id" element={<EditSupplier />} />
               <Route path="customers" element={<Customers />} />
               <Route path="customers/view/:id" element={<ViewCustomer />} />
               <Route path="customers/edit/:id" element={<EditCustomer />} />
