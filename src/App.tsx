@@ -24,6 +24,8 @@ import Dispatch from './pages/sales/Dispatch';
 import Suppliers from './pages/partners/Suppliers';
 import AddSupplier from './pages/partners/AddSupplier';
 import Customers from './pages/partners/Customers';
+import ViewCustomer from './pages/partners/ViewCustomer';
+import EditCustomer from './pages/partners/EditCustomer';
 import Ledger from './pages/finance/Ledger';
 import Payments from './pages/finance/Payments';
 import Settings from './pages/settings/Settings';
@@ -74,6 +76,8 @@ function App() {
               <Route path="suppliers" element={<Suppliers />} />
               <Route path="suppliers/new" element={<AddSupplier />} />
               <Route path="customers" element={<Customers />} />
+              <Route path="customers/view/:id" element={<ViewCustomer />} />
+              <Route path="customers/edit/:id" element={<EditCustomer />} />
               <Route path="ledger" element={<Ledger />} />
               <Route path="payments" element={<Payments />} />
               <Route path="settings" element={<Settings />} />
