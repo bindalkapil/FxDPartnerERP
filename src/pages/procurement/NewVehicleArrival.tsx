@@ -84,9 +84,14 @@ const NewVehicleArrival: React.FC = () => {
           skus: product.skus.map(sku => {
             if (sku.id === skuId) {
               const updatedSKU = { ...sku, ...updates };
-              // For box type, total weight equals quantity (number of boxes)
-              // For loose type, total weight equals quantity (total weight in kg)
-              updatedSKU.totalWeight = updatedSKU.quantity;
+              // Calculate total weight based on unit type and quantity
+              if (updatedSKU.unitType === 'box') {
+                // For box type, total weight = quantity * 1 (default unit weight)
+                updatedSKU.totalWeight = updatedSKU.quantity * 1;
+              } else {
+                // For loose type, total weight = quantity (quantity is already in kg)
+                updatedSKU.totalWeight = updatedSKU.quantity;
+              }
               return updatedSKU;
             }
             return sku;
@@ -197,10 +202,10 @@ const NewVehicleArrival: React.FC = () => {
       const dbItems = [];
 
       for (const product of products) {
-        // Create product with a default category
+        // Create product with default category
         const dbProduct = await createProduct({
           name: product.name,
-          category: 'General', // Default category since we removed category selection
+          category: 'Uncategorized', // Use default category from schema
           description: product.name,
           status: 'active'
         });
@@ -211,7 +216,7 @@ const NewVehicleArrival: React.FC = () => {
             product_id: dbProduct.id,
             code: sku.code,
             unit_type: sku.unitType,
-            unit_weight: null, // No unit weight needed anymore
+            unit_weight: sku.unitType === 'box' ? 1 : null, // Set unit_weight conditionally
             status: 'active'
           });
 
@@ -220,7 +225,7 @@ const NewVehicleArrival: React.FC = () => {
             product_id: dbProduct.id,
             sku_id: dbSKU.id,
             unit_type: sku.unitType,
-            unit_weight: null, // No unit weight needed anymore
+            unit_weight: sku.unitType === 'box' ? 1 : null, // Use the same unit_weight as SKU
             quantity: sku.quantity,
             total_weight: sku.totalWeight
           });
@@ -485,7 +490,7 @@ const NewVehicleArrival: React.FC = () => {
                         {sku.totalWeight > 0 && (
                           <div className="mt-3 text-sm text-gray-600">
                             {sku.unitType === 'box' 
-                              ? `Total: ${sku.totalWeight} boxes`
+                              ? `Total: ${sku.totalWeight} kg (${sku.quantity} boxes × 1 kg/box)`
                               : `Total Weight: ${sku.totalWeight} kg`
                             }
                           </div>
