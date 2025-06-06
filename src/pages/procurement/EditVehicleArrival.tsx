@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Truck, ArrowLeft, Plus, Trash2, Upload, X, Save, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getVehicleArrival, updateVehicleArrival, uploadAttachment } from '../../lib/api';
+import { getVehicleArrival, updateVehicleArrival, uploadAttachment, createProduct, createSKU } from '../../lib/api';
 
 interface Product {
   id: string;
@@ -282,13 +282,71 @@ const EditVehicleArrival: React.FC = () => {
         }
       }
 
-      // Prepare items data (simplified for update - in real app, you'd handle product/SKU creation)
-      const itemsData = products.flatMap(product =>
+      // Process products and SKUs to get real UUIDs
+      const processedProducts = [];
+      
+      for (const product of products) {
+        let productId = product.id;
+        
+        // If this is a new product (temp ID), create it first
+        if (product.id.startsWith('temp_')) {
+          try {
+            const newProduct = await createProduct({
+              name: product.name,
+              category: 'Uncategorized',
+              status: 'active'
+            });
+            productId = newProduct.id;
+          } catch (error) {
+            console.error('Error creating product:', error);
+            toast.error(`Failed to create product "${product.name}"`);
+            return;
+          }
+        }
+
+        // Process SKUs for this product
+        const processedSkus = [];
+        for (const sku of product.skus) {
+          let skuId = sku.id;
+          
+          // If this is a new SKU (temp ID), create it first
+          if (sku.id.startsWith('temp_')) {
+            try {
+              const newSku = await createSKU({
+                product_id: productId,
+                code: sku.code,
+                unit_type: sku.unitType,
+                unit_weight: sku.unitType === 'box' ? 1 : null,
+                status: 'active'
+              });
+              skuId = newSku.id;
+            } catch (error) {
+              console.error('Error creating SKU:', error);
+              toast.error(`Failed to create SKU "${sku.code}"`);
+              return;
+            }
+          }
+
+          processedSkus.push({
+            id: skuId,
+            ...sku
+          });
+        }
+
+        processedProducts.push({
+          id: productId,
+          name: product.name,
+          skus: processedSkus
+        });
+      }
+
+      // Prepare items data with real UUIDs
+      const itemsData = processedProducts.flatMap(product =>
         product.skus.map(sku => ({
-          product_id: product.id.startsWith('temp_') ? 'existing-product-id' : product.id,
-          sku_id: sku.id.startsWith('temp_') ? 'existing-sku-id' : sku.id,
+          product_id: product.id,
+          sku_id: sku.id,
           unit_type: sku.unitType,
-          unit_weight: null,
+          unit_weight: sku.unitType === 'box' ? 1 : null,
           quantity: sku.quantity,
           total_weight: sku.totalWeight
         }))
