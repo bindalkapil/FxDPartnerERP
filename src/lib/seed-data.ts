@@ -1,19 +1,44 @@
 import { supabase } from './supabase';
 
 const products = [
-  { name: 'POMO MH' },
-  { name: 'POMO GJ' },
-  { name: 'Sindura' },
-  { name: 'Alphonso' },
-  { name: 'Washington Apple' }
+  { name: 'POMO MH', category: 'Pomegranate', description: 'Maharashtra Pomegranate' },
+  { name: 'POMO GJ', category: 'Pomegranate', description: 'Gujarat Pomegranate' },
+  { name: 'Sindura', category: 'Mango', description: 'Sindura Mango Variety' },
+  { name: 'Alphonso', category: 'Mango', description: 'Premium Alphonso Mango' },
+  { name: 'Washington Apple', category: 'Imported', description: 'Imported Washington Apples' }
 ];
 
 const skus = [
-  { product_name: 'POMO MH', code: 'POMO-MH-001' },
-  { product_name: 'POMO GJ', code: 'POMO-GJ-001' },
-  { product_name: 'Sindura', code: 'MNG-SIN-001' },
-  { product_name: 'Alphonso', code: 'MNG-ALP-001' },
-  { product_name: 'Washington Apple', code: 'IMP-APP-001' }
+  { 
+    product_name: 'POMO MH', 
+    code: 'POMO-MH-001',
+    unit_type: 'box',
+    unit_weight: 10
+  },
+  { 
+    product_name: 'POMO GJ', 
+    code: 'POMO-GJ-001',
+    unit_type: 'box',
+    unit_weight: 10
+  },
+  { 
+    product_name: 'Sindura', 
+    code: 'MNG-SIN-001',
+    unit_type: 'box',
+    unit_weight: 20
+  },
+  { 
+    product_name: 'Alphonso', 
+    code: 'MNG-ALP-001',
+    unit_type: 'box',
+    unit_weight: 5
+  },
+  { 
+    product_name: 'Washington Apple', 
+    code: 'IMP-APP-001',
+    unit_type: 'box',
+    unit_weight: 18
+  }
 ];
 
 export async function seedData() {
@@ -64,7 +89,9 @@ export async function seedData() {
         .from('skus')
         .insert({
           product_id: productId,
-          code: sku.code
+          code: sku.code,
+          unit_type: sku.unit_type,
+          unit_weight: sku.unit_weight
         })
         .select()
         .single();

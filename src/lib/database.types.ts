@@ -13,18 +13,27 @@ export interface Database {
         Row: {
           id: string
           name: string
+          category: string
+          description: string | null
+          status: string
           created_at: string | null
           updated_at: string | null
         }
         Insert: {
           id?: string
           name: string
+          category?: string
+          description?: string | null
+          status?: string
           created_at?: string | null
           updated_at?: string | null
         }
         Update: {
           id?: string
           name?: string
+          category?: string
+          description?: string | null
+          status?: string
           created_at?: string | null
           updated_at?: string | null
         }
@@ -34,6 +43,9 @@ export interface Database {
           id: string
           product_id: string
           code: string
+          unit_type: string
+          unit_weight: number | null
+          status: string
           created_at: string | null
           updated_at: string | null
         }
@@ -41,6 +53,9 @@ export interface Database {
           id?: string
           product_id: string
           code: string
+          unit_type?: string
+          unit_weight?: number | null
+          status?: string
           created_at?: string | null
           updated_at?: string | null
         }
@@ -48,6 +63,9 @@ export interface Database {
           id?: string
           product_id?: string
           code?: string
+          unit_type?: string
+          unit_weight?: number | null
+          status?: string
           created_at?: string | null
           updated_at?: string | null
         }
