@@ -489,9 +489,6 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Quantity
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Weight
-                    </th>
                     {formData.pricingModel === 'commission' ? (
                       <>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -512,9 +509,11 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total (₹)
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
+                    {!vehicleId && (
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -575,9 +574,6 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
                           />
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.totalWeight} kg
-                      </td>
                       {formData.pricingModel === 'commission' ? (
                         <>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -620,8 +616,8 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         ₹{item.total.toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {!vehicleId && (
+                      {!vehicleId && (
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(item.id)}
@@ -629,20 +625,20 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
-                        )}
-                      </td>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="bg-gray-50">
                   <tr>
-                    <td colSpan={formData.pricingModel === 'commission' ? 7 : 5} className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
+                    <td colSpan={formData.pricingModel === 'commission' ? (vehicleId ? 6 : 7) : (vehicleId ? 4 : 5)} className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
                       Items Subtotal:
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       ₹{items.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
                     </td>
-                    <td></td>
+                    {!vehicleId && <td></td>}
                   </tr>
                 </tfoot>
               </table>
