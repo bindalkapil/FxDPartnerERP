@@ -99,11 +99,22 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
       const data = await getVehicleArrival(vehicleId);
       setVehicleData(data);
       
+      // Format arrival_time to YYYY-MM-DDTHH:mm
+      const formatDateTime = (dateString: string) => {
+        const date = new Date(dateString);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+      };
+
       // Pre-populate form with vehicle data
       setFormData(prev => ({
         ...prev,
         supplier: data.supplier,
-        arrivalTimestamp: data.arrival_time
+        arrivalTimestamp: formatDateTime(data.arrival_time)
       }));
 
       // Convert vehicle arrival items to purchase order items
