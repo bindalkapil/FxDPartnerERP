@@ -385,7 +385,7 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
           <div className="flex items-center">
             <Package2 className="h-6 w-6 text-green-600 mr-2" />
             <h1 className="text-2xl font-bold text-gray-800">
-              {initialData ? 'Edit Purchase Record' : 'New Record Purchase'}
+              {initialData ? 'Edit Purchase Record' : 'New Purchase Record'}
             </h1>
           </div>
         </div>
