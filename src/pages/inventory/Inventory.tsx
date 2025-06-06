@@ -356,7 +356,7 @@ const Inventory: React.FC = () => {
                           {product.skus.length > 0 ? (
                             <div className="grid grid-cols-4 gap-4 text-xs font-medium text-gray-500 uppercase mb-2">
                               <div>SKU Code</div>
-                              <div>Unit Type</div>
+                              <div>Packaging Type</div>
                               <div>Unit Weight</div>
                               <div>Status</div>
                             </div>
@@ -505,7 +505,7 @@ const Inventory: React.FC = () => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700">
-                          Unit Type
+                          Packaging Type
                         </label>
                         <select
                           value={newSKU.unit_type}

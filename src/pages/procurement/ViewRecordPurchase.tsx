@@ -131,6 +131,9 @@ const ViewRecordPurchase: React.FC = () => {
                       Quantity
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Packaging Type
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total Weight
                     </th>
                     {orderData.pricingModel === 'commission' ? (
@@ -164,7 +167,10 @@ const ViewRecordPurchase: React.FC = () => {
                         {item.sku}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.quantity} {item.unitType}
+                        {item.quantity}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.unitType}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {item.totalWeight} kg
