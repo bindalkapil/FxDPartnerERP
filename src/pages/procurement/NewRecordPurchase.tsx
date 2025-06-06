@@ -30,11 +30,8 @@ interface PurchaseOrderData {
   id?: string;
   orderNumber?: string;
   supplier: string;
-  orderDate: string;
   arrivalTimestamp: string;
-  paymentTerms: number;
   pricingModel: 'commission' | 'fixed';
-  status: 'draft' | 'completed';
   items: PurchaseOrderItem[];
   additionalCosts: AdditionalCost[];
   totalAmount: number;
@@ -56,11 +53,8 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
 
   const [formData, setFormData] = useState({
     supplier: initialData?.supplier || '',
-    orderDate: initialData?.orderDate || new Date().toISOString().slice(0, 16),
     arrivalTimestamp: initialData?.arrivalTimestamp || '',
-    paymentTerms: initialData?.paymentTerms || 30,
-    pricingModel: initialData?.pricingModel || 'commission',
-    status: initialData?.status || 'draft' as 'draft' | 'completed'
+    pricingModel: initialData?.pricingModel || 'commission'
   });
 
   const [items, setItems] = useState<PurchaseOrderItem[]>(initialData?.items || []);
@@ -109,8 +103,7 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
       setFormData(prev => ({
         ...prev,
         supplier: data.supplier,
-        arrivalTimestamp: data.arrival_time,
-        paymentTerms: 30 // Default payment terms
+        arrivalTimestamp: data.arrival_time
       }));
 
       // Convert vehicle arrival items to purchase order items
@@ -297,7 +290,7 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.supplier || !formData.orderDate || !formData.arrivalTimestamp) {
+    if (!formData.supplier || !formData.arrivalTimestamp) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -386,19 +379,6 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
 
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Record Date <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="datetime-local"
-                value={formData.orderDate}
-                onChange={(e) => setFormData({ ...formData, orderDate: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
                 Arrival Timestamp <span className="text-red-500">*</span>
               </label>
               <input
@@ -413,20 +393,6 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
 
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Payment Terms (Days) <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                value={formData.paymentTerms}
-                onChange={(e) => setFormData({ ...formData, paymentTerms: parseInt(e.target.value) })}
-                min="0"
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
                 Pricing Model <span className="text-red-500">*</span>
               </label>
               <select
@@ -436,20 +402,6 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
               >
                 <option value="commission">Commission Sale</option>
                 <option value="fixed">Fixed Price Buy</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Status
-              </label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as 'draft' | 'completed' })}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-              >
-                <option value="draft">Draft</option>
-                <option value="completed">Completed</option>
               </select>
             </div>
           </div>
