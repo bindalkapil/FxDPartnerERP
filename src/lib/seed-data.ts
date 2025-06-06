@@ -19,15 +19,22 @@ const skus = [
 export async function seedData() {
   // Insert products
   for (const product of products) {
-    const { error } = await supabase
+    const { data: existingProduct } = await supabase
       .from('products')
-      .insert(product)
       .select()
+      .eq('name', product.name)
       .single();
-    
-    if (error && error.code !== '23505') { // Ignore unique constraint violations
-      console.error('Error inserting product:', error);
-      continue;
+
+    if (!existingProduct) {
+      const { error } = await supabase
+        .from('products')
+        .insert(product)
+        .select()
+        .single();
+      
+      if (error && error.code !== '23505') {
+        console.error('Error inserting product:', error);
+      }
     }
   }
 
@@ -45,17 +52,26 @@ export async function seedData() {
     const productId = productMap.get(sku.product_name);
     if (!productId) continue;
 
-    const { error } = await supabase
+    // Check if SKU already exists
+    const { data: existingSku } = await supabase
       .from('skus')
-      .insert({
-        product_id: productId,
-        code: sku.code
-      })
       .select()
+      .eq('code', sku.code)
       .single();
-    
-    if (error && error.code !== '23505') { // Ignore unique constraint violations
-      console.error('Error inserting SKU:', error);
+
+    if (!existingSku) {
+      const { error } = await supabase
+        .from('skus')
+        .insert({
+          product_id: productId,
+          code: sku.code
+        })
+        .select()
+        .single();
+      
+      if (error && error.code !== '23505') {
+        console.error('Error inserting SKU:', error);
+      }
     }
   }
 }
