@@ -18,6 +18,24 @@ export async function getProducts() {
 }
 
 export async function createProduct(product: Tables['products']['Insert']) {
+  // First, check if a product with this name already exists
+  const { data: existingProduct, error: checkError } = await supabase
+    .from('products')
+    .select('*')
+    .eq('name', product.name)
+    .single();
+
+  if (checkError && checkError.code !== 'PGRST116') {
+    // PGRST116 is "not found" error, which is expected when no duplicate exists
+    throw checkError;
+  }
+
+  if (existingProduct) {
+    // Product already exists, return the existing one
+    return existingProduct;
+  }
+
+  // Product doesn't exist, create a new one
   const { data, error } = await supabase
     .from('products')
     .insert(product)
@@ -30,6 +48,24 @@ export async function createProduct(product: Tables['products']['Insert']) {
 
 // SKUs
 export async function createSKU(sku: Tables['skus']['Insert']) {
+  // First, check if a SKU with this code already exists
+  const { data: existingSKU, error: checkError } = await supabase
+    .from('skus')
+    .select('*')
+    .eq('code', sku.code)
+    .single();
+
+  if (checkError && checkError.code !== 'PGRST116') {
+    // PGRST116 is "not found" error, which is expected when no duplicate exists
+    throw checkError;
+  }
+
+  if (existingSKU) {
+    // SKU already exists, return the existing one
+    return existingSKU;
+  }
+
+  // SKU doesn't exist, create a new one
   const { data, error } = await supabase
     .from('skus')
     .insert(sku)
