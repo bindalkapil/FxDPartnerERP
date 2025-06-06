@@ -22,11 +22,11 @@ interface Attachment {
 
 // This will store all previously used product entries
 const existingProducts = [
-  { category: 'Pomegranate', name: 'POMO MH', sku: 'POMO-MH-001' },
-  { category: 'Pomegranate', name: 'POMO GJ', sku: 'POMO-GJ-001' },
-  { category: 'Mango', name: 'Sindura', sku: 'MNG-SIN-001' },
-  { category: 'Mango', name: 'Alphonso', sku: 'MNG-ALP-001' },
-  { category: 'Imported', name: 'Washington Apple', sku: 'IMP-APP-001' },
+  { name: 'POMO MH', sku: 'POMO-MH-001' },
+  { name: 'POMO GJ', sku: 'POMO-GJ-001' },
+  { name: 'Sindura', sku: 'MNG-SIN-001' },
+  { name: 'Alphonso', sku: 'MNG-ALP-001' },
+  { name: 'Washington Apple', sku: 'IMP-APP-001' },
 ];
 
 const NewVehicleArrival: React.FC = () => {
@@ -46,7 +46,6 @@ const NewVehicleArrival: React.FC = () => {
   const [productSearch, setProductSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<{
-    category: string;
     name: string;
     sku: string;
   } | null>(null);
@@ -56,36 +55,32 @@ const NewVehicleArrival: React.FC = () => {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const filteredProducts = existingProducts.filter(product => 
-    `${product.category} ${product.name}`.toLowerCase().includes(productSearch.toLowerCase())
+    product.name.toLowerCase().includes(productSearch.toLowerCase())
   );
 
   const handleProductSelect = (product: typeof existingProducts[0]) => {
     setSelectedProduct(product);
-    setProductSearch(`${product.category} - ${product.name}`);
+    setProductSearch(product.name);
     setShowSuggestions(false);
   };
 
   const handleNewProduct = () => {
     if (!productSearch.trim()) return;
 
-    const [category, name] = productSearch.split('-').map(s => s.trim());
-    if (!category || !name) {
-      toast.error('Please enter product in format: Category - Name');
-      return;
-    }
-
-    const sku = `${category.substring(0, 3).toUpperCase()}-${name.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+    // Generate a simple SKU based on the first letters of each word
+    const sku = productSearch
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase())
+      .join('') + '-' + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
     
     const newProduct = {
-      category,
-      name,
+      name: productSearch,
       sku
     };
 
     // Here you would typically save this to your backend
     existingProducts.push(newProduct);
     setSelectedProduct(newProduct);
-    setProductSearch(`${category} - ${name}`);
     setShowSuggestions(false);
     toast.success('New product added successfully');
   };
@@ -168,7 +163,7 @@ const NewVehicleArrival: React.FC = () => {
       
     setProducts(prev => [...prev, {
       id: `${Date.now()}`,
-      category: selectedProduct.category,
+      category: '', // Category is no longer used
       name: selectedProduct.name,
       sku: selectedProduct.sku,
       unitType,
@@ -323,7 +318,7 @@ const NewVehicleArrival: React.FC = () => {
                       setProductSearch(e.target.value);
                       setShowSuggestions(true);
                     }}
-                    placeholder="Search or enter new product (Category - Name)"
+                    placeholder="Search or enter new product name"
                     className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                   />
                   {showSuggestions && (
@@ -334,11 +329,11 @@ const NewVehicleArrival: React.FC = () => {
                           className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
                           onClick={() => handleProductSelect(product)}
                         >
-                          {product.category} - {product.name}
+                          {product.name}
                         </div>
                       ))}
                       {productSearch && !filteredProducts.some(p => 
-                        `${p.category} - ${p.name}`.toLowerCase() === productSearch.toLowerCase()
+                        p.name.toLowerCase() === productSearch.toLowerCase()
                       ) && (
                         <div
                           className="px-4 py-2 text-green-600 hover:bg-gray-100 cursor-pointer"
@@ -415,9 +410,6 @@ const NewVehicleArrival: React.FC = () => {
                   <thead className="bg-gray-50">
                     <tr>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Category
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Product
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -440,7 +432,6 @@ const NewVehicleArrival: React.FC = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {products.map((product) => (
                       <tr key={product.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.category}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.name}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.sku}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
