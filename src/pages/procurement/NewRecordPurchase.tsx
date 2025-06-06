@@ -714,7 +714,7 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
 
             <div className="flex items-end space-x-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Cost Name</label>
+                <label className="block text-sm font-medium text-gray-700">Add New Cost</label>
                 <input
                   type="text"
                   value={newCost.name}
