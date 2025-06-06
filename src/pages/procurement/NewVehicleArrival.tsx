@@ -35,7 +35,7 @@ const NewVehicleArrival: React.FC = () => {
     driverName: '',
     driverContact: '',
     arrivalTime: '',
-    arrivalStatus: 'in-transit',
+    arrivalStatus: 'pending', // Default to pending
     notes: ''
   });
 
@@ -381,10 +381,8 @@ const NewVehicleArrival: React.FC = () => {
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                 required
               >
-                <option value="in-transit">In Transit</option>
-                <option value="arrived">Arrived</option>
-                <option value="unloading">Unloading</option>
-                <option value="unloaded">Unloaded</option>
+                <option value="pending">Pending</option>
+                <option value="completed">Completed</option>
               </select>
             </div>
           </div>
