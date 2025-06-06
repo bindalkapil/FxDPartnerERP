@@ -20,23 +20,14 @@ interface Attachment {
   preview: string;
 }
 
-const productData = {
-  Pomegranate: {
-    'POMO MH': ['POMO-MH-001', 'POMO-MH-002'],
-    'POMO GJ': ['POMO-GJ-001', 'POMO-GJ-002'],
-    'POMO RJ': ['POMO-RJ-001', 'POMO-RJ-002'],
-  },
-  Mango: {
-    'Sindura': ['MNG-SIN-001', 'MNG-SIN-002'],
-    'Alphonso': ['MNG-ALP-001', 'MNG-ALP-002'],
-    'Banganpally': ['MNG-BNG-001', 'MNG-BNG-002'],
-  },
-  Imported: {
-    'Washington Apple': ['IMP-APP-001', 'IMP-APP-002'],
-    'Kiwi': ['IMP-KIW-001'],
-    'Dragon Fruit': ['IMP-DRG-001'],
-  },
-};
+// This will store all previously used product entries
+const existingProducts = [
+  { category: 'Pomegranate', name: 'POMO MH', sku: 'POMO-MH-001' },
+  { category: 'Pomegranate', name: 'POMO GJ', sku: 'POMO-GJ-001' },
+  { category: 'Mango', name: 'Sindura', sku: 'MNG-SIN-001' },
+  { category: 'Mango', name: 'Alphonso', sku: 'MNG-ALP-001' },
+  { category: 'Imported', name: 'Washington Apple', sku: 'IMP-APP-001' },
+];
 
 const EditVehicleArrival: React.FC = () => {
   const { id } = useParams();
@@ -85,13 +76,52 @@ const EditVehicleArrival: React.FC = () => {
   });
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState('');
-  const [selectedSKU, setSelectedSKU] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<{
+    category: string;
+    name: string;
+    sku: string;
+  } | null>(null);
   const [unitType, setUnitType] = useState<'box' | 'loose'>('box');
   const [unitWeight, setUnitWeight] = useState<number>(0);
   const [quantity, setQuantity] = useState<number>(0);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+
+  const filteredProducts = existingProducts.filter(product => 
+    `${product.category} ${product.name}`.toLowerCase().includes(productSearch.toLowerCase())
+  );
+
+  const handleProductSelect = (product: typeof existingProducts[0]) => {
+    setSelectedProduct(product);
+    setProductSearch(`${product.category} - ${product.name}`);
+    setShowSuggestions(false);
+  };
+
+  const handleNewProduct = () => {
+    if (!productSearch.trim()) return;
+
+    const [category, name] = productSearch.split('-').map(s => s.trim());
+    if (!category || !name) {
+      toast.error('Please enter product in format: Category - Name');
+      return;
+    }
+
+    const sku = `${category.substring(0, 3).toUpperCase()}-${name.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+    
+    const newProduct = {
+      category,
+      name,
+      sku
+    };
+
+    // Here you would typically save this to your backend
+    existingProducts.push(newProduct);
+    setSelectedProduct(newProduct);
+    setProductSearch(`${category} - ${name}`);
+    setShowSuggestions(false);
+    toast.success('New product added successfully');
+  };
 
   // Load existing data
   useEffect(() => {
@@ -153,7 +183,6 @@ const EditVehicleArrival: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate required fields
     if (!formData.supplier || !formData.arrivalTime || products.length === 0) {
       toast.error('Please fill in all required fields');
       return;
@@ -180,28 +209,31 @@ const EditVehicleArrival: React.FC = () => {
   };
 
   const handleAddProduct = () => {
-    if (selectedCategory && selectedProduct && selectedSKU && 
-        ((unitType === 'box' && unitWeight > 0) || unitType === 'loose') && 
+    if (!selectedProduct || 
+        ((unitType === 'box' && unitWeight <= 0) || unitType === 'loose') && 
         quantity > 0) {
-      
-      const totalWeight = calculateTotalWeight();
-      
-      setProducts(prev => [...prev, {
-        id: `${Date.now()}`,
-        category: selectedCategory,
-        name: selectedProduct,
-        sku: selectedSKU,
-        unitType,
-        unitWeight: unitType === 'box' ? unitWeight : undefined,
-        quantity,
-        totalWeight
-      }]);
-      
-      setSelectedSKU('');
-      setUnitType('box');
-      setUnitWeight(0);
-      setQuantity(0);
+      toast.error('Please fill in all product details');
+      return;
     }
+      
+    const totalWeight = calculateTotalWeight();
+      
+    setProducts(prev => [...prev, {
+      id: `${Date.now()}`,
+      category: selectedProduct.category,
+      name: selectedProduct.name,
+      sku: selectedProduct.sku,
+      unitType,
+      unitWeight: unitType === 'box' ? unitWeight : undefined,
+      quantity,
+      totalWeight
+    }]);
+      
+    setSelectedProduct(null);
+    setProductSearch('');
+    setUnitType('box');
+    setUnitWeight(0);
+    setQuantity(0);
   };
 
   const handleRemoveProduct = (id: string) => {
@@ -329,121 +361,104 @@ const EditVehicleArrival: React.FC = () => {
           <div className="border-t pt-6">
             <h2 className="text-lg font-medium text-gray-900 mb-4">Products <span className="text-red-500">*</span></h2>
             
-            {/* Product Category and Name Selection */}
+            {/* Product Search */}
             <div className="bg-gray-50 p-4 rounded-lg mb-6">
-              <h3 className="text-sm font-medium text-gray-700 mb-4">1. Select Product Category and Name</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Category</label>
-                  <select
-                    value={selectedCategory}
+              <div className="space-y-4">
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Product Search
+                  </label>
+                  <input
+                    type="text"
+                    value={productSearch}
                     onChange={(e) => {
-                      setSelectedCategory(e.target.value);
-                      setSelectedProduct('');
-                      setSelectedSKU('');
+                      setProductSearch(e.target.value);
+                      setShowSuggestions(true);
                     }}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                  >
-                    <option value="">Select Category</option>
-                    {Object.keys(productData).map(category => (
-                      <option key={category} value={category}>{category}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Product</label>
-                  <select
-                    value={selectedProduct}
-                    onChange={(e) => {
-                      setSelectedProduct(e.target.value);
-                      setSelectedSKU('');
-                    }}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                    disabled={!selectedCategory}
-                  >
-                    <option value="">Select Product</option>
-                    {selectedCategory && Object.keys(productData[selectedCategory]).map(product => (
-                      <option key={product} value={product}>{product}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* SKU Details */}
-            {selectedCategory && selectedProduct && (
-              <div className="bg-gray-50 p-4 rounded-lg mb-6">
-                <h3 className="text-sm font-medium text-gray-700 mb-4">2. Add SKU Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">SKU</label>
-                    <select
-                      value={selectedSKU}
-                      onChange={(e) => setSelectedSKU(e.target.value)}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                    >
-                      <option value="">Select SKU</option>
-                      {productData[selectedCategory][selectedProduct].map(sku => (
-                        <option key={sku} value={sku}>{sku}</option>
+                    placeholder="Search or enter new product (Category - Name)"
+                    className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  />
+                  {showSuggestions && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
+                      {filteredProducts.map((product, index) => (
+                        <div
+                          key={index}
+                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                          onClick={() => handleProductSelect(product)}
+                        >
+                          {product.category} - {product.name}
+                        </div>
                       ))}
-                    </select>
-                  </div>
+                      {productSearch && !filteredProducts.some(p => 
+                        `${p.category} - ${p.name}`.toLowerCase() === productSearch.toLowerCase()
+                      ) && (
+                        <div
+                          className="px-4 py-2 text-green-600 hover:bg-gray-100 cursor-pointer"
+                          onClick={handleNewProduct}
+                        >
+                          Add new product: {productSearch}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Unit Type</label>
-                    <select
-                      value={unitType}
-                      onChange={(e) => setUnitType(e.target.value as 'box' | 'loose')}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                    >
-                      <option value="box">Box/Crate</option>
-                      <option value="loose">Loose</option>
-                    </select>
-                  </div>
-
-                  {unitType === 'box' && (
+                {selectedProduct && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Unit Weight (kg)</label>
+                      <label className="block text-sm font-medium text-gray-700">Unit Type</label>
+                      <select
+                        value={unitType}
+                        onChange={(e) => setUnitType(e.target.value as 'box' | 'loose')}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                      >
+                        <option value="box">Box/Crate</option>
+                        <option value="loose">Loose</option>
+                      </select>
+                    </div>
+
+                    {unitType === 'box' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Unit Weight (kg)</label>
+                        <input
+                          type="number"
+                          value={unitWeight}
+                          onChange={(e) => setUnitWeight(Number(e.target.value))}
+                          min="0"
+                          step="0.1"
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        {unitType === 'box' ? 'Number of Boxes' : 'Total Weight (kg)'}
+                      </label>
                       <input
                         type="number"
-                        value={unitWeight}
-                        onChange={(e) => setUnitWeight(Number(e.target.value))}
+                        value={quantity}
+                        onChange={(e) => setQuantity(Number(e.target.value))}
                         min="0"
-                        step="0.1"
+                        step={unitType === 'loose' ? '0.1' : '1'}
                         className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                       />
                     </div>
-                  )}
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      {unitType === 'box' ? 'Number of Boxes' : 'Total Weight (kg)'}
-                    </label>
-                    <input
-                      type="number"
-                      value={quantity}
-                      onChange={(e) => setQuantity(Number(e.target.value))}
-                      min="0"
-                      step={unitType === 'loose' ? '0.1' : '1'}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                    />
+                    <div className="md:col-span-3">
+                      <button
+                        type="button"
+                        onClick={handleAddProduct}
+                        className="w-full px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                      >
+                        <Plus className="h-5 w-5 inline-block mr-2" />
+                        Add Product
+                      </button>
+                    </div>
                   </div>
-
-                  <div className="flex items-end">
-                    <button
-                      type="button"
-                      onClick={handleAddProduct}
-                      disabled={!selectedSKU || quantity <= 0 || (unitType === 'box' && unitWeight <= 0)}
-                      className="w-full px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                    >
-                      <Plus className="h-5 w-5 inline-block" />
-                      Add SKU
-                    </button>
-                  </div>
-                </div>
+                )}
               </div>
-            )}
+            </div>
 
             {/* Products Table */}
             {products.length > 0 && (
