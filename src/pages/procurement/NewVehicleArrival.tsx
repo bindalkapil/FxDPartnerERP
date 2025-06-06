@@ -487,10 +487,10 @@ const NewVehicleArrival: React.FC = () => {
                           </div>
                         </div>
 
-                        {sku.totalWeight > 0 && (
+                        {sku.quantity > 0 && (
                           <div className="mt-3 text-sm text-gray-600">
                             {sku.unitType === 'box' 
-                              ? `Total: ${sku.totalWeight} kg (${sku.quantity} boxes × 1 kg/box)`
+                              ? `Total Boxes: ${sku.quantity}`
                               : `Total Weight: ${sku.totalWeight} kg`
                             }
                           </div>
