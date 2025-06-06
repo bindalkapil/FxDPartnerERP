@@ -2,19 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Package2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { getVehicleArrival, getProducts } from '../../lib/api';
 
 interface PurchaseOrderItem {
   id: string;
+  productId: string;
+  productName: string;
+  skuId: string;
+  skuCode: string;
   category: string;
-  name: string;
-  sku: string;
   quantity: number;
   unitType: string;
-  unitWeight: number;
   totalWeight: number;
   commission?: number;
   unitPrice?: number;
   marketPrice?: number;
+  total: number;
 }
 
 interface AdditionalCost {
@@ -24,8 +27,8 @@ interface AdditionalCost {
 }
 
 interface PurchaseOrderData {
-  id: string;
-  orderNumber: string;
+  id?: string;
+  orderNumber?: string;
   supplier: string;
   orderDate: string;
   arrivalTimestamp: string;
@@ -47,49 +50,30 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
   const queryParams = new URLSearchParams(location.search);
   const vehicleId = queryParams.get('vehicleId');
 
-  const mockVehicleData = {
-    id: 'VA001',
-    supplier: 'Green Farms',
-    arrivalTime: '2025-06-18T08:30',
-    items: [
-      {
-        id: '1',
-        category: 'Pomegranate',
-        name: 'POMO MH',
-        sku: 'POMO-MH-001',
-        quantity: 100,
-        unitType: 'box',
-        unitWeight: 10,
-        totalWeight: 1000
-      }
-    ]
-  };
-
-  const mockSupplierData = {
-    id: 'SUP001',
-    name: 'Green Farms',
-    defaultCommission: 8,
-    paymentTerms: 30,
-    additionalCosts: [
-      { name: 'Labour Cost', amount: 5, type: 'per_box' as const },
-      { name: 'Handling Cost', amount: 3, type: 'per_box' as const },
-      { name: 'APMC Charge', amount: 1, type: 'percentage' as const },
-      { name: 'Vehicle Charges', amount: 2000, type: 'fixed' as const }
-    ]
-  };
+  const [loading, setLoading] = useState(false);
+  const [products, setProducts] = useState<any[]>([]);
+  const [vehicleData, setVehicleData] = useState<any>(null);
 
   const [formData, setFormData] = useState({
     supplier: initialData?.supplier || '',
     orderDate: initialData?.orderDate || new Date().toISOString().slice(0, 16),
     arrivalTimestamp: initialData?.arrivalTimestamp || '',
-    paymentTerms: initialData?.paymentTerms || 0,
+    paymentTerms: initialData?.paymentTerms || 30,
     pricingModel: initialData?.pricingModel || 'commission',
     status: initialData?.status || 'draft' as 'draft' | 'completed'
   });
 
   const [items, setItems] = useState<PurchaseOrderItem[]>(initialData?.items || []);
-  const [commission, setCommission] = useState(initialData?.items?.[0]?.commission || 0);
-  const [additionalCosts, setAdditionalCosts] = useState<AdditionalCost[]>(initialData?.additionalCosts || []);
+  const [commission, setCommission] = useState(8); // Default commission
+  const [additionalCosts, setAdditionalCosts] = useState<AdditionalCost[]>(
+    initialData?.additionalCosts || [
+      { name: 'Labour Cost', amount: 5, type: 'per_box' },
+      { name: 'Handling Cost', amount: 3, type: 'per_box' },
+      { name: 'APMC Charge', amount: 1, type: 'percentage' },
+      { name: 'Vehicle Charges', amount: 2000, type: 'fixed' }
+    ]
+  );
+  
   const [newCost, setNewCost] = useState({
     name: '',
     amount: 0,
@@ -97,59 +81,91 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
   });
 
   useEffect(() => {
+    loadProducts();
     if (vehicleId && !initialData) {
-      setFormData({
-        ...formData,
-        supplier: mockSupplierData.name,
-        arrivalTimestamp: mockVehicleData.arrivalTime,
-        paymentTerms: mockSupplierData.paymentTerms
-      });
-      setItems(mockVehicleData.items.map(item => ({
-        ...item,
-        commission: mockSupplierData.defaultCommission
-      })));
-      setCommission(mockSupplierData.defaultCommission);
-      setAdditionalCosts(mockSupplierData.additionalCosts);
+      loadVehicleData();
     }
   }, [vehicleId, initialData]);
+
+  const loadProducts = async () => {
+    try {
+      const data = await getProducts();
+      setProducts(data);
+    } catch (error) {
+      console.error('Error loading products:', error);
+      toast.error('Failed to load products');
+    }
+  };
+
+  const loadVehicleData = async () => {
+    if (!vehicleId) return;
+    
+    setLoading(true);
+    try {
+      const data = await getVehicleArrival(vehicleId);
+      setVehicleData(data);
+      
+      // Pre-populate form with vehicle data
+      setFormData(prev => ({
+        ...prev,
+        supplier: data.supplier,
+        arrivalTimestamp: data.arrival_time,
+        paymentTerms: 30 // Default payment terms
+      }));
+
+      // Convert vehicle arrival items to purchase order items
+      const poItems: PurchaseOrderItem[] = data.vehicle_arrival_items.map((item: any, index: number) => ({
+        id: `item_${index}`,
+        productId: item.product_id,
+        productName: item.product.name,
+        skuId: item.sku_id,
+        skuCode: item.sku.code,
+        category: item.product.category,
+        quantity: item.quantity,
+        unitType: item.unit_type,
+        totalWeight: item.total_weight,
+        commission: commission,
+        marketPrice: 0,
+        unitPrice: 0,
+        total: 0
+      }));
+
+      setItems(poItems);
+    } catch (error) {
+      console.error('Error loading vehicle data:', error);
+      toast.error('Failed to load vehicle arrival data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCommissionChange = (value: number) => {
     setCommission(value);
     setItems(prev => prev.map(item => ({
       ...item,
-      commission: value
+      commission: value,
+      total: calculateItemTotal({ ...item, commission: value })
     })));
   };
 
   const handleItemCommissionChange = (id: string, value: number) => {
     setItems(prev => prev.map(item => 
-      item.id === id ? { ...item, commission: value } : item
+      item.id === id ? { 
+        ...item, 
+        commission: value,
+        total: calculateItemTotal({ ...item, commission: value })
+      } : item
     ));
   };
 
-  const handleItemPriceChange = (id: string, value: number) => {
+  const handleItemPriceChange = (id: string, field: 'unitPrice' | 'marketPrice', value: number) => {
     setItems(prev => prev.map(item => 
-      item.id === id ? { ...item, unitPrice: value } : item
+      item.id === id ? { 
+        ...item, 
+        [field]: value,
+        total: calculateItemTotal({ ...item, [field]: value })
+      } : item
     ));
-  };
-
-  const handleMarketPriceChange = (id: string, value: number) => {
-    setItems(prev => prev.map(item => 
-      item.id === id ? { ...item, marketPrice: value } : item
-    ));
-  };
-
-  const handleAddCost = () => {
-    if (!newCost.name || newCost.amount <= 0) {
-      toast.error('Please enter valid cost details');
-      return;
-    }
-    setAdditionalCosts(prev => [...prev, newCost]);
-    setNewCost({ name: '', amount: 0, type: 'fixed' });
-  };
-
-  const handleRemoveCost = (index: number) => {
-    setAdditionalCosts(prev => prev.filter((_, i) => i !== index));
   };
 
   const calculateItemTotal = (item: PurchaseOrderItem): number => {
@@ -189,7 +205,7 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
   };
 
   const calculateTotalAmount = (): number => {
-    const itemsTotal = items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
+    const itemsTotal = items.reduce((sum, item) => sum + item.total, 0);
     
     if (formData.pricingModel === 'fixed') {
       return itemsTotal + calculateAdditionalCosts(itemsTotal);
@@ -197,6 +213,85 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
 
     const marketValue = items.reduce((sum, item) => sum + ((item.marketPrice || 0) * item.quantity), 0);
     return itemsTotal + calculateAdditionalCosts(marketValue);
+  };
+
+  const handleAddCost = () => {
+    if (!newCost.name || newCost.amount <= 0) {
+      toast.error('Please enter valid cost details');
+      return;
+    }
+    setAdditionalCosts(prev => [...prev, newCost]);
+    setNewCost({ name: '', amount: 0, type: 'fixed' });
+  };
+
+  const handleRemoveCost = (index: number) => {
+    setAdditionalCosts(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddItem = () => {
+    if (products.length === 0) {
+      toast.error('No products available. Please add products first.');
+      return;
+    }
+
+    const newItem: PurchaseOrderItem = {
+      id: `item_${Date.now()}`,
+      productId: '',
+      productName: '',
+      skuId: '',
+      skuCode: '',
+      category: '',
+      quantity: 0,
+      unitType: 'box',
+      totalWeight: 0,
+      commission: commission,
+      marketPrice: 0,
+      unitPrice: 0,
+      total: 0
+    };
+
+    setItems(prev => [...prev, newItem]);
+  };
+
+  const handleRemoveItem = (id: string) => {
+    setItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleItemChange = (id: string, field: keyof PurchaseOrderItem, value: any) => {
+    setItems(prev => prev.map(item => {
+      if (item.id === id) {
+        const updatedItem = { ...item, [field]: value };
+        
+        // If product is changed, update related fields
+        if (field === 'productId') {
+          const product = products.find(p => p.id === value);
+          if (product) {
+            updatedItem.productName = product.name;
+            updatedItem.category = product.category;
+            updatedItem.skuId = '';
+            updatedItem.skuCode = '';
+          }
+        }
+        
+        // If SKU is changed, update SKU code
+        if (field === 'skuId') {
+          const product = products.find(p => p.id === item.productId);
+          if (product) {
+            const sku = product.skus.find((s: any) => s.id === value);
+            if (sku) {
+              updatedItem.skuCode = sku.code;
+              updatedItem.unitType = sku.unit_type;
+            }
+          }
+        }
+
+        // Recalculate total
+        updatedItem.total = calculateItemTotal(updatedItem);
+        
+        return updatedItem;
+      }
+      return item;
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -207,30 +302,50 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
       return;
     }
 
-    if (formData.pricingModel === 'fixed') {
-      const invalidItems = items.some(item => !item.unitPrice || item.unitPrice <= 0);
-      if (invalidItems) {
-        toast.error('Please enter valid unit prices for all items');
+    if (items.length === 0) {
+      toast.error('Please add at least one item');
+      return;
+    }
+
+    // Validate items
+    for (const item of items) {
+      if (!item.productId || !item.skuId || item.quantity <= 0) {
+        toast.error('Please complete all item details');
         return;
       }
-    } else {
-      const invalidItems = items.some(item => !item.marketPrice || item.marketPrice <= 0);
-      if (invalidItems) {
-        toast.error('Please enter valid market prices for all items');
-        return;
+
+      if (formData.pricingModel === 'fixed') {
+        if (!item.unitPrice || item.unitPrice <= 0) {
+          toast.error('Please enter valid unit prices for all items');
+          return;
+        }
+      } else {
+        if (!item.marketPrice || item.marketPrice <= 0) {
+          toast.error('Please enter valid market prices for all items');
+          return;
+        }
       }
     }
 
-    console.log('Form submitted:', {
+    const orderData = {
       ...formData,
       items,
-      commission: formData.pricingModel === 'commission' ? commission : undefined,
-      additionalCosts
-    });
+      additionalCosts,
+      totalAmount: calculateTotalAmount()
+    };
 
+    console.log('Purchase order data:', orderData);
     toast.success('Purchase order created successfully');
     navigate('/purchase-orders');
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -253,61 +368,66 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
 
       <div className="bg-white shadow-sm rounded-lg">
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Basic Details */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Supplier
+                Supplier <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={formData.supplier}
-                disabled
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-50"
+                onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                required
+                disabled={!!vehicleId}
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Order Date
+                Order Date <span className="text-red-500">*</span>
               </label>
               <input
                 type="datetime-local"
                 value={formData.orderDate}
                 onChange={(e) => setFormData({ ...formData, orderDate: e.target.value })}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                required
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Arrival Timestamp
+                Arrival Timestamp <span className="text-red-500">*</span>
               </label>
               <input
                 type="datetime-local"
                 value={formData.arrivalTimestamp}
-                disabled
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-50"
+                onChange={(e) => setFormData({ ...formData, arrivalTimestamp: e.target.value })}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                required
+                disabled={!!vehicleId}
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Payment Terms
+                Payment Terms (Days) <span className="text-red-500">*</span>
               </label>
-              <div className="mt-1 flex items-center">
-                <input
-                  type="number"
-                  value={formData.paymentTerms}
-                  onChange={(e) => setFormData({ ...formData, paymentTerms: parseInt(e.target.value) })}
-                  className="block w-20 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                />
-                <span className="ml-2 text-gray-500">Days</span>
-              </div>
+              <input
+                type="number"
+                value={formData.paymentTerms}
+                onChange={(e) => setFormData({ ...formData, paymentTerms: parseInt(e.target.value) })}
+                min="0"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                required
+              />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Pricing Model
+                Pricing Model <span className="text-red-500">*</span>
               </label>
               <select
                 value={formData.pricingModel}
@@ -334,6 +454,7 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
             </div>
           </div>
 
+          {/* Commission Settings */}
           {formData.pricingModel === 'commission' && (
             <div className="border-t pt-6">
               <h2 className="text-lg font-medium text-gray-900 mb-4">Commission Settings</h2>
@@ -355,18 +476,28 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
             </div>
           )}
 
+          {/* Items Section */}
           <div className="border-t pt-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Items</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-gray-900">Items</h2>
+              {!vehicleId && (
+                <button
+                  type="button"
+                  onClick={handleAddItem}
+                  className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Item
+                </button>
+              )}
+            </div>
             
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Category
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Item
+                      Product
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       SKU
@@ -375,7 +506,7 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
                       Quantity
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total Weight
+                      Weight
                     </th>
                     {formData.pricingModel === 'commission' ? (
                       <>
@@ -388,36 +519,78 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Unit Price (₹)
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total (₹)
-                        </th>
                       </>
                     ) : (
-                      <>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Unit Price (₹)
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total (₹)
-                        </th>
-                      </>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Unit Price (₹)
+                      </th>
                     )}
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Total (₹)
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {items.map((item) => (
                     <tr key={item.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.category}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {vehicleId ? (
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{item.productName}</div>
+                            <div className="text-sm text-gray-500">{item.category}</div>
+                          </div>
+                        ) : (
+                          <select
+                            value={item.productId}
+                            onChange={(e) => handleItemChange(item.id, 'productId', e.target.value)}
+                            className="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                          >
+                            <option value="">Select Product</option>
+                            {products.map((product) => (
+                              <option key={product.id} value={product.id}>
+                                {product.name} ({product.category})
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.name}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {vehicleId ? (
+                          <div className="text-sm text-gray-900">{item.skuCode}</div>
+                        ) : (
+                          <select
+                            value={item.skuId}
+                            onChange={(e) => handleItemChange(item.id, 'skuId', e.target.value)}
+                            className="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            disabled={!item.productId}
+                          >
+                            <option value="">Select SKU</option>
+                            {item.productId && products.find(p => p.id === item.productId)?.skus.map((sku: any) => (
+                              <option key={sku.id} value={sku.id}>
+                                {sku.code}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {item.sku}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.quantity} {item.unitType}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {vehicleId ? (
+                          <div className="text-sm text-gray-900">
+                            {item.quantity} {item.unitType === 'box' ? 'boxes' : 'kg'}
+                          </div>
+                        ) : (
+                          <input
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => handleItemChange(item.id, 'quantity', Number(e.target.value))}
+                            min="0"
+                            step="1"
+                            className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                          />
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {item.totalWeight} kg
@@ -428,10 +601,10 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
                             <input
                               type="number"
                               value={item.marketPrice || ''}
-                              onChange={(e) => handleMarketPriceChange(item.id, parseFloat(e.target.value))}
+                              onChange={(e) => handleItemPriceChange(item.id, 'marketPrice', parseFloat(e.target.value))}
                               step="0.1"
                               min="0"
-                              className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                              className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                             />
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -442,72 +615,97 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
                               step="0.1"
                               min="0"
                               max="100"
-                              className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                              className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                             />
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             ₹{calculateUnitPrice(item.marketPrice || 0, item.commission || 0).toFixed(2)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ₹{calculateItemTotal(item).toFixed(2)}
-                          </td>
                         </>
                       ) : (
-                        <>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <input
-                              type="number"
-                              value={item.unitPrice || ''}
-                              onChange={(e) => handleItemPriceChange(item.id, parseFloat(e.target.value))}
-                              step="0.1"
-                              min="0"
-                              className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            />
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ₹{calculateItemTotal(item).toFixed(2)}
-                          </td>
-                        </>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input
+                            type="number"
+                            value={item.unitPrice || ''}
+                            onChange={(e) => handleItemPriceChange(item.id, 'unitPrice', parseFloat(e.target.value))}
+                            step="0.1"
+                            min="0"
+                            className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                          />
+                        </td>
                       )}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ₹{item.total.toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {!vehicleId && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItem(item.id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="bg-gray-50">
                   <tr>
-                    <td colSpan={formData.pricingModel === 'commission' ? 8 : 6} className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
+                    <td colSpan={formData.pricingModel === 'commission' ? 7 : 5} className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
                       Items Subtotal:
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      ₹{items.reduce((sum, item) => sum + calculateItemTotal(item), 0).toFixed(2)}
+                      ₹{items.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
                     </td>
+                    <td></td>
                   </tr>
                 </tfoot>
               </table>
             </div>
+
+            {items.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                No items added yet. {!vehicleId && 'Click "Add Item" to get started.'}
+              </div>
+            )}
           </div>
 
+          {/* Additional Costs */}
           <div className="border-t pt-6">
             <h2 className="text-lg font-medium text-gray-900 mb-4">Additional Costs</h2>
             
-            <div className="space-y-2">
+            <div className="space-y-2 mb-4">
               {additionalCosts.map((cost, index) => (
-                <div key={index} className="flex items-center space-x-4">
-                  <span className="text-sm text-gray-600 w-32">{cost.name}</span>
-                  <span className="text-sm text-gray-900">
-                    {cost.amount} {cost.type === 'percentage' ? '%' : cost.type === 'per_box' ? '₹/box' : '₹'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveCost(index)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                  <div className="flex items-center space-x-4">
+                    <span className="text-sm font-medium text-gray-700 w-32">{cost.name}</span>
+                    <span className="text-sm text-gray-600">
+                      {cost.amount} {cost.type === 'percentage' ? '%' : cost.type === 'per_box' ? '₹/box' : '₹'}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium text-gray-900">
+                      ₹{(cost.type === 'per_box' 
+                        ? cost.amount * calculateTotalBoxes()
+                        : cost.type === 'percentage'
+                          ? (items.reduce((sum, item) => sum + ((item.marketPrice || 0) * item.quantity), 0) * cost.amount / 100)
+                          : cost.amount).toFixed(2)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCost(index)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
 
-            <div className="mt-2 flex items-end space-x-4">
+            <div className="flex items-end space-x-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Cost Name</label>
                 <input
@@ -515,6 +713,7 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
                   value={newCost.name}
                   onChange={(e) => setNewCost({ ...newCost, name: e.target.value })}
                   className="mt-1 block w-48 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  placeholder="e.g., Transport Cost"
                 />
               </div>
               <div>
@@ -550,12 +749,13 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
             </div>
           </div>
 
+          {/* Total Summary */}
           <div className="border-t pt-6">
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm font-medium">
                   <span className="text-gray-600">Items Subtotal:</span>
-                  <span className="text-gray-900">₹{items.reduce((sum, item) => sum + calculateItemTotal(item), 0).toFixed(2)}</span>
+                  <span className="text-gray-900">₹{items.reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span>
                 </div>
                 {additionalCosts.map((cost, index) => (
                   <div key={index} className="flex justify-between text-sm">
@@ -569,7 +769,7 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
                     </span>
                   </div>
                 ))}
-                <div className="border-t pt-2 flex justify-between text-sm font-medium">
+                <div className="border-t pt-2 flex justify-between text-lg font-bold">
                   <span className="text-gray-900">Total Amount:</span>
                   <span className="text-gray-900">₹{calculateTotalAmount().toFixed(2)}</span>
                 </div>
@@ -577,6 +777,7 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
             </div>
           </div>
 
+          {/* Form Actions */}
           <div className="border-t pt-6 flex justify-end space-x-3">
             <button
               type="button"
