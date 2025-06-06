@@ -13,7 +13,6 @@ interface SKU {
   id: string;
   code: string;
   unitType: 'box' | 'loose';
-  unitWeight?: number;
   quantity: number;
   totalWeight: number;
 }
@@ -48,9 +47,8 @@ const EditVehicleArrival: React.FC = () => {
             id: 'sku1',
             code: 'POMO-MH-001',
             unitType: 'box' as const,
-            unitWeight: 10,
             quantity: 100,
-            totalWeight: 1000
+            totalWeight: 100
           }
         ]
       }
@@ -120,7 +118,6 @@ const EditVehicleArrival: React.FC = () => {
             id: skuId,
             code: '',
             unitType: 'box',
-            unitWeight: 0,
             quantity: 0,
             totalWeight: 0
           }]
@@ -138,12 +135,9 @@ const EditVehicleArrival: React.FC = () => {
           skus: product.skus.map(sku => {
             if (sku.id === skuId) {
               const updatedSKU = { ...sku, ...updates };
-              // Auto-calculate total weight
-              if (updatedSKU.unitType === 'box' && updatedSKU.unitWeight && updatedSKU.quantity) {
-                updatedSKU.totalWeight = updatedSKU.unitWeight * updatedSKU.quantity;
-              } else if (updatedSKU.unitType === 'loose') {
-                updatedSKU.totalWeight = updatedSKU.quantity;
-              }
+              // For box type, total weight equals quantity (number of boxes)
+              // For loose type, total weight equals quantity (total weight in kg)
+              updatedSKU.totalWeight = updatedSKU.quantity;
               return updatedSKU;
             }
             return sku;
@@ -417,7 +411,7 @@ const EditVehicleArrival: React.FC = () => {
                           </button>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               SKU Code <span className="text-red-500">*</span>
@@ -438,8 +432,7 @@ const EditVehicleArrival: React.FC = () => {
                             <select
                               value={sku.unitType}
                               onChange={(e) => handleUpdateSKU(product.id, sku.id, { 
-                                unitType: e.target.value as 'box' | 'loose',
-                                unitWeight: e.target.value === 'loose' ? undefined : sku.unitWeight
+                                unitType: e.target.value as 'box' | 'loose'
                               })}
                               className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                             >
@@ -447,22 +440,6 @@ const EditVehicleArrival: React.FC = () => {
                               <option value="loose">Loose</option>
                             </select>
                           </div>
-
-                          {sku.unitType === 'box' && (
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Unit Weight (kg) <span className="text-red-500">*</span>
-                              </label>
-                              <input
-                                type="number"
-                                value={sku.unitWeight || ''}
-                                onChange={(e) => handleUpdateSKU(product.id, sku.id, { unitWeight: Number(e.target.value) })}
-                                min="0"
-                                step="0.1"
-                                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                              />
-                            </div>
-                          )}
 
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -481,7 +458,10 @@ const EditVehicleArrival: React.FC = () => {
 
                         {sku.totalWeight > 0 && (
                           <div className="mt-3 text-sm text-gray-600">
-                            Total Weight: <span className="font-medium">{sku.totalWeight} kg</span>
+                            {sku.unitType === 'box' 
+                              ? `Total: ${sku.totalWeight} boxes`
+                              : `Total Weight: ${sku.totalWeight} kg`
+                            }
                           </div>
                         )}
                       </div>
