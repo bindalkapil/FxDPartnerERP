@@ -32,6 +32,8 @@ interface StatusUpdateData {
     originalQuantity: number;
     unloadedQuantity: number;
     unit: string;
+    difference: number;
+    differenceType: 'exact' | 'shortage' | 'excess';
   }>;
   cancellationReason?: string;
 }
@@ -115,6 +117,13 @@ const VehicleArrival: React.FC = () => {
     }
   };
 
+  const calculateDifference = (original: number, unloaded: number) => {
+    const diff = unloaded - original;
+    if (diff === 0) return { difference: 0, type: 'exact' as const };
+    if (diff < 0) return { difference: Math.abs(diff), type: 'shortage' as const };
+    return { difference: diff, type: 'excess' as const };
+  };
+
   const handleStatusUpdate = (vehicle: VehicleArrival, action: string) => {
     setSelectedVehicle(vehicle);
     setStatusAction(action);
@@ -122,13 +131,18 @@ const VehicleArrival: React.FC = () => {
     if (action === 'complete') {
       // Prepare unloaded items data for confirmation
       setStatusUpdateData({
-        unloadedItems: vehicle.vehicle_arrival_items.map((item, index) => ({
-          id: `item_${index}`,
-          name: item.product.name,
-          originalQuantity: item.quantity,
-          unloadedQuantity: item.quantity, // Default to original quantity
-          unit: item.unit_type === 'box' ? 'boxes' : 'kg'
-        }))
+        unloadedItems: vehicle.vehicle_arrival_items.map((item, index) => {
+          const { difference, type } = calculateDifference(item.quantity, item.quantity);
+          return {
+            id: `item_${index}`,
+            name: item.product.name,
+            originalQuantity: item.quantity,
+            unloadedQuantity: item.quantity, // Default to original quantity
+            unit: item.unit_type === 'box' ? 'boxes' : 'kg',
+            difference,
+            differenceType: type
+          };
+        })
       });
     } else if (action === 'cancel') {
       setStatusUpdateData({
@@ -139,6 +153,26 @@ const VehicleArrival: React.FC = () => {
     }
     
     setShowStatusModal(true);
+  };
+
+  const updateUnloadedQuantity = (index: number, newQuantity: number) => {
+    if (!statusUpdateData.unloadedItems) return;
+
+    const newItems = [...statusUpdateData.unloadedItems];
+    const item = newItems[index];
+    const { difference, type } = calculateDifference(item.originalQuantity, newQuantity);
+    
+    newItems[index] = {
+      ...item,
+      unloadedQuantity: newQuantity,
+      difference,
+      differenceType: type
+    };
+
+    setStatusUpdateData({
+      ...statusUpdateData,
+      unloadedItems: newItems
+    });
   };
 
   const confirmStatusUpdate = async () => {
@@ -153,11 +187,11 @@ const VehicleArrival: React.FC = () => {
         }
 
         const hasInvalidQuantity = statusUpdateData.unloadedItems.some(
-          item => item.unloadedQuantity < 0 || item.unloadedQuantity > item.originalQuantity
+          item => item.unloadedQuantity < 0
         );
 
         if (hasInvalidQuantity) {
-          toast.error('Unloaded quantities must be between 0 and original quantity');
+          toast.error('Unloaded quantities cannot be negative');
           return;
         }
 
@@ -171,7 +205,23 @@ const VehicleArrival: React.FC = () => {
           )
         );
 
-        toast.success('Vehicle arrival marked as completed');
+        // Show summary of differences if any
+        const itemsWithDifferences = statusUpdateData.unloadedItems.filter(item => item.differenceType !== 'exact');
+        if (itemsWithDifferences.length > 0) {
+          const shortages = itemsWithDifferences.filter(item => item.differenceType === 'shortage');
+          const excesses = itemsWithDifferences.filter(item => item.differenceType === 'excess');
+          
+          let message = 'Vehicle arrival marked as completed';
+          if (shortages.length > 0) {
+            message += ` with ${shortages.length} shortage(s)`;
+          }
+          if (excesses.length > 0) {
+            message += ` with ${excesses.length} excess(es)`;
+          }
+          toast.success(message);
+        } else {
+          toast.success('Vehicle arrival marked as completed - all quantities match exactly');
+        }
       } else if (statusAction === 'create-po') {
         // Redirect to PO creation page with vehicle data
         navigate(`/purchase-orders/new?vehicleId=${selectedVehicle.id}`);
@@ -200,6 +250,16 @@ const VehicleArrival: React.FC = () => {
     setSelectedVehicle(null);
     setStatusAction('');
     setStatusUpdateData({});
+  };
+
+  const getDifferenceDisplay = (item: StatusUpdateData['unloadedItems'][0]) => {
+    if (item.differenceType === 'exact') {
+      return <span className="text-green-600 text-xs">✓ Exact match</span>;
+    } else if (item.differenceType === 'shortage') {
+      return <span className="text-red-600 text-xs">↓ Short by {item.difference} {item.unit}</span>;
+    } else {
+      return <span className="text-orange-600 text-xs">↑ Excess of {item.difference} {item.unit}</span>;
+    }
   };
 
   const getStatusModalContent = () => {
@@ -234,38 +294,60 @@ const VehicleArrival: React.FC = () => {
             </h4>
             <div className="space-y-3">
               {statusUpdateData.unloadedItems?.map((item, index) => (
-                <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-gray-900">{item.name}</div>
-                    <div className="text-xs text-gray-500">
-                      Original: {item.originalQuantity} {item.unit}
+                <div key={item.id} className="border rounded-md p-3 bg-gray-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-gray-900">{item.name}</div>
+                      <div className="text-xs text-gray-500">
+                        Original: {item.originalQuantity} {item.unit}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <label className="text-xs text-gray-500">Unloaded:</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.unloadedQuantity}
+                        onChange={(e) => updateUnloadedQuantity(index, Number(e.target.value))}
+                        className="w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                      />
+                      <span className="text-xs text-gray-500">{item.unit}</span>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <label className="text-xs text-gray-500">Unloaded:</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max={item.originalQuantity}
-                      value={item.unloadedQuantity}
-                      onChange={(e) => {
-                        const newItems = [...(statusUpdateData.unloadedItems || [])];
-                        newItems[index] = {
-                          ...newItems[index],
-                          unloadedQuantity: Number(e.target.value)
-                        };
-                        setStatusUpdateData({
-                          ...statusUpdateData,
-                          unloadedItems: newItems
-                        });
-                      }}
-                      className="w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                    />
-                    <span className="text-xs text-gray-500">{item.unit}</span>
+                  
+                  {/* Difference Display */}
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-gray-600">
+                      Difference: {item.originalQuantity} → {item.unloadedQuantity}
+                    </div>
+                    <div>
+                      {getDifferenceDisplay(item)}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
+            
+            {/* Summary */}
+            <div className="mt-4 p-3 bg-blue-50 rounded-md">
+              <div className="text-xs text-blue-800">
+                <strong>Summary:</strong>
+                {(() => {
+                  const exactMatches = statusUpdateData.unloadedItems?.filter(item => item.differenceType === 'exact').length || 0;
+                  const shortages = statusUpdateData.unloadedItems?.filter(item => item.differenceType === 'shortage').length || 0;
+                  const excesses = statusUpdateData.unloadedItems?.filter(item => item.differenceType === 'excess').length || 0;
+                  
+                  return (
+                    <div className="space-y-1">
+                      <div>✓ {exactMatches} item(s) match exactly</div>
+                      {shortages > 0 && <div className="text-red-600">↓ {shortages} item(s) have shortages</div>}
+                      {excesses > 0 && <div className="text-orange-600">↑ {excesses} item(s) have excess quantities</div>}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+            
             <div className="mt-3 text-xs text-gray-500">
               * You can adjust quantities if there were any discrepancies during unloading
             </div>
