@@ -40,11 +40,11 @@ interface PurchaseOrderData {
   totalAmount: number;
 }
 
-interface NewPurchaseOrderProps {
+interface NewRecordPurchaseProps {
   initialData?: PurchaseOrderData;
 }
 
-const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
+const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
@@ -334,9 +334,9 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
       totalAmount: calculateTotalAmount()
     };
 
-    console.log('Purchase order data:', orderData);
-    toast.success('Purchase order created successfully');
-    navigate('/purchase-orders');
+    console.log('Purchase record data:', orderData);
+    toast.success('Purchase record created successfully');
+    navigate('/record-purchase');
   };
 
   if (loading) {
@@ -352,7 +352,7 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <button
-            onClick={() => navigate('/purchase-orders')}
+            onClick={() => navigate('/record-purchase')}
             className="text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft className="h-6 w-6" />
@@ -360,7 +360,7 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
           <div className="flex items-center">
             <Package2 className="h-6 w-6 text-green-600 mr-2" />
             <h1 className="text-2xl font-bold text-gray-800">
-              {initialData ? 'Edit Purchase Order' : 'New Purchase Order'}
+              {initialData ? 'Edit Purchase Record' : 'New Purchase Record'}
             </h1>
           </div>
         </div>
@@ -386,7 +386,7 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Order Date <span className="text-red-500">*</span>
+                Record Date <span className="text-red-500">*</span>
               </label>
               <input
                 type="datetime-local"
@@ -781,7 +781,7 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
           <div className="border-t pt-6 flex justify-end space-x-3">
             <button
               type="button"
-              onClick={() => navigate('/purchase-orders')}
+              onClick={() => navigate('/record-purchase')}
               className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
             >
               Cancel
@@ -790,7 +790,7 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
               type="submit"
               className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
             >
-              {initialData ? 'Update Purchase Order' : 'Create Purchase Order'}
+              {initialData ? 'Update Purchase Record' : 'Create Purchase Record'}
             </button>
           </div>
         </form>
@@ -799,4 +799,4 @@ const NewPurchaseOrder: React.FC<NewPurchaseOrderProps> = ({ initialData }) => {
   );
 };
 
-export default NewPurchaseOrder;
+export default NewRecordPurchase;

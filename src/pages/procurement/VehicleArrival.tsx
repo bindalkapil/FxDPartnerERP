@@ -94,7 +94,7 @@ const VehicleArrival: React.FC = () => {
       case 'completed':
         return 'Completed';
       case 'po-created':
-        return 'PO Created';
+        return 'Record Created';
       case 'cancelled':
         return 'Cancelled';
       default:
@@ -111,7 +111,7 @@ const VehicleArrival: React.FC = () => {
       case 'pending':
         return 'complete';
       case 'completed':
-        return 'create-po';
+        return 'create-record';
       default:
         return null;
     }
@@ -222,9 +222,9 @@ const VehicleArrival: React.FC = () => {
         } else {
           toast.success('Vehicle arrival marked as completed - all quantities match exactly');
         }
-      } else if (statusAction === 'create-po') {
-        // Redirect to PO creation page with vehicle data
-        navigate(`/purchase-orders/new?vehicleId=${selectedVehicle.id}`);
+      } else if (statusAction === 'create-record') {
+        // Redirect to Record Purchase creation page with vehicle data
+        navigate(`/record-purchase/new?vehicleId=${selectedVehicle.id}`);
         setShowStatusModal(false);
         return;
       } else if (statusAction === 'cancel') {
@@ -356,11 +356,11 @@ const VehicleArrival: React.FC = () => {
       );
     }
 
-    if (statusAction === 'create-po') {
+    if (statusAction === 'create-record') {
       return (
         <div className="mt-4">
           <p className="text-sm text-gray-500">
-            Proceeding will take you to the Purchase Order creation page where you can set prices and create the PO for this vehicle arrival.
+            Proceeding will take you to the Record Purchase page where you can set prices and create the purchase record for this vehicle arrival.
           </p>
         </div>
       );
@@ -373,8 +373,8 @@ const VehicleArrival: React.FC = () => {
     switch (statusAction) {
       case 'complete':
         return 'Mark as Completed';
-      case 'create-po':
-        return 'Create Purchase Order';
+      case 'create-record':
+        return 'Create Purchase Record';
       case 'cancel':
         return 'Cancel Vehicle Arrival';
       default:
@@ -386,8 +386,8 @@ const VehicleArrival: React.FC = () => {
     switch (statusAction) {
       case 'complete':
         return 'Mark as Completed';
-      case 'create-po':
-        return 'Create Purchase Order';
+      case 'create-record':
+        return 'Create Purchase Record';
       case 'cancel':
         return 'Cancel Arrival';
       default:
@@ -465,7 +465,7 @@ const VehicleArrival: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">PO Created</p>
+              <p className="text-sm font-medium text-gray-500">Record Created</p>
               <p className="text-2xl font-bold text-gray-800">
                 {vehicles.filter(v => v.status === 'po-created').length}
               </p>

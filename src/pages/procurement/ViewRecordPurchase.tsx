@@ -2,14 +2,14 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Package2, ArrowLeft, FileText, Pencil } from 'lucide-react';
 
-const ViewPurchaseOrder: React.FC = () => {
+const ViewRecordPurchase: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
   // Mock data - in a real app, this would be fetched from an API
   const orderData = {
-    id: 'PO001',
-    orderNumber: 'PO-2025-001',
+    id: 'RP001',
+    orderNumber: 'RP-2025-001',
     supplier: 'Green Farms',
     orderDate: '2025-06-18 08:30 AM',
     arrivalTimestamp: '2025-06-18 08:30 AM',
@@ -45,23 +45,23 @@ const ViewPurchaseOrder: React.FC = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <button
-            onClick={() => navigate('/purchase-orders')}
+            onClick={() => navigate('/record-purchase')}
             className="text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft className="h-6 w-6" />
           </button>
           <div className="flex items-center">
             <Package2 className="h-6 w-6 text-green-600 mr-2" />
-            <h1 className="text-2xl font-bold text-gray-800">View Purchase Order</h1>
+            <h1 className="text-2xl font-bold text-gray-800">View Purchase Record</h1>
           </div>
         </div>
         {orderData.status === 'draft' && (
           <button
-            onClick={() => navigate(`/purchase-orders/edit/${id}`)}
+            onClick={() => navigate(`/record-purchase/edit/${id}`)}
             className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
           >
             <Pencil className="h-4 w-4 mr-1" />
-            Edit Order
+            Edit Record
           </button>
         )}
       </div>
@@ -70,10 +70,10 @@ const ViewPurchaseOrder: React.FC = () => {
         <div className="p-6 space-y-6">
           {/* Basic Details */}
           <div>
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Order Details</h2>
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Record Details</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-500">Order Number</label>
+                <label className="block text-sm font-medium text-gray-500">Record Number</label>
                 <p className="mt-1 text-sm text-gray-900">{orderData.orderNumber}</p>
               </div>
               <div>
@@ -81,7 +81,7 @@ const ViewPurchaseOrder: React.FC = () => {
                 <p className="mt-1 text-sm text-gray-900">{orderData.supplier}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-500">Order Date</label>
+                <label className="block text-sm font-medium text-gray-500">Record Date</label>
                 <p className="mt-1 text-sm text-gray-900">{orderData.orderDate}</p>
               </div>
               <div>
@@ -222,4 +222,4 @@ const ViewPurchaseOrder: React.FC = () => {
   );
 };
 
-export default ViewPurchaseOrder;
+export default ViewRecordPurchase;

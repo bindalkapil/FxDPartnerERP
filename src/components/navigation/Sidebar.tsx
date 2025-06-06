@@ -99,7 +99,7 @@ const Sidebar: React.FC = () => {
           
           {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Procurement</div>}
           <NavItem to="/vehicle-arrival" icon={<Truck size={20} />} label="Vehicle Arrival" closeSidebar={closeSidebar} />
-          <NavItem to="/purchase-orders" icon={<ClipboardList size={20} />} label="Purchase Orders" closeSidebar={closeSidebar} />
+          <NavItem to="/record-purchase" icon={<ClipboardList size={20} />} label="Record Purchase" closeSidebar={closeSidebar} />
           
           {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Inventory</div>}
           <NavItem to="/inventory" icon={<Package size={20} />} label="Inventory" closeSidebar={closeSidebar} />

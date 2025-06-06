@@ -1,14 +1,14 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
-import NewPurchaseOrder from './NewPurchaseOrder';
+import NewRecordPurchase from './NewRecordPurchase';
 
-const EditPurchaseOrder: React.FC = () => {
+const EditRecordPurchase: React.FC = () => {
   const { id } = useParams();
 
   // Mock data - in a real app, this would be fetched from an API
   const orderData = {
-    id: 'PO002',
-    orderNumber: 'PO-2025-002',
+    id: 'RP002',
+    orderNumber: 'RP-2025-002',
     supplier: 'Fresh Harvests',
     orderDate: '2025-06-18T10:15',
     arrivalTimestamp: '2025-06-18T10:15',
@@ -38,7 +38,7 @@ const EditPurchaseOrder: React.FC = () => {
     totalAmount: 75000
   };
 
-  return <NewPurchaseOrder initialData={orderData} />;
+  return <NewRecordPurchase initialData={orderData} />;
 };
 
-export default EditPurchaseOrder;
+export default EditRecordPurchase;

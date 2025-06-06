@@ -14,10 +14,10 @@ import VehicleArrival from './pages/procurement/VehicleArrival';
 import NewVehicleArrival from './pages/procurement/NewVehicleArrival';
 import ViewVehicleArrival from './pages/procurement/ViewVehicleArrival';
 import EditVehicleArrival from './pages/procurement/EditVehicleArrival';
-import PurchaseOrders from './pages/procurement/PurchaseOrders';
-import NewPurchaseOrder from './pages/procurement/NewPurchaseOrder';
-import ViewPurchaseOrder from './pages/procurement/ViewPurchaseOrder';
-import EditPurchaseOrder from './pages/procurement/EditPurchaseOrder';
+import RecordPurchase from './pages/procurement/RecordPurchase';
+import NewRecordPurchase from './pages/procurement/NewRecordPurchase';
+import ViewRecordPurchase from './pages/procurement/ViewRecordPurchase';
+import EditRecordPurchase from './pages/procurement/EditRecordPurchase';
 import Inventory from './pages/inventory/Inventory';
 import Sales from './pages/sales/Sales';
 import Dispatch from './pages/sales/Dispatch';
@@ -68,10 +68,10 @@ function App() {
               <Route path="vehicle-arrival/new" element={<NewVehicleArrival />} />
               <Route path="vehicle-arrival/view/:id" element={<ViewVehicleArrival />} />
               <Route path="vehicle-arrival/edit/:id" element={<EditVehicleArrival />} />
-              <Route path="purchase-orders" element={<PurchaseOrders />} />
-              <Route path="purchase-orders/new" element={<NewPurchaseOrder />} />
-              <Route path="purchase-orders/view/:id" element={<ViewPurchaseOrder />} />
-              <Route path="purchase-orders/edit/:id" element={<EditPurchaseOrder />} />
+              <Route path="record-purchase" element={<RecordPurchase />} />
+              <Route path="record-purchase/new" element={<NewRecordPurchase />} />
+              <Route path="record-purchase/view/:id" element={<ViewRecordPurchase />} />
+              <Route path="record-purchase/edit/:id" element={<EditRecordPurchase />} />
               <Route path="inventory" element={<Inventory />} />
               <Route path="sales" element={<Sales />} />
               <Route path="dispatch" element={<Dispatch />} />

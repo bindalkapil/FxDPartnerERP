@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Package2, Search, Filter, Eye, Pencil, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-interface PurchaseOrder {
+interface RecordPurchase {
   id: string;
   orderNumber: string;
   supplier: string;
@@ -17,10 +17,10 @@ interface PurchaseOrder {
   pricingModel: 'commission' | 'fixed';
 }
 
-const mockPurchaseOrders: PurchaseOrder[] = [
+const mockRecordPurchases: RecordPurchase[] = [
   {
-    id: 'PO001',
-    orderNumber: 'PO-2025-001',
+    id: 'RP001',
+    orderNumber: 'RP-2025-001',
     supplier: 'Green Farms',
     orderDate: '2025-06-18 08:30 AM',
     items: [
@@ -35,8 +35,8 @@ const mockPurchaseOrders: PurchaseOrder[] = [
     pricingModel: 'commission'
   },
   {
-    id: 'PO002',
-    orderNumber: 'PO-2025-002',
+    id: 'RP002',
+    orderNumber: 'RP-2025-002',
     supplier: 'Fresh Harvests',
     orderDate: '2025-06-18 10:15 AM',
     items: [
@@ -51,8 +51,8 @@ const mockPurchaseOrders: PurchaseOrder[] = [
     pricingModel: 'fixed'
   },
   {
-    id: 'PO003',
-    orderNumber: 'PO-2025-003',
+    id: 'RP003',
+    orderNumber: 'RP-2025-003',
     supplier: 'Organic Fruits Co.',
     orderDate: '2025-06-18 11:45 AM',
     items: [
@@ -68,9 +68,9 @@ const mockPurchaseOrders: PurchaseOrder[] = [
   }
 ];
 
-const PurchaseOrders: React.FC = () => {
+const RecordPurchase: React.FC = () => {
   const navigate = useNavigate();
-  const [orders, setOrders] = useState<PurchaseOrder[]>(mockPurchaseOrders);
+  const [orders, setOrders] = useState<RecordPurchase[]>(mockRecordPurchases);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedPricingModel, setSelectedPricingModel] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -91,7 +91,7 @@ const PurchaseOrders: React.FC = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center">
           <Package2 className="h-6 w-6 text-green-600 mr-2" />
-          <h1 className="text-2xl font-bold text-gray-800">Purchase Orders</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Record Purchase</h1>
         </div>
       </div>
 
@@ -100,7 +100,7 @@ const PurchaseOrders: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Total Orders</p>
+              <p className="text-sm font-medium text-gray-500">Total Records</p>
               <p className="text-2xl font-bold text-gray-800">{orders.length}</p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
@@ -111,7 +111,7 @@ const PurchaseOrders: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Draft Orders</p>
+              <p className="text-sm font-medium text-gray-500">Draft Records</p>
               <p className="text-2xl font-bold text-gray-800">
                 {orders.filter(order => order.status === 'draft').length}
               </p>
@@ -124,7 +124,7 @@ const PurchaseOrders: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Completed Orders</p>
+              <p className="text-sm font-medium text-gray-500">Completed Records</p>
               <p className="text-2xl font-bold text-gray-800">
                 {orders.filter(order => order.status === 'completed').length}
               </p>
@@ -158,7 +158,7 @@ const PurchaseOrders: React.FC = () => {
           <input
             type="text"
             className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500"
-            placeholder="Search orders..."
+            placeholder="Search records..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -189,14 +189,14 @@ const PurchaseOrders: React.FC = () => {
         </div>
       </div>
 
-      {/* Orders Table */}
+      {/* Records Table */}
       <div className="bg-white shadow-sm rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Order Details
+                  Record Details
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Supplier
@@ -259,14 +259,14 @@ const PurchaseOrders: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
                       <button 
-                        onClick={() => navigate(`/purchase-orders/view/${order.id}`)}
+                        onClick={() => navigate(`/record-purchase/view/${order.id}`)}
                         className="text-indigo-600 hover:text-indigo-900"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       {order.status === 'draft' && (
                         <button 
-                          onClick={() => navigate(`/purchase-orders/edit/${order.id}`)}
+                          onClick={() => navigate(`/record-purchase/edit/${order.id}`)}
                           className="text-gray-600 hover:text-gray-900"
                         >
                           <Pencil className="h-4 w-4" />
@@ -282,7 +282,7 @@ const PurchaseOrders: React.FC = () => {
         
         {filteredOrders.length === 0 && (
           <div className="py-6 text-center text-gray-500">
-            No purchase orders found.
+            No purchase records found.
           </div>
         )}
       </div>
@@ -290,4 +290,4 @@ const PurchaseOrders: React.FC = () => {
   );
 };
 
-export default PurchaseOrders;
+export default RecordPurchase;
