@@ -600,7 +600,7 @@ const EditVehicleArrival: React.FC = () => {
 
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Unit Type <span className="text-red-500">*</span>
+                                Packaging Type <span className="text-red-500">*</span>
                               </label>
                               <select
                                 value={sku.unitType}
