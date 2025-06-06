@@ -16,7 +16,6 @@ interface SKU {
 interface Product {
   id: string;
   name: string;
-  category: string;
   skus: SKU[];
 }
 
@@ -42,84 +41,69 @@ const NewVehicleArrival: React.FC = () => {
   });
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [newProduct, setNewProduct] = useState('');
-  const [newCategory, setNewCategory] = useState('');
-  const [showProductForm, setShowProductForm] = useState(false);
-  const [editingProductId, setEditingProductId] = useState<string | null>(null);
-  
-  // SKU form state
-  const [newSKU, setNewSKU] = useState({
-    code: '',
-    unitType: 'box' as const,
-    unitWeight: 0,
-    quantity: 0
-  });
-
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const handleAddProduct = () => {
-    if (!newProduct.trim() || !newCategory.trim()) {
-      toast.error('Please enter both product name and category');
-      return;
-    }
-
     const productId = `temp_${Date.now()}`;
     setProducts(prev => [...prev, {
       id: productId,
-      name: newProduct,
-      category: newCategory,
+      name: '',
       skus: []
     }]);
+  };
 
-    setNewProduct('');
-    setNewCategory('');
-    setEditingProductId(productId);
-    setShowProductForm(false);
+  const handleUpdateProductName = (productId: string, name: string) => {
+    setProducts(prev => prev.map(product => 
+      product.id === productId ? { ...product, name } : product
+    ));
   };
 
   const handleAddSKU = (productId: string) => {
-    if (!newSKU.code.trim() || 
-        (newSKU.unitType === 'box' && newSKU.unitWeight <= 0) || 
-        newSKU.quantity <= 0) {
-      toast.error('Please fill in all SKU details');
-      return;
-    }
-
-    const totalWeight = newSKU.unitType === 'box' 
-      ? newSKU.quantity * newSKU.unitWeight 
-      : newSKU.quantity;
-
+    const skuId = `temp_${Date.now()}`;
     setProducts(prev => prev.map(product => {
       if (product.id === productId) {
         return {
           ...product,
           skus: [...product.skus, {
-            id: `temp_${Date.now()}`,
-            code: newSKU.code,
-            unitType: newSKU.unitType,
-            unitWeight: newSKU.unitType === 'box' ? newSKU.unitWeight : undefined,
-            quantity: newSKU.quantity,
-            totalWeight
+            id: skuId,
+            code: '',
+            unitType: 'box',
+            unitWeight: 0,
+            quantity: 0,
+            totalWeight: 0
           }]
         };
       }
       return product;
     }));
+  };
 
-    // Reset SKU form
-    setNewSKU({
-      code: '',
-      unitType: 'box',
-      unitWeight: 0,
-      quantity: 0
-    });
+  const handleUpdateSKU = (productId: string, skuId: string, updates: Partial<SKU>) => {
+    setProducts(prev => prev.map(product => {
+      if (product.id === productId) {
+        return {
+          ...product,
+          skus: product.skus.map(sku => {
+            if (sku.id === skuId) {
+              const updatedSKU = { ...sku, ...updates };
+              // Auto-calculate total weight
+              if (updatedSKU.unitType === 'box' && updatedSKU.unitWeight && updatedSKU.quantity) {
+                updatedSKU.totalWeight = updatedSKU.unitWeight * updatedSKU.quantity;
+              } else if (updatedSKU.unitType === 'loose') {
+                updatedSKU.totalWeight = updatedSKU.quantity;
+              }
+              return updatedSKU;
+            }
+            return sku;
+          })
+        };
+      }
+      return product;
+    }));
   };
 
   const handleRemoveProduct = (productId: string) => {
     setProducts(prev => prev.filter(p => p.id !== productId));
-    if (editingProductId === productId) {
-      setEditingProductId(null);
-    }
   };
 
   const handleRemoveSKU = (productId: string, skuId: string) => {
@@ -186,28 +170,50 @@ const NewVehicleArrival: React.FC = () => {
       return;
     }
 
-    if (products.some(p => p.skus.length === 0)) {
-      toast.error('Each product must have at least one SKU');
-      return;
+    // Validate products and SKUs
+    for (const product of products) {
+      if (!product.name.trim()) {
+        toast.error('Please enter product name for all products');
+        return;
+      }
+      
+      if (product.skus.length === 0) {
+        toast.error(`Product "${product.name}" must have at least one SKU`);
+        return;
+      }
+
+      for (const sku of product.skus) {
+        if (!sku.code.trim()) {
+          toast.error(`Please enter SKU code for all SKUs in "${product.name}"`);
+          return;
+        }
+        
+        if (sku.unitType === 'box' && sku.unitWeight <= 0) {
+          toast.error(`Please enter valid unit weight for box SKUs in "${product.name}"`);
+          return;
+        }
+        
+        if (sku.quantity <= 0) {
+          toast.error(`Please enter valid quantity for all SKUs in "${product.name}"`);
+          return;
+        }
+      }
     }
 
     setIsSubmitting(true);
 
     try {
       // Create products and SKUs in database
-      const dbProducts = [];
       const dbItems = [];
 
       for (const product of products) {
-        // Create product
+        // Create product with a default category
         const dbProduct = await createProduct({
           name: product.name,
-          category: product.category,
-          description: `${product.category} - ${product.name}`,
+          category: 'General', // Default category since we removed category selection
+          description: product.name,
           status: 'active'
         });
-
-        dbProducts.push(dbProduct);
 
         // Create SKUs for this product
         for (const sku of product.skus) {
@@ -399,7 +405,7 @@ const NewVehicleArrival: React.FC = () => {
               <h2 className="text-lg font-medium text-gray-900">Products <span className="text-red-500">*</span></h2>
               <button
                 type="button"
-                onClick={() => setShowProductForm(true)}
+                onClick={handleAddProduct}
                 className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
               >
                 <Plus className="h-4 w-4 mr-1" />
@@ -407,192 +413,146 @@ const NewVehicleArrival: React.FC = () => {
               </button>
             </div>
 
-            {/* Add Product Form */}
-            {showProductForm && (
-              <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Category
-                    </label>
-                    <input
-                      type="text"
-                      value={newCategory}
-                      onChange={(e) => setNewCategory(e.target.value)}
-                      className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                      placeholder="e.g., Pomegranate, Mango, Imported"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Product Name
-                    </label>
-                    <input
-                      type="text"
-                      value={newProduct}
-                      onChange={(e) => setNewProduct(e.target.value)}
-                      className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                      placeholder="e.g., POMO MH, Alphonso"
-                    />
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <button
-                      type="button"
-                      onClick={handleAddProduct}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                    >
-                      Add
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowProductForm(false)}
-                      className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Products List */}
-            <div className="space-y-4">
-              {products.map((product) => (
-                <div key={product.id} className="border rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center">
-                      <h3 className="text-sm font-medium text-gray-900">{product.category} - {product.name}</h3>
-                      <span className="ml-2 text-sm text-gray-500">
-                        ({product.skus.length} SKUs)
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditingProductId(editingProductId === product.id ? null : product.id)}
-                        className="text-gray-600 hover:text-gray-900"
-                      >
-                        {editingProductId === product.id ? 'Close' : 'Add SKU'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveProduct(product.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
+            <div className="space-y-6">
+              {products.map((product, productIndex) => (
+                <div key={product.id} className="border rounded-lg p-4 bg-gray-50">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-medium text-gray-900">Product {productIndex + 1}</h3>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveProduct(product.id)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
 
-                  {/* SKU List */}
-                  {product.skus.length > 0 && (
-                    <div className="p-4">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead>
-                          <tr>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Unit Type</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total Weight</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {product.skus.map((sku) => (
-                            <tr key={sku.id} className="hover:bg-gray-50">
-                              <td className="px-3 py-2 text-sm text-gray-900">{sku.code}</td>
-                              <td className="px-3 py-2 text-sm text-gray-900">
-                                {sku.unitType === 'box' ? `Box (${sku.unitWeight}kg)` : 'Loose'}
-                              </td>
-                              <td className="px-3 py-2 text-sm text-gray-900">
-                                {sku.quantity} {sku.unitType === 'box' ? 'boxes' : 'kg'}
-                              </td>
-                              <td className="px-3 py-2 text-sm text-gray-900">{sku.totalWeight} kg</td>
-                              <td className="px-3 py-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveSKU(product.id, sku.id)}
-                                  className="text-red-600 hover:text-red-900"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                  {/* Product Name */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Product Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={product.name}
+                      onChange={(e) => handleUpdateProductName(product.id, e.target.value)}
+                      className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                      placeholder="e.g., POMO MH, Alphonso, Washington Apple"
+                    />
+                  </div>
+
+                  {/* SKUs Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-md font-medium text-gray-800">SKUs</h4>
+                      <button
+                        type="button"
+                        onClick={() => handleAddSKU(product.id)}
+                        className="bg-blue-600 text-white rounded-md px-3 py-1 text-sm font-medium hover:bg-blue-700 transition-colors duration-200 flex items-center"
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add SKU
+                      </button>
                     </div>
-                  )}
 
-                  {/* Add SKU Form */}
-                  {editingProductId === product.id && (
-                    <div className="p-4 bg-gray-50 border-t">
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">SKU Code</label>
-                          <input
-                            type="text"
-                            value={newSKU.code}
-                            onChange={(e) => setNewSKU({ ...newSKU, code: e.target.value })}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            placeholder="e.g., POMO-MH-001"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Unit Type</label>
-                          <select
-                            value={newSKU.unitType}
-                            onChange={(e) => setNewSKU({ ...newSKU, unitType: e.target.value as 'box' | 'loose' })}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          >
-                            <option value="box">Box/Crate</option>
-                            <option value="loose">Loose</option>
-                          </select>
-                        </div>
-
-                        {newSKU.unitType === 'box' && (
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700">Unit Weight (kg)</label>
-                            <input
-                              type="number"
-                              value={newSKU.unitWeight}
-                              onChange={(e) => setNewSKU({ ...newSKU, unitWeight: Number(e.target.value) })}
-                              min="0"
-                              step="0.1"
-                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            />
-                          </div>
-                        )}
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">
-                            {newSKU.unitType === 'box' ? 'Number of Boxes' : 'Total Weight (kg)'}
-                          </label>
-                          <input
-                            type="number"
-                            value={newSKU.quantity}
-                            onChange={(e) => setNewSKU({ ...newSKU, quantity: Number(e.target.value) })}
-                            min="0"
-                            step={newSKU.unitType === 'loose' ? '0.1' : '1'}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          />
-                        </div>
-
-                        <div className="md:col-span-4">
+                    {product.skus.map((sku, skuIndex) => (
+                      <div key={sku.id} className="bg-white p-4 rounded-md border">
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="text-sm font-medium text-gray-700">SKU {skuIndex + 1}</h5>
                           <button
                             type="button"
-                            onClick={() => handleAddSKU(product.id)}
-                            className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                            onClick={() => handleRemoveSKU(product.id, sku.id)}
+                            className="text-red-600 hover:text-red-900"
                           >
-                            Add SKU
+                            <Trash2 className="h-3 w-3" />
                           </button>
                         </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              SKU Code <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={sku.code}
+                              onChange={(e) => handleUpdateSKU(product.id, sku.id, { code: e.target.value })}
+                              className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                              placeholder="e.g., POMO-MH-001"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Unit Type <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              value={sku.unitType}
+                              onChange={(e) => handleUpdateSKU(product.id, sku.id, { 
+                                unitType: e.target.value as 'box' | 'loose',
+                                unitWeight: e.target.value === 'loose' ? undefined : sku.unitWeight
+                              })}
+                              className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            >
+                              <option value="box">Box/Crate</option>
+                              <option value="loose">Loose</option>
+                            </select>
+                          </div>
+
+                          {sku.unitType === 'box' && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Unit Weight (kg) <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="number"
+                                value={sku.unitWeight || ''}
+                                onChange={(e) => handleUpdateSKU(product.id, sku.id, { unitWeight: Number(e.target.value) })}
+                                min="0"
+                                step="0.1"
+                                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                              />
+                            </div>
+                          )}
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              {sku.unitType === 'box' ? 'Quantity (No of Boxes)' : 'Quantity (Total Wt)'} <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              value={sku.quantity || ''}
+                              onChange={(e) => handleUpdateSKU(product.id, sku.id, { quantity: Number(e.target.value) })}
+                              min="0"
+                              step={sku.unitType === 'loose' ? '0.1' : '1'}
+                              className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            />
+                          </div>
+                        </div>
+
+                        {sku.totalWeight > 0 && (
+                          <div className="mt-3 text-sm text-gray-600">
+                            Total Weight: <span className="font-medium">{sku.totalWeight} kg</span>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    ))}
+
+                    {product.skus.length === 0 && (
+                      <div className="text-center py-4 text-gray-500">
+                        No SKUs added yet. Click "Add SKU" to add the first SKU.
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
+
+              {products.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  No products added yet. Click "Add Product" to get started.
+                </div>
+              )}
             </div>
           </div>
 
