@@ -1,111 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Truck, Search, Plus, Eye, Pencil, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { getVehicleArrivals, updateVehicleArrivalStatus } from '../../lib/api';
 
 interface VehicleArrival {
   id: string;
-  vehicleNumber: string | null;
+  vehicle_number: string | null;
   supplier: string;
-  arrivalTime: string;
+  arrival_time: string;
   status: 'in-transit' | 'arrived' | 'unloading' | 'unloaded' | 'po-created' | 'cancelled';
-  items: Array<{
-    name: string;
+  vehicle_arrival_items: Array<{
+    product: {
+      name: string;
+      category: string;
+    };
+    sku: {
+      code: string;
+    };
     quantity: number;
-    totalWeight: number;
+    total_weight: number;
+    unit_type: string;
   }>;
 }
 
-const mockVehicleArrivals: VehicleArrival[] = [
-  {
-    id: 'VA001',
-    vehicleNumber: 'KA-01-AB-1234',
-    supplier: 'Green Farms',
-    arrivalTime: '2025-06-18 08:30 AM',
-    status: 'po-created',
-    items: [
-      {
-        name: 'POMO MH',
-        quantity: 100,
-        totalWeight: 1000
-      }
-    ]
-  },
-  {
-    id: 'VA002',
-    vehicleNumber: 'MH-02-CD-5678',
-    supplier: 'Fresh Harvests',
-    arrivalTime: '2025-06-18 10:15 AM',
-    status: 'unloaded',
-    items: [
-      {
-        name: 'Washington Apple',
-        quantity: 50,
-        totalWeight: 1000
-      }
-    ]
-  },
-  {
-    id: 'VA003',
-    vehicleNumber: 'TN-03-EF-9012',
-    supplier: 'Organic Fruits Co.',
-    arrivalTime: '2025-06-18 11:45 AM',
-    status: 'unloading',
-    items: [
-      {
-        name: 'Banganpally',
-        quantity: 750,
-        totalWeight: 750
-      }
-    ]
-  },
-  {
-    id: 'VA004',
-    vehicleNumber: 'KA-04-GH-3456',
-    supplier: 'Green Farms',
-    arrivalTime: '2025-06-18 12:30 PM',
-    status: 'arrived',
-    items: [
-      {
-        name: 'Alphonso',
-        quantity: 500,
-        totalWeight: 500
-      }
-    ]
-  },
-  {
-    id: 'VA005',
-    vehicleNumber: null,
-    supplier: 'Fresh Harvests',
-    arrivalTime: '2025-06-18 02:15 PM',
-    status: 'in-transit',
-    items: [
-      {
-        name: 'POMO GJ',
-        quantity: 200,
-        totalWeight: 2000
-      }
-    ]
-  },
-  {
-    id: 'VA006',
-    vehicleNumber: 'MH-05-IJ-7890',
-    supplier: 'Organic Fruits Co.',
-    arrivalTime: '2025-06-18 03:00 PM',
-    status: 'cancelled',
-    items: [
-      {
-        name: 'Kiwi',
-        quantity: 300,
-        totalWeight: 300
-      }
-    ]
-  }
-];
-
 const VehicleArrival: React.FC = () => {
   const navigate = useNavigate();
-  const [vehicles, setVehicles] = useState<VehicleArrival[]>(mockVehicleArrivals);
+  const [vehicles, setVehicles] = useState<VehicleArrival[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleArrival | null>(null);
@@ -114,10 +36,26 @@ const VehicleArrival: React.FC = () => {
     time?: string;
     items?: Array<{ name: string; quantity: number; totalWeight: number }>;
   }>({});
+
+  useEffect(() => {
+    loadVehicleArrivals();
+  }, []);
+
+  const loadVehicleArrivals = async () => {
+    try {
+      const data = await getVehicleArrivals();
+      setVehicles(data);
+    } catch (error) {
+      console.error('Error loading vehicle arrivals:', error);
+      toast.error('Failed to load vehicle arrivals');
+    } finally {
+      setLoading(false);
+    }
+  };
   
   const filteredVehicles = vehicles.filter(vehicle => {
     const matchesSearch = 
-      (vehicle.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase()) || !vehicle.vehicleNumber) ||
+      (vehicle.vehicle_number?.toLowerCase().includes(searchTerm.toLowerCase()) || !vehicle.vehicle_number) ||
       vehicle.supplier.toLowerCase().includes(searchTerm.toLowerCase());
     
     return matchesSearch;
@@ -164,58 +102,68 @@ const VehicleArrival: React.FC = () => {
     setStatusAction(action);
     setStatusUpdateData({
       time: new Date().toISOString().slice(0, 16),
-      items: vehicle.items.map(item => ({ ...item }))
+      items: vehicle.vehicle_arrival_items.map(item => ({
+        name: item.product.name,
+        quantity: item.quantity,
+        totalWeight: item.total_weight
+      }))
     });
     setShowStatusModal(true);
   };
 
-  const confirmStatusUpdate = () => {
+  const confirmStatusUpdate = async () => {
     if (!selectedVehicle || !statusAction) return;
 
-    if (statusAction === 'next') {
-      const nextStatus = getNextStatus(selectedVehicle.status);
-      if (!nextStatus) return;
+    try {
+      if (statusAction === 'next') {
+        const nextStatus = getNextStatus(selectedVehicle.status);
+        if (!nextStatus) return;
 
-      if (nextStatus === 'po-created') {
-        // Redirect to PO creation page with vehicle data
-        navigate(`/purchase-orders/new?vehicleId=${selectedVehicle.id}`);
-        setShowStatusModal(false);
-        return;
+        if (nextStatus === 'po-created') {
+          // Redirect to PO creation page with vehicle data
+          navigate(`/purchase-orders/new?vehicleId=${selectedVehicle.id}`);
+          setShowStatusModal(false);
+          return;
+        }
+
+        // Validate required data
+        if (!statusUpdateData.time) {
+          toast.error('Please enter the required time');
+          return;
+        }
+
+        if (nextStatus === 'unloaded' && !statusUpdateData.items) {
+          toast.error('Please confirm all item quantities');
+          return;
+        }
+
+        await updateVehicleArrivalStatus(selectedVehicle.id, nextStatus);
+        
+        // Update local state
+        setVehicles(prev => 
+          prev.map(vehicle => 
+            vehicle.id === selectedVehicle.id 
+              ? { ...vehicle, status: nextStatus as VehicleArrival['status'] }
+              : vehicle
+          )
+        );
+
+        toast.success(`Status updated to ${getStatusDisplay(nextStatus)}`);
+      } else {
+        await updateVehicleArrivalStatus(selectedVehicle.id, 'cancelled');
+        
+        setVehicles(prev => 
+          prev.map(vehicle => 
+            vehicle.id === selectedVehicle.id 
+              ? { ...vehicle, status: 'cancelled' as VehicleArrival['status'] }
+              : vehicle
+          )
+        );
+        toast.success('Vehicle arrival cancelled');
       }
-
-      // Validate required data
-      if (!statusUpdateData.time) {
-        toast.error('Please enter the required time');
-        return;
-      }
-
-      if (nextStatus === 'unloaded' && !statusUpdateData.items) {
-        toast.error('Please confirm all item quantities');
-        return;
-      }
-
-      setVehicles(prev => 
-        prev.map(vehicle => 
-          vehicle.id === selectedVehicle.id 
-            ? {
-                ...vehicle,
-                status: nextStatus as VehicleArrival['status'],
-                ...(nextStatus === 'unloaded' ? { items: statusUpdateData.items! } : {})
-              }
-            : vehicle
-        )
-      );
-
-      toast.success(`Status updated to ${getStatusDisplay(nextStatus)}`);
-    } else {
-      setVehicles(prev => 
-        prev.map(vehicle => 
-          vehicle.id === selectedVehicle.id 
-            ? { ...vehicle, status: 'cancelled' as VehicleArrival['status'] }
-            : vehicle
-        )
-      );
-      toast.success('Vehicle arrival cancelled');
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error('Failed to update status');
     }
 
     setShowStatusModal(false);
@@ -332,6 +280,18 @@ const VehicleArrival: React.FC = () => {
     }
   };
 
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading vehicle arrivals...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -392,21 +352,21 @@ const VehicleArrival: React.FC = () => {
               {filteredVehicles.map((vehicle) => (
                 <tr key={vehicle.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {vehicle.arrivalTime}
+                    {formatDateTime(vehicle.arrival_time)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{vehicle.supplier}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {vehicle.vehicleNumber || 'Not Available'}
+                      {vehicle.vehicle_number || 'Not Available'}
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900">
-                      {vehicle.items.map((item, index) => (
+                      {vehicle.vehicle_arrival_items.map((item, index) => (
                         <div key={index} className="text-sm text-gray-500">
-                          {item.name} ({item.quantity} boxes - {item.totalWeight}kg)
+                          {item.product.name} ({item.quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'} - {item.total_weight}kg)
                         </div>
                       ))}
                     </div>

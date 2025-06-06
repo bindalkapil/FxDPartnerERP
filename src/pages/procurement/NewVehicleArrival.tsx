@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Truck, ArrowLeft, Plus, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { createProduct, createSKU, createVehicleArrival, uploadAttachment } from '../../lib/api';
 
 interface SKU {
   id: string;
@@ -15,6 +16,7 @@ interface SKU {
 interface Product {
   id: string;
   name: string;
+  category: string;
   skus: SKU[];
 }
 
@@ -27,6 +29,8 @@ interface Attachment {
 const NewVehicleArrival: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [formData, setFormData] = useState({
     vehicleNumber: '',
     supplier: '',
@@ -39,6 +43,7 @@ const NewVehicleArrival: React.FC = () => {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [newProduct, setNewProduct] = useState('');
+  const [newCategory, setNewCategory] = useState('');
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   
@@ -53,19 +58,21 @@ const NewVehicleArrival: React.FC = () => {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const handleAddProduct = () => {
-    if (!newProduct.trim()) {
-      toast.error('Please enter a product name');
+    if (!newProduct.trim() || !newCategory.trim()) {
+      toast.error('Please enter both product name and category');
       return;
     }
 
-    const productId = `${Date.now()}`;
+    const productId = `temp_${Date.now()}`;
     setProducts(prev => [...prev, {
       id: productId,
       name: newProduct,
+      category: newCategory,
       skus: []
     }]);
 
     setNewProduct('');
+    setNewCategory('');
     setEditingProductId(productId);
     setShowProductForm(false);
   };
@@ -87,7 +94,7 @@ const NewVehicleArrival: React.FC = () => {
         return {
           ...product,
           skus: [...product.skus, {
-            id: `${Date.now()}`,
+            id: `temp_${Date.now()}`,
             code: newSKU.code,
             unitType: newSKU.unitType,
             unitWeight: newSKU.unitType === 'box' ? newSKU.unitWeight : undefined,
@@ -159,14 +166,14 @@ const NewVehicleArrival: React.FC = () => {
   const handleRemoveAttachment = (id: string) => {
     setAttachments(prev => {
       const attachmentToRemove = prev.find(a => a.id === id);
-      if (attachmentToRemove?.preview) {
+      if (attachmentToRemove?.preview && attachmentToRemove.preview.startsWith('blob:')) {
         URL.revokeObjectURL(attachmentToRemove.preview);
       }
       return prev.filter(a => a.id !== id);
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.supplier || !formData.arrivalTime) {
@@ -184,8 +191,81 @@ const NewVehicleArrival: React.FC = () => {
       return;
     }
 
-    console.log('Form submitted:', { ...formData, products, attachments });
-    navigate('/vehicle-arrival');
+    setIsSubmitting(true);
+
+    try {
+      // Create products and SKUs in database
+      const dbProducts = [];
+      const dbItems = [];
+
+      for (const product of products) {
+        // Create product
+        const dbProduct = await createProduct({
+          name: product.name,
+          category: product.category,
+          description: `${product.category} - ${product.name}`,
+          status: 'active'
+        });
+
+        dbProducts.push(dbProduct);
+
+        // Create SKUs for this product
+        for (const sku of product.skus) {
+          const dbSKU = await createSKU({
+            product_id: dbProduct.id,
+            code: sku.code,
+            unit_type: sku.unitType,
+            unit_weight: sku.unitWeight || null,
+            status: 'active'
+          });
+
+          // Prepare item for vehicle arrival
+          dbItems.push({
+            product_id: dbProduct.id,
+            sku_id: dbSKU.id,
+            unit_type: sku.unitType,
+            unit_weight: sku.unitWeight || null,
+            quantity: sku.quantity,
+            total_weight: sku.totalWeight
+          });
+        }
+      }
+
+      // Upload attachments
+      const dbAttachments = [];
+      for (const attachment of attachments) {
+        try {
+          const uploadResult = await uploadAttachment(attachment.file);
+          dbAttachments.push(uploadResult);
+        } catch (error) {
+          console.warn('Failed to upload attachment:', attachment.file.name, error);
+          // Continue with other attachments
+        }
+      }
+
+      // Create vehicle arrival
+      await createVehicleArrival(
+        {
+          vehicle_number: formData.vehicleNumber || null,
+          supplier: formData.supplier,
+          driver_name: formData.driverName || null,
+          driver_contact: formData.driverContact || null,
+          arrival_time: formData.arrivalTime,
+          status: formData.arrivalStatus as any,
+          notes: formData.notes || null
+        },
+        dbItems,
+        dbAttachments
+      );
+
+      toast.success('Vehicle arrival created successfully!');
+      navigate('/vehicle-arrival');
+    } catch (error) {
+      console.error('Error creating vehicle arrival:', error);
+      toast.error('Failed to create vehicle arrival. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -330,8 +410,20 @@ const NewVehicleArrival: React.FC = () => {
             {/* Add Product Form */}
             {showProductForm && (
               <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                <div className="flex items-end gap-4">
-                  <div className="flex-1">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Category
+                    </label>
+                    <input
+                      type="text"
+                      value={newCategory}
+                      onChange={(e) => setNewCategory(e.target.value)}
+                      className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                      placeholder="e.g., Pomegranate, Mango, Imported"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Product Name
                     </label>
@@ -340,16 +432,25 @@ const NewVehicleArrival: React.FC = () => {
                       value={newProduct}
                       onChange={(e) => setNewProduct(e.target.value)}
                       className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                      placeholder="Enter product name"
+                      placeholder="e.g., POMO MH, Alphonso"
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleAddProduct}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                  >
-                    Add
-                  </button>
+                  <div className="flex items-end gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddProduct}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                    >
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowProductForm(false)}
+                      className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -360,7 +461,7 @@ const NewVehicleArrival: React.FC = () => {
                 <div key={product.id} className="border rounded-lg overflow-hidden">
                   <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center">
-                      <h3 className="text-sm font-medium text-gray-900">{product.name}</h3>
+                      <h3 className="text-sm font-medium text-gray-900">{product.category} - {product.name}</h3>
                       <span className="ml-2 text-sm text-gray-500">
                         ({product.skus.length} SKUs)
                       </span>
@@ -434,6 +535,7 @@ const NewVehicleArrival: React.FC = () => {
                             value={newSKU.code}
                             onChange={(e) => setNewSKU({ ...newSKU, code: e.target.value })}
                             className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            placeholder="e.g., POMO-MH-001"
                           />
                         </div>
 
@@ -578,14 +680,16 @@ const NewVehicleArrival: React.FC = () => {
               type="button"
               onClick={() => navigate('/vehicle-arrival')}
               className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              disabled={isSubmitting}
+              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              Create Arrival
+              {isSubmitting ? 'Creating...' : 'Create Arrival'}
             </button>
           </div>
         </form>
