@@ -41,6 +41,13 @@ interface NewRecordPurchaseProps {
   initialData?: PurchaseOrderData;
 }
 
+const defaultAdditionalCosts: AdditionalCost[] = [
+  { name: 'Labour Cost', amount: 5, type: 'per_box' },
+  { name: 'Handling Cost', amount: 3, type: 'per_box' },
+  { name: 'APMC Charge', amount: 1, type: 'percentage' },
+  { name: 'Vehicle Charges', amount: 2000, type: 'fixed' }
+];
+
 const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -60,12 +67,7 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
   const [items, setItems] = useState<PurchaseOrderItem[]>(initialData?.items || []);
   const [commission, setCommission] = useState(8); // Default commission
   const [additionalCosts, setAdditionalCosts] = useState<AdditionalCost[]>(
-    initialData?.additionalCosts || [
-      { name: 'Labour Cost', amount: 5, type: 'per_box' },
-      { name: 'Handling Cost', amount: 3, type: 'per_box' },
-      { name: 'APMC Charge', amount: 1, type: 'percentage' },
-      { name: 'Vehicle Charges', amount: 2000, type: 'fixed' }
-    ]
+    initialData?.additionalCosts || [...defaultAdditionalCosts]
   );
   
   const [newCost, setNewCost] = useState({
@@ -191,21 +193,40 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
     return items.reduce((sum, item) => sum + item.quantity, 0);
   };
 
+  const calculateSingleAdditionalCost = (cost: AdditionalCost, marketValue: number, totalBoxes: number): number => {
+    if (formData.pricingModel === 'fixed' && cost.name !== 'Vehicle Charges') {
+      return 0;
+    }
+
+    switch (cost.type) {
+      case 'per_box':
+        return cost.amount * totalBoxes;
+      case 'percentage':
+        return marketValue * (cost.amount / 100);
+      case 'fixed':
+        return cost.amount;
+      default:
+        return 0;
+    }
+  };
+
   const calculateAdditionalCosts = (marketValue: number = 0): number => {
     const totalBoxes = calculateTotalBoxes();
     
     return additionalCosts.reduce((total, cost) => {
-      switch (cost.type) {
-        case 'per_box':
-          return total + (cost.amount * totalBoxes);
-        case 'percentage':
-          return total + (marketValue * (cost.amount / 100));
-        case 'fixed':
-          return total + cost.amount;
-        default:
-          return total;
-      }
+      return total + calculateSingleAdditionalCost(cost, marketValue, totalBoxes);
     }, 0);
+  };
+
+  const handleAdditionalCostChange = (index: number, field: keyof AdditionalCost, value: any) => {
+    setAdditionalCosts(prev => {
+      const newCosts = [...prev];
+      newCosts[index] = {
+        ...newCosts[index],
+        [field]: field === 'amount' ? Number(value) : value
+      };
+      return newCosts;
+    });
   };
 
   const calculateTotalAmount = (): number => {
@@ -503,7 +524,6 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
                         {vehicleId ? (
                           <div>
                             <div className="text-sm font-medium text-gray-900">{item.productName}</div>
-                            <div className="text-sm text-gray-500">{item.category}</div>
                           </div>
                         ) : (
                           <select
@@ -640,32 +660,56 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
             <h2 className="text-lg font-medium text-gray-900 mb-4">Additional Costs</h2>
             
             <div className="space-y-2 mb-4">
-              {additionalCosts.map((cost, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                  <div className="flex items-center space-x-4">
-                    <span className="text-sm font-medium text-gray-700 w-32">{cost.name}</span>
-                    <span className="text-sm text-gray-600">
-                      {cost.amount} {cost.type === 'percentage' ? '%' : cost.type === 'per_box' ? '₹/box' : '₹'}
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium text-gray-900">
-                      ₹{(cost.type === 'per_box' 
-                        ? cost.amount * calculateTotalBoxes()
-                        : cost.type === 'percentage'
-                          ? (items.reduce((sum, item) => sum + ((item.marketPrice || 0) * item.quantity), 0) * cost.amount / 100)
-                          : cost.amount).toFixed(2)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveCost(index)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+              {additionalCosts
+                .filter(cost => formData.pricingModel !== 'fixed' || cost.name === 'Vehicle Charges')
+                .map((cost, index) => {
+                  const originalIndex = additionalCosts.findIndex(c => c.name === cost.name);
+                  const costValue = calculateSingleAdditionalCost(cost, 
+                    items.reduce((sum, item) => sum + ((item.marketPrice || 0) * item.quantity), 0),
+                    calculateTotalBoxes()
+                  );
+
+                  return (
+                    <div key={cost.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                      <div className="flex items-center space-x-4">
+                        <span className="text-sm font-medium text-gray-700 w-32">{cost.name}</span>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="number"
+                            value={cost.amount}
+                            onChange={(e) => handleAdditionalCostChange(originalIndex, 'amount', e.target.value)}
+                            className="w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            step={cost.type === 'percentage' ? '0.1' : '1'}
+                            min="0"
+                          />
+                          <select
+                            value={cost.type}
+                            onChange={(e) => handleAdditionalCostChange(originalIndex, 'type', e.target.value as any)}
+                            className="border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                          >
+                            <option value="fixed">Fixed (₹)</option>
+                            <option value="per_box">Per Box (₹/box)</option>
+                            <option value="percentage">Percentage (%)</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-gray-900">
+                          ₹{costValue.toFixed(2)}
+                        </span>
+                        {cost.name !== 'Vehicle Charges' && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCost(originalIndex)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
 
             <div className="flex items-end space-x-4">
@@ -720,18 +764,24 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
                   <span className="text-gray-600">Items Subtotal:</span>
                   <span className="text-gray-900">₹{items.reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span>
                 </div>
-                {additionalCosts.map((cost, index) => (
-                  <div key={index} className="flex justify-between text-sm">
-                    <span className="text-gray-600">{cost.name}:</span>
-                    <span className="text-gray-900">
-                      ₹{(cost.type === 'per_box' 
-                        ? cost.amount * calculateTotalBoxes()
-                        : cost.type === 'percentage'
-                          ? (items.reduce((sum, item) => sum + ((item.marketPrice || 0) * item.quantity), 0) * cost.amount / 100)
-                          : cost.amount).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
+                {additionalCosts
+                  .filter(cost => formData.pricingModel !== 'fixed' || cost.name === 'Vehicle Charges')
+                  .map((cost, index) => {
+                    const costValue = calculateSingleAdditionalCost(
+                      cost,
+                      items.reduce((sum, item) => sum + ((item.marketPrice || 0) * item.quantity), 0),
+                      calculateTotalBoxes()
+                    );
+                    
+                    return (
+                      <div key={cost.name} className="flex justify-between text-sm">
+                        <span className="text-gray-600">{cost.name}:</span>
+                        <span className="text-gray-900">
+                          ₹{costValue.toFixed(2)}
+                        </span>
+                      </div>
+                    );
+                  })}
                 <div className="border-t pt-2 flex justify-between text-lg font-bold">
                   <span className="text-gray-900">Total Amount:</span>
                   <span className="text-gray-900">₹{calculateTotalAmount().toFixed(2)}</span>

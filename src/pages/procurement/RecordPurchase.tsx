@@ -239,7 +239,7 @@ const RecordPurchase: React.FC = () => {
                     <div className="text-sm text-gray-900">
                       {order.items.map((item, index) => (
                         <div key={index} className="text-sm text-gray-500">
-                          {item.name} ({item.quantity} boxes - {item.totalWeight}kg)
+                          {item.name} ({item.quantity} boxes)
                         </div>
                       ))}
                     </div>
