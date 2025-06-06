@@ -343,17 +343,7 @@ const EditVehicleArrival: React.FC = () => {
 
           {/* Products Section */}
           <div className="border-t pt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-medium text-gray-900">Products <span className="text-red-500">*</span></h2>
-              <button
-                type="button"
-                onClick={handleAddProduct}
-                className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Product
-              </button>
-            </div>
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Products <span className="text-red-500">*</span></h2>
 
             {/* Products List */}
             <div className="space-y-6">
@@ -386,17 +376,7 @@ const EditVehicleArrival: React.FC = () => {
 
                   {/* SKUs Section */}
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-md font-medium text-gray-800">SKUs</h4>
-                      <button
-                        type="button"
-                        onClick={() => handleAddSKU(product.id)}
-                        className="bg-blue-600 text-white rounded-md px-3 py-1 text-sm font-medium hover:bg-blue-700 transition-colors duration-200 flex items-center"
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        Add SKU
-                      </button>
-                    </div>
+                    <h4 className="text-md font-medium text-gray-800">SKUs</h4>
 
                     {product.skus.map((sku, skuIndex) => (
                       <div key={sku.id} className="bg-white p-4 rounded-md border">
@@ -467,6 +447,18 @@ const EditVehicleArrival: React.FC = () => {
                       </div>
                     ))}
 
+                    {/* Add SKU Button - positioned after the last SKU */}
+                    <div className="flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => handleAddSKU(product.id)}
+                        className="bg-blue-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors duration-200 flex items-center"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add SKU
+                      </button>
+                    </div>
+
                     {product.skus.length === 0 && (
                       <div className="text-center py-4 text-gray-500">
                         No SKUs added yet. Click "Add SKU" to add the first SKU.
@@ -475,6 +467,18 @@ const EditVehicleArrival: React.FC = () => {
                   </div>
                 </div>
               ))}
+
+              {/* Add Product Button - positioned after the last product */}
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleAddProduct}
+                  className="bg-green-600 text-white rounded-md px-6 py-3 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Product
+                </button>
+              </div>
 
               {products.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
