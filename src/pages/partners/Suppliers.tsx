@@ -1,87 +1,98 @@
-import React, { useState } from 'react';
-import { Users, Search, Filter, Eye, Pencil, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Users, Search, Filter, Eye, Pencil, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { supabase } from '../../lib/supabase';
 
 interface Supplier {
   id: string;
-  name: string;
-  contactPerson: string;
+  company_name: string;
+  contact_person: string;
   phone: string;
   email: string;
   address: string;
-  products: string[];
+  gst_number: string | null;
+  pan_number: string | null;
+  bank_name: string | null;
+  account_number: string | null;
+  ifsc_code: string | null;
+  payment_terms: number;
+  credit_limit: number;
+  current_balance: number;
+  products: string[] | null;
   status: 'active' | 'inactive';
-  creditLimit: number;
-  outstandingBalance: number;
-  lastTransaction: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
-
-const mockSuppliers: Supplier[] = [
-  {
-    id: 'SUP001',
-    name: 'Green Farms',
-    contactPerson: 'Rajesh Kumar',
-    phone: '9876543210',
-    email: 'rajesh@greenfarms.com',
-    address: '123, Farm Road, Bangalore',
-    products: ['Apples', 'Oranges', 'Bananas'],
-    status: 'active',
-    creditLimit: 100000,
-    outstandingBalance: 25000,
-    lastTransaction: '2025-06-18'
-  },
-  {
-    id: 'SUP002',
-    name: 'Fresh Harvests',
-    contactPerson: 'Priya Singh',
-    phone: '8765432109',
-    email: 'priya@freshharvests.com',
-    address: '456, Market Lane, Mumbai',
-    products: ['Mangoes', 'Grapes'],
-    status: 'active',
-    creditLimit: 150000,
-    outstandingBalance: 45000,
-    lastTransaction: '2025-06-17'
-  },
-  {
-    id: 'SUP003',
-    name: 'Organic Fruits Co.',
-    contactPerson: 'Ahmed Khan',
-    phone: '7654321098',
-    email: 'ahmed@organicfruits.com',
-    address: '789, Garden Street, Delhi',
-    products: ['Pineapples', 'Papayas'],
-    status: 'inactive',
-    creditLimit: 80000,
-    outstandingBalance: 0,
-    lastTransaction: '2025-06-15'
-  }
-];
 
 const Suppliers: React.FC = () => {
   const navigate = useNavigate();
-  const [suppliers, setSuppliers] = useState<Supplier[]>(mockSuppliers);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   
+  useEffect(() => {
+    loadSuppliers();
+  }, []);
+
+  const loadSuppliers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setSuppliers(data || []);
+    } catch (error) {
+      console.error('Error loading suppliers:', error);
+      toast.error('Failed to load suppliers');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   const filteredSuppliers = suppliers.filter(supplier => {
     const matchesSearch = 
-      supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplier.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplier.email.toLowerCase().includes(searchTerm.toLowerCase());
+      supplier.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      supplier.contact_person.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      supplier.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      supplier.phone.includes(searchTerm);
       
     const matchesStatus = selectedStatus === 'all' || supplier.status === selectedStatus;
     
     return matchesSearch && matchesStatus;
   });
 
-  const handleStatusChange = (id: string, newStatus: 'active' | 'inactive') => {
-    setSuppliers(prev => prev.map(supplier => 
-      supplier.id === id ? { ...supplier, status: newStatus } : supplier
-    ));
-    toast.success(`Supplier ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
+  const handleStatusChange = async (id: string, newStatus: 'active' | 'inactive') => {
+    try {
+      const { error } = await supabase
+        .from('suppliers')
+        .update({ status: newStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setSuppliers(prev => prev.map(supplier => 
+        supplier.id === id ? { ...supplier, status: newStatus } : supplier
+      ));
+      
+      toast.success(`Supplier ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
+    } catch (error) {
+      console.error('Error updating supplier status:', error);
+      toast.error('Failed to update supplier status');
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading suppliers...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -92,8 +103,9 @@ const Suppliers: React.FC = () => {
         </div>
         <button 
           onClick={() => navigate('/suppliers/new')}
-          className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200"
+          className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
         >
+          <Plus className="h-4 w-4 mr-1" />
           Add Supplier
         </button>
       </div>
@@ -129,11 +141,11 @@ const Suppliers: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-500">Total Outstanding</p>
               <p className="text-2xl font-bold text-gray-800">
-                ₹{suppliers.reduce((sum, s) => sum + s.outstandingBalance, 0).toLocaleString()}
+                ₹{suppliers.reduce((sum, s) => sum + s.current_balance, 0).toLocaleString()}
               </p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-yellow-100 text-yellow-600">
-              <FileText className="h-5 w-5" />
+              <Users className="h-5 w-5" />
             </div>
           </div>
         </div>
@@ -203,42 +215,46 @@ const Suppliers: React.FC = () => {
                         <Users className="h-5 w-5" />
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{supplier.name}</div>
-                        <div className="text-sm text-gray-500">ID: {supplier.id}</div>
+                        <div className="text-sm font-medium text-gray-900">{supplier.company_name}</div>
+                        <div className="text-sm text-gray-500">{supplier.contact_person}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm">
-                      <div className="text-gray-900">{supplier.contactPerson}</div>
-                      <div className="text-gray-500">{supplier.phone}</div>
+                      <div className="text-gray-900">{supplier.phone}</div>
                       <div className="text-gray-500">{supplier.email}</div>
+                      <div className="text-gray-500 truncate max-w-xs">{supplier.address}</div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1">
-                      {supplier.products.map((product, index) => (
-                        <span 
-                          key={index}
-                          className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800"
-                        >
-                          {product}
-                        </span>
-                      ))}
+                      {supplier.products && supplier.products.length > 0 ? (
+                        supplier.products.map((product, index) => (
+                          <span 
+                            key={index}
+                            className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800"
+                          >
+                            {product}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-sm text-gray-400">No products listed</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm">
-                      <div className="text-gray-900">Credit Limit: ₹{supplier.creditLimit.toLocaleString()}</div>
-                      <div className="text-gray-500">Outstanding: ₹{supplier.outstandingBalance.toLocaleString()}</div>
-                      <div className="text-gray-500">Last Transaction: {supplier.lastTransaction}</div>
+                      <div className="text-gray-900">Credit: ₹{supplier.credit_limit.toLocaleString()}</div>
+                      <div className="text-gray-500">Balance: ₹{supplier.current_balance.toLocaleString()}</div>
+                      <div className="text-gray-500">Terms: {supplier.payment_terms} days</div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <select
                       value={supplier.status}
                       onChange={(e) => handleStatusChange(supplier.id, e.target.value as 'active' | 'inactive')}
-                      className={`text-sm rounded-full px-3 py-1 ${
+                      className={`text-sm rounded-full px-3 py-1 border-0 focus:ring-2 focus:ring-green-500 ${
                         supplier.status === 'active' 
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-red-100 text-red-800'
@@ -252,13 +268,15 @@ const Suppliers: React.FC = () => {
                     <div className="flex space-x-2">
                       <button 
                         onClick={() => navigate(`/suppliers/view/${supplier.id}`)}
-                        className="text-indigo-600 hover:text-indigo-900"
+                        className="text-indigo-600 hover:text-indigo-900 transition-colors duration-200"
+                        title="View Details"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       <button 
                         onClick={() => navigate(`/suppliers/edit/${supplier.id}`)}
-                        className="text-gray-600 hover:text-gray-900"
+                        className="text-gray-600 hover:text-gray-900 transition-colors duration-200"
+                        title="Edit Supplier"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
@@ -270,9 +288,24 @@ const Suppliers: React.FC = () => {
           </table>
         </div>
         
-        {filteredSuppliers.length === 0 && (
-          <div className="py-6 text-center text-gray-500">
-            No suppliers found.
+        {filteredSuppliers.length === 0 && !loading && (
+          <div className="py-12 text-center text-gray-500">
+            <Users className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Suppliers Found</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {suppliers.length === 0 
+                ? "Get started by adding your first supplier."
+                : "No suppliers match your current search and filter criteria."
+              }
+            </p>
+            {suppliers.length === 0 && (
+              <button
+                onClick={() => navigate('/suppliers/new')}
+                className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200"
+              >
+                Add First Supplier
+              </button>
+            )}
           </div>
         )}
       </div>
