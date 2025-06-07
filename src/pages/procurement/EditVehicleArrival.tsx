@@ -87,7 +87,7 @@ const EditVehicleArrival: React.FC = () => {
         notes: data.notes || ''
       });
 
-      // Group items by product
+      // Group items by product - preserve existing database IDs
       const productMap = new Map<string, Product>();
       
       data.vehicle_arrival_items.forEach((item: any) => {
@@ -96,7 +96,7 @@ const EditVehicleArrival: React.FC = () => {
         
         if (!productMap.has(productId)) {
           productMap.set(productId, {
-            id: productId,
+            id: productId, // Use actual database ID
             name: productName,
             skus: []
           });
@@ -104,7 +104,7 @@ const EditVehicleArrival: React.FC = () => {
         
         const product = productMap.get(productId)!;
         product.skus.push({
-          id: item.sku.id,
+          id: item.sku.id, // Use actual database ID
           code: item.sku.code,
           unitType: item.unit_type as 'box' | 'loose',
           quantity: item.quantity,
@@ -124,6 +124,9 @@ const EditVehicleArrival: React.FC = () => {
   };
 
   const handleAddProduct = () => {
+    // Only allow adding new products if editing is allowed
+    if (!canEdit()) return;
+    
     const productId = `temp_${Date.now()}`;
     setProducts(prev => [...prev, {
       id: productId,
@@ -299,17 +302,27 @@ const EditVehicleArrival: React.FC = () => {
         }
       }
 
-      // Prepare items data using existing product and SKU IDs
+      // For editing, we only update the items that have changed
+      // We don't create new products/SKUs - we use existing ones
       const itemsData = products.flatMap(product =>
         product.skus.map(sku => ({
-          product_id: product.id,
-          sku_id: sku.id,
+          product_id: product.id, // Use existing product ID (no temp IDs should remain)
+          sku_id: sku.id, // Use existing SKU ID (no temp IDs should remain)
           unit_type: sku.unitType,
           unit_weight: sku.unitType === 'box' ? 1 : null,
           quantity: sku.quantity,
           total_weight: sku.totalWeight
         }))
       );
+
+      // Check if any items have temp IDs (which shouldn't happen in edit mode)
+      const hasInvalidIds = itemsData.some(item => 
+        item.product_id.startsWith('temp_') || item.sku_id.startsWith('temp_')
+      );
+
+      if (hasInvalidIds) {
+        throw new Error('Cannot save changes with temporary product/SKU IDs. Please refresh and try again.');
+      }
 
       // Update vehicle arrival
       await updateVehicleArrival(
@@ -495,16 +508,22 @@ const EditVehicleArrival: React.FC = () => {
             </div>
           </div>
 
-          {/* Products Section - Only editable if status allows */}
-          {canEdit() && (
-            <div className="border-t pt-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Products <span className="text-red-500">*</span></h2>
+          {/* Products Section - Show existing products in read-only mode if can't edit */}
+          <div className="border-t pt-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">
+              Products <span className="text-red-500">*</span>
+              {!canEdit() && <span className="text-sm font-normal text-gray-500 ml-2">(Read-only)</span>}
+            </h2>
 
-              <div className="space-y-6">
-                {products.map((product, productIndex) => (
-                  <div key={product.id} className="border rounded-lg p-4 bg-gray-50">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-medium text-gray-900">Product {productIndex + 1}</h3>
+            <div className="space-y-6">
+              {products.map((product, productIndex) => (
+                <div key={product.id} className="border rounded-lg p-4 bg-gray-50">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-medium text-gray-900">Product {productIndex + 1}</h3>
+                    {canEdit() && !product.id.startsWith('temp_') && (
+                      <span className="text-xs text-gray-500">Existing Product</span>
+                    )}
+                    {canEdit() && product.id.startsWith('temp_') && (
                       <button
                         type="button"
                         onClick={() => handleRemoveProduct(product.id)}
@@ -512,28 +531,34 @@ const EditVehicleArrival: React.FC = () => {
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
-                    </div>
+                    )}
+                  </div>
 
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Product Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={product.name}
-                        onChange={(e) => handleUpdateProductName(product.id, e.target.value)}
-                        className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                        placeholder="e.g., POMO MH, Alphonso, Washington Apple"
-                      />
-                    </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Product Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={product.name}
+                      onChange={(e) => handleUpdateProductName(product.id, e.target.value)}
+                      className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                      placeholder="e.g., POMO MH, Alphonso, Washington Apple"
+                      disabled={!canEdit() || !product.id.startsWith('temp_')}
+                    />
+                  </div>
 
-                    <div className="space-y-4">
-                      <h4 className="text-md font-medium text-gray-800">SKUs</h4>
+                  <div className="space-y-4">
+                    <h4 className="text-md font-medium text-gray-800">SKUs</h4>
 
-                      {product.skus.map((sku, skuIndex) => (
-                        <div key={sku.id} className="bg-white p-4 rounded-md border">
-                          <div className="flex items-center justify-between mb-3">
-                            <h5 className="text-sm font-medium text-gray-700">SKU {skuIndex + 1}</h5>
+                    {product.skus.map((sku, skuIndex) => (
+                      <div key={sku.id} className="bg-white p-4 rounded-md border">
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="text-sm font-medium text-gray-700">SKU {skuIndex + 1}</h5>
+                          {canEdit() && !sku.id.startsWith('temp_') && (
+                            <span className="text-xs text-gray-500">Existing SKU</span>
+                          )}
+                          {canEdit() && sku.id.startsWith('temp_') && (
                             <button
                               type="button"
                               onClick={() => handleRemoveSKU(product.id, sku.id)}
@@ -541,64 +566,69 @@ const EditVehicleArrival: React.FC = () => {
                             >
                               <Trash2 className="h-3 w-3" />
                             </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                SKU Code <span className="text-red-500">*</span>
-                              </label>
-                              <input
-                                type="text"
-                                value={sku.code}
-                                onChange={(e) => handleUpdateSKU(product.id, sku.id, { code: e.target.value })}
-                                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                                placeholder="e.g., POMO-MH-001"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Packaging Type <span className="text-red-500">*</span>
-                              </label>
-                              <select
-                                value={sku.unitType}
-                                onChange={(e) => handleUpdateSKU(product.id, sku.id, { 
-                                  unitType: e.target.value as 'box' | 'loose'
-                                })}
-                                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                              >
-                                <option value="box">Box/Crate</option>
-                                <option value="loose">Loose</option>
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                {sku.unitType === 'box' ? 'Quantity (No of Boxes)' : 'Quantity (Total Wt)'} <span className="text-red-500">*</span>
-                              </label>
-                              <input
-                                type="number"
-                                value={sku.quantity || ''}
-                                onChange={(e) => handleUpdateSKU(product.id, sku.id, { quantity: Number(e.target.value) })}
-                                min="0"
-                                step={sku.unitType === 'loose' ? '0.1' : '1'}
-                                className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                              />
-                            </div>
-                          </div>
-
-                          {sku.quantity > 0 && (
-                            <div className="mt-3 text-sm text-gray-600">
-                              {sku.unitType === 'box' 
-                                ? `Total Boxes: ${sku.quantity}`
-                                : `Total Weight: ${sku.totalWeight} kg`
-                              }
-                            </div>
                           )}
                         </div>
-                      ))}
 
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              SKU Code <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={sku.code}
+                              onChange={(e) => handleUpdateSKU(product.id, sku.id, { code: e.target.value })}
+                              className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                              placeholder="e.g., POMO-MH-001"
+                              disabled={!canEdit() || !sku.id.startsWith('temp_')}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Packaging Type <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              value={sku.unitType}
+                              onChange={(e) => handleUpdateSKU(product.id, sku.id, { 
+                                unitType: e.target.value as 'box' | 'loose'
+                              })}
+                              className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                              disabled={!canEdit()}
+                            >
+                              <option value="box">Box/Crate</option>
+                              <option value="loose">Loose</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              {sku.unitType === 'box' ? 'Quantity (No of Boxes)' : 'Quantity (Total Wt)'} <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              value={sku.quantity || ''}
+                              onChange={(e) => handleUpdateSKU(product.id, sku.id, { quantity: Number(e.target.value) })}
+                              min="0"
+                              step={sku.unitType === 'loose' ? '0.1' : '1'}
+                              className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                              disabled={!canEdit()}
+                            />
+                          </div>
+                        </div>
+
+                        {sku.quantity > 0 && (
+                          <div className="mt-3 text-sm text-gray-600">
+                            {sku.unitType === 'box' 
+                              ? `Total Boxes: ${sku.quantity}`
+                              : `Total Weight: ${sku.totalWeight} kg`
+                            }
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {canEdit() && (
                       <div className="flex justify-center">
                         <button
                           type="button"
@@ -609,16 +639,18 @@ const EditVehicleArrival: React.FC = () => {
                           Add SKU
                         </button>
                       </div>
+                    )}
 
-                      {product.skus.length === 0 && (
-                        <div className="text-center py-4 text-gray-500">
-                          No SKUs added yet. Click "Add SKU" to add the first SKU.
-                        </div>
-                      )}
-                    </div>
+                    {product.skus.length === 0 && (
+                      <div className="text-center py-4 text-gray-500">
+                        No SKUs added yet. {canEdit() && 'Click "Add SKU" to add the first SKU.'}
+                      </div>
+                    )}
                   </div>
-                ))}
+                </div>
+              ))}
 
+              {canEdit() && (
                 <div className="flex justify-center">
                   <button
                     type="button"
@@ -629,15 +661,15 @@ const EditVehicleArrival: React.FC = () => {
                     Add Product
                   </button>
                 </div>
+              )}
 
-                {products.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    No products added yet. Click "Add Product" to get started.
-                  </div>
-                )}
-              </div>
+              {products.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  No products added yet. {canEdit() && 'Click "Add Product" to get started.'}
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
           {/* Attachments Section */}
           <div className="border-t pt-6">
