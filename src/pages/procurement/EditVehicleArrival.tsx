@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Truck, ArrowLeft, Plus, Trash2, Upload, X, Save, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getVehicleArrival, updateVehicleArrival, uploadAttachment, createProduct, createSKU } from '../../lib/api';
+import { getVehicleArrival, updateVehicleArrival, uploadAttachment } from '../../lib/api';
 
 interface Product {
   id: string;
@@ -60,19 +60,29 @@ const EditVehicleArrival: React.FC = () => {
     }
   }, [id]);
 
+  const formatDateTimeForInput = (dateString: string) => {
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   const loadVehicleData = async () => {
     if (!id) return;
     
     try {
       const data = await getVehicleArrival(id);
       
-      // Set form data
+      // Set form data with properly formatted arrival time
       setFormData({
         vehicleNumber: data.vehicle_number || '',
         supplier: data.supplier,
         driverName: data.driver_name || '',
         driverContact: data.driver_contact || '',
-        arrivalTime: data.arrival_time,
+        arrivalTime: formatDateTimeForInput(data.arrival_time),
         arrivalStatus: data.status,
         notes: data.notes || ''
       });
@@ -289,59 +299,8 @@ const EditVehicleArrival: React.FC = () => {
         }
       }
 
-      // Process ALL products and SKUs to ensure they exist in the database
-      const processedProducts = [];
-      
-      for (const product of products) {
-        // Always create/get product by name to ensure consistency
-        let dbProduct;
-        try {
-          dbProduct = await createProduct({
-            name: product.name,
-            category: 'Uncategorized',
-            description: product.name,
-            status: 'active'
-          });
-        } catch (error) {
-          console.error('Error creating/getting product:', error);
-          toast.error(`Failed to process product "${product.name}"`);
-          return;
-        }
-
-        // Process SKUs for this product
-        const processedSkus = [];
-        for (const sku of product.skus) {
-          // Always create/get SKU by code to ensure consistency
-          let dbSku;
-          try {
-            dbSku = await createSKU({
-              product_id: dbProduct.id,
-              code: sku.code,
-              unit_type: sku.unitType,
-              unit_weight: sku.unitType === 'box' ? 1 : null,
-              status: 'active'
-            });
-          } catch (error) {
-            console.error('Error creating/getting SKU:', error);
-            toast.error(`Failed to process SKU "${sku.code}"`);
-            return;
-          }
-
-          processedSkus.push({
-            id: dbSku.id,
-            ...sku
-          });
-        }
-
-        processedProducts.push({
-          id: dbProduct.id,
-          name: product.name,
-          skus: processedSkus
-        });
-      }
-
-      // Prepare items data with correct database IDs
-      const itemsData = processedProducts.flatMap(product =>
+      // Prepare items data using existing product and SKU IDs
+      const itemsData = products.flatMap(product =>
         product.skus.map(sku => ({
           product_id: product.id,
           sku_id: sku.id,
