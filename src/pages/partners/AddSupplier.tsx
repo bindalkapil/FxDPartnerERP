@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, ArrowLeft, Building2, Phone, Mail, MapPin, IndianRupee, Clock, CreditCard } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { supabase } from '../../lib/supabase';
 
 interface SupplierFormData {
   companyName: string;
@@ -18,10 +19,12 @@ interface SupplierFormData {
   creditLimit: number;
   products: string[];
   status: 'active' | 'inactive';
+  notes: string;
 }
 
 const AddSupplier: React.FC = () => {
   const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<SupplierFormData>({
     companyName: '',
     contactPerson: '',
@@ -36,7 +39,8 @@ const AddSupplier: React.FC = () => {
     paymentTerms: 30,
     creditLimit: 0,
     products: [],
-    status: 'active'
+    status: 'active',
+    notes: ''
   });
 
   const [newProduct, setNewProduct] = useState('');
@@ -45,7 +49,7 @@ const AddSupplier: React.FC = () => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: name === 'paymentTerms' || name === 'creditLimit' ? Number(value) : value
     }));
   };
 
@@ -66,17 +70,17 @@ const AddSupplier: React.FC = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Basic validation
-    if (!formData.companyName || !formData.phone || !formData.email) {
+    if (!formData.companyName || !formData.contactPerson || !formData.phone || !formData.email || !formData.address) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    if (formData.creditLimit <= 0) {
-      toast.error('Credit limit must be greater than 0');
+    if (formData.creditLimit < 0) {
+      toast.error('Credit limit cannot be negative');
       return;
     }
 
@@ -85,10 +89,61 @@ const AddSupplier: React.FC = () => {
       return;
     }
 
-    // In a real app, this would make an API call
-    console.log('Form submitted:', formData);
-    toast.success('Supplier added successfully');
-    navigate('/suppliers');
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .insert({
+          company_name: formData.companyName,
+          contact_person: formData.contactPerson,
+          phone: formData.phone,
+          email: formData.email,
+          address: formData.address,
+          gst_number: formData.gstNumber || null,
+          pan_number: formData.panNumber || null,
+          bank_name: formData.bankName || null,
+          account_number: formData.accountNumber || null,
+          ifsc_code: formData.ifscCode || null,
+          payment_terms: formData.paymentTerms,
+          credit_limit: formData.creditLimit,
+          current_balance: 0, // Default to 0 for new suppliers
+          products: formData.products.length > 0 ? formData.products : null,
+          status: formData.status,
+          notes: formData.notes || null
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success('Supplier added successfully!');
+      navigate('/suppliers');
+    } catch (error: any) {
+      console.error('Error adding supplier:', error);
+      
+      // Handle specific database errors
+      if (error.code === '23505') {
+        if (error.message.includes('email')) {
+          toast.error('A supplier with this email already exists');
+        } else if (error.message.includes('phone')) {
+          toast.error('A supplier with this phone number already exists');
+        } else {
+          toast.error('A supplier with these details already exists');
+        }
+      } else {
+        toast.error('Failed to add supplier. Please try again.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -97,7 +152,7 @@ const AddSupplier: React.FC = () => {
         <div className="flex items-center space-x-4">
           <button
             onClick={() => navigate('/suppliers')}
-            className="text-gray-600 hover:text-gray-900"
+            className="text-gray-600 hover:text-gray-900 transition-colors duration-200"
           >
             <ArrowLeft className="h-6 w-6" />
           </button>
@@ -223,7 +278,7 @@ const AddSupplier: React.FC = () => {
                     name="paymentTerms"
                     value={formData.paymentTerms}
                     onChange={handleChange}
-                    min="0"
+                    min="1"
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
                     required
                   />
@@ -325,6 +380,12 @@ const AddSupplier: React.FC = () => {
                   onChange={(e) => setNewProduct(e.target.value)}
                   placeholder="Enter product name"
                   className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddProduct();
+                    }
+                  }}
                 />
                 <button
                   type="button"
@@ -344,15 +405,31 @@ const AddSupplier: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleRemoveProduct(index)}
-                          className="text-red-600 hover:text-red-800"
+                          className="text-red-600 hover:text-red-800 text-sm"
                         >
-                          ×
+                          Remove
                         </button>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="border-t pt-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Additional Information</h2>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Notes</label>
+              <textarea
+                name="notes"
+                value={formData.notes}
+                onChange={handleChange}
+                rows={3}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                placeholder="Any additional notes about this supplier..."
+              />
             </div>
           </div>
 
@@ -381,14 +458,16 @@ const AddSupplier: React.FC = () => {
               type="button"
               onClick={() => navigate('/suppliers')}
               className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              disabled={isSubmitting}
+              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              Add Supplier
+              {isSubmitting ? 'Adding Supplier...' : 'Add Supplier'}
             </button>
           </div>
         </form>
