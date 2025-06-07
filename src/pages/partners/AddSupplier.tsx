@@ -102,10 +102,10 @@ const AddSupplier: React.FC = () => {
         .from('suppliers')
         .insert({
           company_name: formData.companyName.trim(),
-          contact_person: formData.contactPerson.trim() || null,
-          phone: formData.phone.trim() || null,
-          email: formData.email.trim() || null,
-          address: formData.address.trim() || null,
+          contact_person: formData.contactPerson.trim() || '',
+          phone: formData.phone.trim() || '',
+          email: formData.email.trim() || '',
+          address: formData.address.trim() || '',
           gst_number: formData.gstNumber.trim() || null,
           pan_number: formData.panNumber.trim() || null,
           bank_name: formData.bankName.trim() || null,
@@ -189,7 +189,7 @@ const AddSupplier: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Contact Person
+                  Contact Person <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -197,12 +197,13 @@ const AddSupplier: React.FC = () => {
                   value={formData.contactPerson}
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  required
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Phone Number
+                  Phone Number <span className="text-red-500">*</span>
                 </label>
                 <div className="mt-1 relative rounded-md shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -214,13 +215,14 @@ const AddSupplier: React.FC = () => {
                     value={formData.phone}
                     onChange={handleChange}
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                    required
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Email Address
+                  Email Address <span className="text-red-500">*</span>
                 </label>
                 <div className="mt-1 relative rounded-md shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -232,13 +234,14 @@ const AddSupplier: React.FC = () => {
                     value={formData.email}
                     onChange={handleChange}
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                    required
                   />
                 </div>
               </div>
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700">
-                  Address
+                  Address <span className="text-red-500">*</span>
                 </label>
                 <div className="mt-1 relative rounded-md shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -250,6 +253,7 @@ const AddSupplier: React.FC = () => {
                     onChange={handleChange}
                     rows={3}
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                    required
                   />
                 </div>
               </div>
