@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Package2, Search, Filter, Eye, Pencil, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
+import { getVehicleArrivals } from '../../lib/api';
 
 interface RecordPurchase {
   id: string;
@@ -17,63 +19,47 @@ interface RecordPurchase {
   pricingModel: 'commission' | 'fixed';
 }
 
-const mockRecordPurchases: RecordPurchase[] = [
-  {
-    id: 'RP001',
-    orderNumber: 'RP-2025-001',
-    supplier: 'Green Farms',
-    orderDate: '2025-06-18 08:30 AM',
-    items: [
-      {
-        name: 'POMO MH',
-        quantity: 100,
-        totalWeight: 1000
-      }
-    ],
-    totalAmount: 125000,
-    status: 'completed',
-    pricingModel: 'commission'
-  },
-  {
-    id: 'RP002',
-    orderNumber: 'RP-2025-002',
-    supplier: 'Fresh Harvests',
-    orderDate: '2025-06-18 10:15 AM',
-    items: [
-      {
-        name: 'Washington Apple',
-        quantity: 50,
-        totalWeight: 1000
-      }
-    ],
-    totalAmount: 75000,
-    status: 'draft',
-    pricingModel: 'fixed'
-  },
-  {
-    id: 'RP003',
-    orderNumber: 'RP-2025-003',
-    supplier: 'Organic Fruits Co.',
-    orderDate: '2025-06-18 11:45 AM',
-    items: [
-      {
-        name: 'Banganpally',
-        quantity: 750,
-        totalWeight: 750
-      }
-    ],
-    totalAmount: 150000,
-    status: 'draft',
-    pricingModel: 'commission'
-  }
-];
-
 const RecordPurchase: React.FC = () => {
   const navigate = useNavigate();
-  const [orders, setOrders] = useState<RecordPurchase[]>(mockRecordPurchases);
+  const [orders, setOrders] = useState<RecordPurchase[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedPricingModel, setSelectedPricingModel] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+
+  useEffect(() => {
+    loadPurchaseRecords();
+  }, []);
+
+  const loadPurchaseRecords = async () => {
+    try {
+      // Fetch vehicle arrivals with status 'po-created'
+      const vehicleArrivals = await getVehicleArrivals();
+      const purchaseRecords = vehicleArrivals
+        .filter(va => va.status === 'po-created')
+        .map(va => ({
+          id: va.id,
+          orderNumber: `PO-${va.id.substring(0, 8).toUpperCase()}`,
+          supplier: va.supplier,
+          orderDate: new Date(va.arrival_time).toLocaleString(),
+          items: va.vehicle_arrival_items.map(item => ({
+            name: item.product.name,
+            quantity: item.quantity,
+            totalWeight: item.total_weight
+          })),
+          totalAmount: 0, // Placeholder - would need pricing data to calculate
+          status: 'completed' as const, // Map po-created to completed
+          pricingModel: 'commission' as const // Default placeholder
+        }));
+
+      setOrders(purchaseRecords);
+    } catch (error) {
+      console.error('Error loading purchase records:', error);
+      toast.error('Failed to load purchase records');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch = 
@@ -85,6 +71,14 @@ const RecordPurchase: React.FC = () => {
     
     return matchesSearch && matchesStatus && matchesPricingModel;
   });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading purchase records...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -246,6 +240,7 @@ const RecordPurchase: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">₹{order.totalAmount.toLocaleString()}</div>
+                    <div className="text-sm text-gray-500">{order.pricingModel}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${

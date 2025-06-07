@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Package2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getVehicleArrival, getProducts } from '../../lib/api';
+import { getVehicleArrival, getProducts, updateVehicleArrivalStatus } from '../../lib/api';
 
 interface PurchaseOrderItem {
   id: string;
@@ -319,7 +319,7 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.supplier || !formData.arrivalTimestamp) {
@@ -359,9 +359,20 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
       totalAmount: calculateTotalAmount()
     };
 
-    console.log('Purchase record data:', orderData);
-    toast.success('Purchase record created successfully');
-    navigate('/record-purchase');
+    try {
+      // If this is from a vehicle arrival, update the vehicle status to 'po-created'
+      if (vehicleId) {
+        await updateVehicleArrivalStatus(vehicleId, 'po-created');
+        toast.success('Purchase record created and vehicle arrival updated successfully');
+      } else {
+        toast.success('Purchase record created successfully');
+      }
+      
+      navigate('/record-purchase');
+    } catch (error) {
+      console.error('Error creating purchase record:', error);
+      toast.error('Failed to create purchase record');
+    }
   };
 
   if (loading) {
