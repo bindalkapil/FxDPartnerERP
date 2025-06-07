@@ -73,9 +73,9 @@ const AddSupplier: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Basic validation
-    if (!formData.companyName || !formData.contactPerson || !formData.phone || !formData.email || !formData.address) {
-      toast.error('Please fill in all required fields');
+    // Basic validation - only company name is required
+    if (!formData.companyName.trim()) {
+      toast.error('Company name is required');
       return;
     }
 
@@ -89,9 +89,8 @@ const AddSupplier: React.FC = () => {
       return;
     }
 
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
+    // Email validation only if email is provided
+    if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       toast.error('Please enter a valid email address');
       return;
     }
@@ -102,22 +101,22 @@ const AddSupplier: React.FC = () => {
       const { data, error } = await supabase
         .from('suppliers')
         .insert({
-          company_name: formData.companyName,
-          contact_person: formData.contactPerson,
-          phone: formData.phone,
-          email: formData.email,
-          address: formData.address,
-          gst_number: formData.gstNumber || null,
-          pan_number: formData.panNumber || null,
-          bank_name: formData.bankName || null,
-          account_number: formData.accountNumber || null,
-          ifsc_code: formData.ifscCode || null,
+          company_name: formData.companyName.trim(),
+          contact_person: formData.contactPerson.trim() || null,
+          phone: formData.phone.trim() || null,
+          email: formData.email.trim() || null,
+          address: formData.address.trim() || null,
+          gst_number: formData.gstNumber.trim() || null,
+          pan_number: formData.panNumber.trim() || null,
+          bank_name: formData.bankName.trim() || null,
+          account_number: formData.accountNumber.trim() || null,
+          ifsc_code: formData.ifscCode.trim() || null,
           payment_terms: formData.paymentTerms,
           credit_limit: formData.creditLimit,
           current_balance: 0, // Default to 0 for new suppliers
           products: formData.products.length > 0 ? formData.products : null,
           status: formData.status,
-          notes: formData.notes || null
+          notes: formData.notes.trim() || null
         })
         .select()
         .single();
@@ -190,7 +189,7 @@ const AddSupplier: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Contact Person <span className="text-red-500">*</span>
+                  Contact Person
                 </label>
                 <input
                   type="text"
@@ -198,13 +197,12 @@ const AddSupplier: React.FC = () => {
                   value={formData.contactPerson}
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                  required
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Phone Number <span className="text-red-500">*</span>
+                  Phone Number
                 </label>
                 <div className="mt-1 relative rounded-md shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -216,14 +214,13 @@ const AddSupplier: React.FC = () => {
                     value={formData.phone}
                     onChange={handleChange}
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-                    required
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Email Address <span className="text-red-500">*</span>
+                  Email Address
                 </label>
                 <div className="mt-1 relative rounded-md shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -235,14 +232,13 @@ const AddSupplier: React.FC = () => {
                     value={formData.email}
                     onChange={handleChange}
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-                    required
                   />
                 </div>
               </div>
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700">
-                  Address <span className="text-red-500">*</span>
+                  Address
                 </label>
                 <div className="mt-1 relative rounded-md shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -254,7 +250,6 @@ const AddSupplier: React.FC = () => {
                     onChange={handleChange}
                     rows={3}
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-                    required
                   />
                 </div>
               </div>
