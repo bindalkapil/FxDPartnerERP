@@ -1,66 +1,50 @@
-import React, { useState } from 'react';
-import { User, Search, Filter, Eye, Pencil, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Search, Filter, Eye, Pencil, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { getCustomers, updateCustomer } from '../../lib/api';
 
 interface Customer {
   id: string;
   name: string;
-  type: string;
+  customer_type: string;
   contact: string;
   email: string;
   address: string;
-  creditLimit: number;
-  currentBalance: number;
+  gst_number: string | null;
+  pan_number: string | null;
+  credit_limit: number;
+  current_balance: number;
+  payment_terms: number;
   status: 'active' | 'inactive';
-  lastTransaction: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
-
-const mockCustomers: Customer[] = [
-  {
-    id: 'CUST001',
-    name: 'ABC Retail Store',
-    type: 'Retailer',
-    contact: '9876543210',
-    email: 'abc@retail.com',
-    address: '123 Market Street, City Center',
-    creditLimit: 50000,
-    currentBalance: 15000,
-    status: 'active',
-    lastTransaction: '2025-06-18'
-  },
-  {
-    id: 'CUST002',
-    name: 'XYZ Wholesalers',
-    type: 'Wholesaler',
-    contact: '8765432109',
-    email: 'xyz@wholesale.com',
-    address: '456 Business Hub, West End',
-    creditLimit: 100000,
-    currentBalance: 75000,
-    status: 'active',
-    lastTransaction: '2025-06-17'
-  },
-  {
-    id: 'CUST003',
-    name: 'Fresh Foods Restaurant',
-    type: 'Restaurant',
-    contact: '7654321098',
-    email: 'fresh@foods.com',
-    address: '789 Food Street, City',
-    creditLimit: 25000,
-    currentBalance: 5000,
-    status: 'inactive',
-    lastTransaction: '2025-06-16'
-  }
-];
 
 const Customers: React.FC = () => {
   const navigate = useNavigate();
-  const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  
+  useEffect(() => {
+    loadCustomers();
+  }, []);
+
+  const loadCustomers = async () => {
+    try {
+      const data = await getCustomers();
+      setCustomers(data || []);
+    } catch (error) {
+      console.error('Error loading customers:', error);
+      toast.error('Failed to load customers');
+    } finally {
+      setLoading(false);
+    }
+  };
   
   const filteredCustomers = customers.filter(customer => {
     const matchesSearch = 
@@ -68,20 +52,36 @@ const Customers: React.FC = () => {
       customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.contact.includes(searchTerm);
       
-    const matchesType = selectedType === 'all' || customer.type === selectedType;
+    const matchesType = selectedType === 'all' || customer.customer_type === selectedType;
     const matchesStatus = selectedStatus === 'all' || customer.status === selectedStatus;
     
     return matchesSearch && matchesType && matchesStatus;
   });
 
-  const customerTypes = Array.from(new Set(customers.map(customer => customer.type)));
+  const customerTypes = Array.from(new Set(customers.map(customer => customer.customer_type)));
 
-  const handleStatusChange = (id: string, newStatus: 'active' | 'inactive') => {
-    setCustomers(prev => prev.map(customer => 
-      customer.id === id ? { ...customer, status: newStatus } : customer
-    ));
-    toast.success(`Customer ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
+  const handleStatusChange = async (id: string, newStatus: 'active' | 'inactive') => {
+    try {
+      await updateCustomer(id, { status: newStatus });
+      
+      setCustomers(prev => prev.map(customer => 
+        customer.id === id ? { ...customer, status: newStatus } : customer
+      ));
+      
+      toast.success(`Customer ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
+    } catch (error) {
+      console.error('Error updating customer status:', error);
+      toast.error('Failed to update customer status');
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading customers...</div>
+      </div>
+    );
+  }
   
   return (
     <div className="space-y-6">
@@ -92,8 +92,9 @@ const Customers: React.FC = () => {
         </div>
         <button 
           onClick={() => navigate('/customers/new')}
-          className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200"
+          className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
         >
+          <Plus className="h-4 w-4 mr-1" />
           Add Customer
         </button>
       </div>
@@ -116,11 +117,11 @@ const Customers: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-500">Total Credit Extended</p>
               <p className="text-2xl font-bold text-gray-800">
-                ₹{customers.reduce((sum, customer) => sum + customer.currentBalance, 0).toLocaleString()}
+                ₹{customers.reduce((sum, customer) => sum + customer.current_balance, 0).toLocaleString()}
               </p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-blue-100 text-blue-600">
-              <FileText className="h-5 w-5" />
+              <User className="h-5 w-5" />
             </div>
           </div>
         </div>
@@ -196,9 +197,6 @@ const Customers: React.FC = () => {
                   Credit Status
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Last Transaction
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -216,26 +214,29 @@ const Customers: React.FC = () => {
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">{customer.name}</div>
-                        <div className="text-sm text-gray-500">{customer.type}</div>
+                        <div className="text-sm text-gray-500">{customer.customer_type}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{customer.contact}</div>
-                    <div className="text-sm text-gray-500">{customer.email}</div>
+                  <td className="px-6 py-4">
+                    <div className="text-sm">
+                      <div className="text-gray-900">{customer.contact}</div>
+                      <div className="text-gray-500">{customer.email}</div>
+                      <div className="text-gray-500 truncate max-w-xs">{customer.address}</div>
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">Balance: ₹{customer.currentBalance}</div>
-                    <div className="text-sm text-gray-500">Limit: ₹{customer.creditLimit}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {customer.lastTransaction}
+                    <div className="text-sm">
+                      <div className="text-gray-900">Balance: ₹{customer.current_balance.toLocaleString()}</div>
+                      <div className="text-gray-500">Limit: ₹{customer.credit_limit.toLocaleString()}</div>
+                      <div className="text-gray-500">Terms: {customer.payment_terms} days</div>
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <select
                       value={customer.status}
                       onChange={(e) => handleStatusChange(customer.id, e.target.value as 'active' | 'inactive')}
-                      className={`text-sm rounded-full px-3 py-1 ${
+                      className={`text-sm rounded-full px-3 py-1 border-0 focus:ring-2 focus:ring-green-500 ${
                         customer.status === 'active' 
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-red-100 text-red-800'
@@ -249,13 +250,15 @@ const Customers: React.FC = () => {
                     <div className="flex space-x-2">
                       <button 
                         onClick={() => navigate(`/customers/view/${customer.id}`)}
-                        className="text-indigo-600 hover:text-indigo-900"
+                        className="text-indigo-600 hover:text-indigo-900 transition-colors duration-200"
+                        title="View Details"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       <button 
                         onClick={() => navigate(`/customers/edit/${customer.id}`)}
-                        className="text-gray-600 hover:text-gray-900"
+                        className="text-gray-600 hover:text-gray-900 transition-colors duration-200"
+                        title="Edit Customer"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
@@ -267,9 +270,24 @@ const Customers: React.FC = () => {
           </table>
         </div>
         
-        {filteredCustomers.length === 0 && (
-          <div className="py-6 text-center text-gray-500">
-            No customers found.
+        {filteredCustomers.length === 0 && !loading && (
+          <div className="py-12 text-center text-gray-500">
+            <User className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Customers Found</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {customers.length === 0 
+                ? "Get started by adding your first customer."
+                : "No customers match your current search and filter criteria."
+              }
+            </p>
+            {customers.length === 0 && (
+              <button
+                onClick={() => navigate('/customers/new')}
+                className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200"
+              >
+                Add First Customer
+              </button>
+            )}
           </div>
         )}
       </div>

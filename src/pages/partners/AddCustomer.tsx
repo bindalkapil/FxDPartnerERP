@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { User, ArrowLeft } from 'lucide-react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { User, ArrowLeft, Building2, Phone, Mail, MapPin, CreditCard, Clock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getCustomer, updateCustomer } from '../../lib/api';
+import { createCustomer } from '../../lib/api';
 
 interface CustomerFormData {
   name: string;
@@ -18,12 +18,9 @@ interface CustomerFormData {
   notes: string;
 }
 
-const EditCustomer: React.FC = () => {
+const AddCustomer: React.FC = () => {
   const navigate = useNavigate();
-  const { id } = useParams();
-  const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const [formData, setFormData] = useState<CustomerFormData>({
     name: '',
     customerType: 'retailer',
@@ -37,41 +34,6 @@ const EditCustomer: React.FC = () => {
     status: 'active',
     notes: ''
   });
-
-  useEffect(() => {
-    if (id) {
-      loadCustomerData();
-    }
-  }, [id]);
-
-  const loadCustomerData = async () => {
-    if (!id) return;
-    
-    try {
-      const data = await getCustomer(id);
-
-      // Populate form with existing data
-      setFormData({
-        name: data.name,
-        customerType: data.customer_type,
-        contact: data.contact || '',
-        email: data.email || '',
-        address: data.address || '',
-        gstNumber: data.gst_number || '',
-        panNumber: data.pan_number || '',
-        creditLimit: data.credit_limit,
-        paymentTerms: data.payment_terms,
-        status: data.status,
-        notes: data.notes || ''
-      });
-    } catch (error) {
-      console.error('Error loading customer data:', error);
-      toast.error('Failed to load customer data');
-      navigate('/customers');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -109,7 +71,7 @@ const EditCustomer: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      await updateCustomer(id!, {
+      await createCustomer({
         name: formData.name.trim(),
         customer_type: formData.customerType,
         contact: formData.contact.trim() || '',
@@ -118,15 +80,16 @@ const EditCustomer: React.FC = () => {
         gst_number: formData.gstNumber.trim() || null,
         pan_number: formData.panNumber.trim() || null,
         credit_limit: formData.creditLimit,
+        current_balance: 0, // Default to 0 for new customers
         payment_terms: formData.paymentTerms,
         status: formData.status,
         notes: formData.notes.trim() || null
       });
 
-      toast.success('Customer updated successfully!');
+      toast.success('Customer added successfully!');
       navigate('/customers');
     } catch (error: any) {
-      console.error('Error updating customer:', error);
+      console.error('Error adding customer:', error);
       
       // Handle specific database errors
       if (error.code === '23505') {
@@ -138,20 +101,12 @@ const EditCustomer: React.FC = () => {
           toast.error('A customer with these details already exists');
         }
       } else {
-        toast.error('Failed to update customer. Please try again.');
+        toast.error('Failed to add customer. Please try again.');
       }
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading customer data...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -165,7 +120,7 @@ const EditCustomer: React.FC = () => {
           </button>
           <div className="flex items-center">
             <User className="h-6 w-6 text-green-600 mr-2" />
-            <h1 className="text-2xl font-bold text-gray-800">Edit Customer</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Add New Customer</h1>
           </div>
         </div>
       </div>
@@ -180,14 +135,19 @@ const EditCustomer: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700">
                   Customer Name <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                  required
-                />
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Building2 className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                    required
+                  />
+                </div>
               </div>
 
               <div>
@@ -211,39 +171,54 @@ const EditCustomer: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700">
                   Contact Number
                 </label>
-                <input
-                  type="tel"
-                  name="contact"
-                  value={formData.contact}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                />
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Phone className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="tel"
+                    name="contact"
+                    value={formData.contact}
+                    onChange={handleChange}
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   Email Address
                 </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                />
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
               </div>
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700">
                   Address
                 </label>
-                <textarea
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  rows={3}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                />
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <MapPin className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <textarea
+                    name="address"
+                    value={formData.address}
+                    onChange={handleChange}
+                    rows={3}
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -254,31 +229,41 @@ const EditCustomer: React.FC = () => {
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Credit Limit (₹)
+                  Payment Terms (Days)
                 </label>
-                <input
-                  type="number"
-                  name="creditLimit"
-                  value={formData.creditLimit}
-                  onChange={handleChange}
-                  min="0"
-                  step="1000"
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                />
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Clock className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="number"
+                    name="paymentTerms"
+                    value={formData.paymentTerms}
+                    onChange={handleChange}
+                    min="1"
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Payment Terms (Days)
+                  Credit Limit (₹)
                 </label>
-                <input
-                  type="number"
-                  name="paymentTerms"
-                  value={formData.paymentTerms}
-                  onChange={handleChange}
-                  min="1"
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                />
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <CreditCard className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="number"
+                    name="creditLimit"
+                    value={formData.creditLimit}
+                    onChange={handleChange}
+                    min="0"
+                    step="1000"
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
               </div>
 
               <div>
@@ -340,6 +325,7 @@ const EditCustomer: React.FC = () => {
             </div>
           </div>
 
+          {/* Form Actions */}
           <div className="border-t pt-6 flex justify-end space-x-3">
             <button
               type="button"
@@ -354,7 +340,7 @@ const EditCustomer: React.FC = () => {
               disabled={isSubmitting}
               className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? 'Updating Customer...' : 'Update Customer'}
+              {isSubmitting ? 'Adding Customer...' : 'Add Customer'}
             </button>
           </div>
         </form>
@@ -363,4 +349,4 @@ const EditCustomer: React.FC = () => {
   );
 };
 
-export default EditCustomer;
+export default AddCustomer;

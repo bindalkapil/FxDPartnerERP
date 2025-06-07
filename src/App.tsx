@@ -26,6 +26,7 @@ import AddSupplier from './pages/partners/AddSupplier';
 import ViewSupplier from './pages/partners/ViewSupplier';
 import EditSupplier from './pages/partners/EditSupplier';
 import Customers from './pages/partners/Customers';
+import AddCustomer from './pages/partners/AddCustomer';
 import ViewCustomer from './pages/partners/ViewCustomer';
 import EditCustomer from './pages/partners/EditCustomer';
 import Ledger from './pages/finance/Ledger';
@@ -80,6 +81,7 @@ function App() {
               <Route path="suppliers/view/:id" element={<ViewSupplier />} />
               <Route path="suppliers/edit/:id" element={<EditSupplier />} />
               <Route path="customers" element={<Customers />} />
+              <Route path="customers/new" element={<AddCustomer />} />
               <Route path="customers/view/:id" element={<ViewCustomer />} />
               <Route path="customers/edit/:id" element={<EditCustomer />} />
               <Route path="ledger" element={<Ledger />} />

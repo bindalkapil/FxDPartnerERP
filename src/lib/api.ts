@@ -1,3 +1,4 @@
+// Add customer-related API functions
 import { supabase } from './supabase';
 import type { Database } from './database.types';
 
@@ -69,6 +70,51 @@ export async function createSKU(sku: Tables['skus']['Insert']) {
   const { data, error } = await supabase
     .from('skus')
     .insert(sku)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+// Customers
+export async function getCustomers() {
+  const { data, error } = await supabase
+    .from('customers')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function getCustomer(id: string) {
+  const { data, error } = await supabase
+    .from('customers')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function createCustomer(customer: Tables['customers']['Insert']) {
+  const { data, error } = await supabase
+    .from('customers')
+    .insert(customer)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function updateCustomer(id: string, customer: Tables['customers']['Update']) {
+  const { data, error } = await supabase
+    .from('customers')
+    .update(customer)
+    .eq('id', id)
     .select()
     .single();
   
