@@ -290,14 +290,14 @@ const ViewVehicleArrival: React.FC = () => {
                 </tbody>
                 <tfoot className="bg-gray-50">
                   <tr>
-                    <td colSpan={4} className="px-6 py-3 text-sm font-medium text-gray-900 text-right">
-                      Total Weight:
+                    <td colSpan={3} className="px-6 py-3 text-sm font-medium text-gray-900 text-right">
+                      Total:
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {item.unit_type === 'box' ? `${item.quantity} boxes` : `${item.quantity} kg`}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {vehicleData.vehicle_arrival_items.reduce((sum, item) => sum + item.quantity, 0)} units
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {item.unit_type === 'box' ? 'N/A' : `${item.total_weight} kg`}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {vehicleData.vehicle_arrival_items.reduce((sum, item) => sum + item.total_weight, 0)} kg
                     </td>
                   </tr>
                 </tfoot>
