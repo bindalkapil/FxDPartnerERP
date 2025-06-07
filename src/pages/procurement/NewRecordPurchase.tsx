@@ -233,11 +233,11 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
     const itemsTotal = items.reduce((sum, item) => sum + item.total, 0);
     
     if (formData.pricingModel === 'fixed') {
-      return itemsTotal + calculateAdditionalCosts(itemsTotal);
+      return itemsTotal - calculateAdditionalCosts(itemsTotal);
     }
 
     const marketValue = items.reduce((sum, item) => sum + ((item.marketPrice || 0) * item.quantity), 0);
-    return itemsTotal + calculateAdditionalCosts(marketValue);
+    return itemsTotal - calculateAdditionalCosts(marketValue);
   };
 
   const handleAddCost = () => {
