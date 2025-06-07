@@ -4,18 +4,20 @@ import { Truck, ArrowLeft, Plus, Trash2, Upload, X, Save, AlertCircle } from 'lu
 import { toast } from 'react-hot-toast';
 import { getVehicleArrival, updateVehicleArrival, uploadAttachment } from '../../lib/api';
 
-interface Product {
-  id: string;
-  name: string;
-  skus: SKU[];
-}
-
 interface SKU {
   id: string;
   code: string;
   unitType: 'box' | 'loose';
   quantity: number;
   totalWeight: number;
+  isNew?: boolean; // Flag to identify newly added SKUs
+}
+
+interface Product {
+  id: string;
+  name: string;
+  skus: SKU[];
+  isNew?: boolean; // Flag to identify newly added products
 }
 
 interface Attachment {
@@ -98,7 +100,8 @@ const EditVehicleArrival: React.FC = () => {
           productMap.set(productId, {
             id: productId, // Use actual database ID
             name: productName,
-            skus: []
+            skus: [],
+            isNew: false // Mark as existing
           });
         }
         
@@ -108,7 +111,8 @@ const EditVehicleArrival: React.FC = () => {
           code: item.sku.code,
           unitType: item.unit_type as 'box' | 'loose',
           quantity: item.quantity,
-          totalWeight: item.total_weight
+          totalWeight: item.total_weight,
+          isNew: false // Mark as existing
         });
       });
 
@@ -131,7 +135,8 @@ const EditVehicleArrival: React.FC = () => {
     setProducts(prev => [...prev, {
       id: productId,
       name: '',
-      skus: []
+      skus: [],
+      isNew: true
     }]);
   };
 
@@ -152,7 +157,8 @@ const EditVehicleArrival: React.FC = () => {
             code: '',
             unitType: 'box',
             quantity: 0,
-            totalWeight: 0
+            totalWeight: 0,
+            isNew: true
           }]
         };
       }
@@ -170,10 +176,8 @@ const EditVehicleArrival: React.FC = () => {
               const updatedSKU = { ...sku, ...updates };
               // Calculate total weight based on unit type and quantity
               if (updatedSKU.unitType === 'box') {
-                // For box type, total weight = quantity * 1 (default unit weight)
                 updatedSKU.totalWeight = updatedSKU.quantity * 1;
               } else {
-                // For loose type, total weight = quantity (quantity is already in kg)
                 updatedSKU.totalWeight = updatedSKU.quantity;
               }
               return updatedSKU;
@@ -187,16 +191,24 @@ const EditVehicleArrival: React.FC = () => {
   };
 
   const handleRemoveProduct = (productId: string) => {
-    setProducts(prev => prev.filter(p => p.id !== productId));
+    // Only allow removing new products
+    const product = products.find(p => p.id === productId);
+    if (product?.isNew) {
+      setProducts(prev => prev.filter(p => p.id !== productId));
+    }
   };
 
   const handleRemoveSKU = (productId: string, skuId: string) => {
+    // Only allow removing new SKUs
     setProducts(prev => prev.map(product => {
       if (product.id === productId) {
-        return {
-          ...product,
-          skus: product.skus.filter(sku => sku.id !== skuId)
-        };
+        const sku = product.skus.find(s => s.id === skuId);
+        if (sku?.isNew) {
+          return {
+            ...product,
+            skus: product.skus.filter(sku => sku.id !== skuId)
+          };
+        }
       }
       return product;
     }));
@@ -302,26 +314,30 @@ const EditVehicleArrival: React.FC = () => {
         }
       }
 
-      // For editing, we only update the items that have changed
-      // We don't create new products/SKUs - we use existing ones
-      const itemsData = products.flatMap(product =>
-        product.skus.map(sku => ({
-          product_id: product.id, // Use existing product ID (no temp IDs should remain)
-          sku_id: sku.id, // Use existing SKU ID (no temp IDs should remain)
-          unit_type: sku.unitType,
-          unit_weight: sku.unitType === 'box' ? 1 : null,
-          quantity: sku.quantity,
-          total_weight: sku.totalWeight
-        }))
-      );
-
-      // Check if any items have temp IDs (which shouldn't happen in edit mode)
-      const hasInvalidIds = itemsData.some(item => 
-        item.product_id.startsWith('temp_') || item.sku_id.startsWith('temp_')
-      );
-
-      if (hasInvalidIds) {
-        throw new Error('Cannot save changes with temporary product/SKU IDs. Please refresh and try again.');
+      // For editing, we need to handle both existing and new items differently
+      const itemsData = [];
+      
+      for (const product of products) {
+        for (const sku of product.skus) {
+          // For existing items, use their actual database IDs
+          // For new items, we would need to create them first (but this should be rare in edit mode)
+          if (!product.isNew && !sku.isNew) {
+            // Existing product and SKU - just update quantities
+            itemsData.push({
+              product_id: product.id,
+              sku_id: sku.id,
+              unit_type: sku.unitType,
+              unit_weight: sku.unitType === 'box' ? 1 : null,
+              quantity: sku.quantity,
+              total_weight: sku.totalWeight
+            });
+          } else {
+            // This shouldn't happen in normal edit flow
+            // If we have new products/SKUs, we'd need to create them first
+            toast.error('Cannot add new products/SKUs in edit mode. Please use the New Vehicle Arrival page.');
+            return;
+          }
+        }
       }
 
       // Update vehicle arrival
@@ -508,7 +524,7 @@ const EditVehicleArrival: React.FC = () => {
             </div>
           </div>
 
-          {/* Products Section - Show existing products in read-only mode if can't edit */}
+          {/* Products Section */}
           <div className="border-t pt-6">
             <h2 className="text-lg font-medium text-gray-900 mb-4">
               Products <span className="text-red-500">*</span>
@@ -519,15 +535,17 @@ const EditVehicleArrival: React.FC = () => {
               {products.map((product, productIndex) => (
                 <div key={product.id} className="border rounded-lg p-4 bg-gray-50">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-medium text-gray-900">Product {productIndex + 1}</h3>
-                    {canEdit() && !product.id.startsWith('temp_') && (
-                      <span className="text-xs text-gray-500">Existing Product</span>
-                    )}
-                    {canEdit() && product.id.startsWith('temp_') && (
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-lg font-medium text-gray-900">Product {productIndex + 1}</h3>
+                      {!product.isNew && (
+                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Existing</span>
+                      )}
+                    </div>
+                    {canEdit() && product.isNew && (
                       <button
                         type="button"
                         onClick={() => handleRemoveProduct(product.id)}
-                        className="text-red-600 hover:text-red-900 transition-colors duration-200"
+                        className="text-red-600 hover:text-red-900"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -544,7 +562,7 @@ const EditVehicleArrival: React.FC = () => {
                       onChange={(e) => handleUpdateProductName(product.id, e.target.value)}
                       className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                       placeholder="e.g., POMO MH, Alphonso, Washington Apple"
-                      disabled={!canEdit() || !product.id.startsWith('temp_')}
+                      disabled={!canEdit() || !product.isNew}
                     />
                   </div>
 
@@ -554,15 +572,17 @@ const EditVehicleArrival: React.FC = () => {
                     {product.skus.map((sku, skuIndex) => (
                       <div key={sku.id} className="bg-white p-4 rounded-md border">
                         <div className="flex items-center justify-between mb-3">
-                          <h5 className="text-sm font-medium text-gray-700">SKU {skuIndex + 1}</h5>
-                          {canEdit() && !sku.id.startsWith('temp_') && (
-                            <span className="text-xs text-gray-500">Existing SKU</span>
-                          )}
-                          {canEdit() && sku.id.startsWith('temp_') && (
+                          <div className="flex items-center space-x-2">
+                            <h5 className="text-sm font-medium text-gray-700">SKU {skuIndex + 1}</h5>
+                            {!sku.isNew && (
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Existing</span>
+                            )}
+                          </div>
+                          {canEdit() && sku.isNew && (
                             <button
                               type="button"
                               onClick={() => handleRemoveSKU(product.id, sku.id)}
-                              className="text-red-600 hover:text-red-900 transition-colors duration-200"
+                              className="text-red-600 hover:text-red-900"
                             >
                               <Trash2 className="h-3 w-3" />
                             </button>
@@ -580,7 +600,7 @@ const EditVehicleArrival: React.FC = () => {
                               onChange={(e) => handleUpdateSKU(product.id, sku.id, { code: e.target.value })}
                               className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                               placeholder="e.g., POMO-MH-001"
-                              disabled={!canEdit() || !sku.id.startsWith('temp_')}
+                              disabled={!canEdit() || !sku.isNew}
                             />
                           </div>
 
