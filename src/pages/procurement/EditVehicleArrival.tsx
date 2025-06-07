@@ -155,7 +155,14 @@ const EditVehicleArrival: React.FC = () => {
           skus: product.skus.map(sku => {
             if (sku.id === skuId) {
               const updatedSKU = { ...sku, ...updates };
-              updatedSKU.totalWeight = updatedSKU.quantity;
+              // Calculate total weight based on unit type and quantity
+              if (updatedSKU.unitType === 'box') {
+                // For box type, total weight = quantity * 1 (default unit weight)
+                updatedSKU.totalWeight = updatedSKU.quantity * 1;
+              } else {
+                // For loose type, total weight = quantity (quantity is already in kg)
+                updatedSKU.totalWeight = updatedSKU.quantity;
+              }
               return updatedSKU;
             }
             return sku;
@@ -282,65 +289,58 @@ const EditVehicleArrival: React.FC = () => {
         }
       }
 
-      // Process products and SKUs to get real UUIDs
+      // Process ALL products and SKUs to ensure they exist in the database
       const processedProducts = [];
       
       for (const product of products) {
-        let productId = product.id;
-        
-        // If this is a new product (temp ID), create it first
-        if (product.id.startsWith('temp_')) {
-          try {
-            const newProduct = await createProduct({
-              name: product.name,
-              category: 'Uncategorized',
-              status: 'active'
-            });
-            productId = newProduct.id;
-          } catch (error) {
-            console.error('Error creating product:', error);
-            toast.error(`Failed to create product "${product.name}"`);
-            return;
-          }
+        // Always create/get product by name to ensure consistency
+        let dbProduct;
+        try {
+          dbProduct = await createProduct({
+            name: product.name,
+            category: 'Uncategorized',
+            description: product.name,
+            status: 'active'
+          });
+        } catch (error) {
+          console.error('Error creating/getting product:', error);
+          toast.error(`Failed to process product "${product.name}"`);
+          return;
         }
 
         // Process SKUs for this product
         const processedSkus = [];
         for (const sku of product.skus) {
-          let skuId = sku.id;
-          
-          // If this is a new SKU (temp ID), create it first
-          if (sku.id.startsWith('temp_')) {
-            try {
-              const newSku = await createSKU({
-                product_id: productId,
-                code: sku.code,
-                unit_type: sku.unitType,
-                unit_weight: sku.unitType === 'box' ? 1 : null,
-                status: 'active'
-              });
-              skuId = newSku.id;
-            } catch (error) {
-              console.error('Error creating SKU:', error);
-              toast.error(`Failed to create SKU "${sku.code}"`);
-              return;
-            }
+          // Always create/get SKU by code to ensure consistency
+          let dbSku;
+          try {
+            dbSku = await createSKU({
+              product_id: dbProduct.id,
+              code: sku.code,
+              unit_type: sku.unitType,
+              unit_weight: sku.unitType === 'box' ? 1 : null,
+              status: 'active'
+            });
+          } catch (error) {
+            console.error('Error creating/getting SKU:', error);
+            toast.error(`Failed to process SKU "${sku.code}"`);
+            return;
           }
 
           processedSkus.push({
-            id: skuId,
+            id: dbSku.id,
             ...sku
           });
         }
 
         processedProducts.push({
-          id: productId,
+          id: dbProduct.id,
           name: product.name,
           skus: processedSkus
         });
       }
 
-      // Prepare items data with real UUIDs
+      // Prepare items data with correct database IDs
       const itemsData = processedProducts.flatMap(product =>
         product.skus.map(sku => ({
           product_id: product.id,
@@ -629,10 +629,10 @@ const EditVehicleArrival: React.FC = () => {
                             </div>
                           </div>
 
-                          {sku.totalWeight > 0 && (
+                          {sku.quantity > 0 && (
                             <div className="mt-3 text-sm text-gray-600">
                               {sku.unitType === 'box' 
-                                ? `Total: ${sku.totalWeight} boxes`
+                                ? `Total Boxes: ${sku.quantity}`
                                 : `Total Weight: ${sku.totalWeight} kg`
                               }
                             </div>
