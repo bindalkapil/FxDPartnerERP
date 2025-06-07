@@ -175,6 +175,147 @@ export interface Database {
           created_at?: string | null
         }
       }
+      purchase_records: {
+        Row: {
+          id: string
+          vehicle_arrival_id: string | null
+          record_number: string
+          supplier: string
+          record_date: string
+          arrival_timestamp: string
+          pricing_model: string
+          default_commission: number | null
+          payment_terms: number | null
+          items_subtotal: number
+          additional_costs_total: number
+          total_amount: number
+          status: string
+          notes: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          vehicle_arrival_id?: string | null
+          record_number: string
+          supplier: string
+          record_date: string
+          arrival_timestamp: string
+          pricing_model: string
+          default_commission?: number | null
+          payment_terms?: number | null
+          items_subtotal?: number
+          additional_costs_total?: number
+          total_amount?: number
+          status?: string
+          notes?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          vehicle_arrival_id?: string | null
+          record_number?: string
+          supplier?: string
+          record_date?: string
+          arrival_timestamp?: string
+          pricing_model?: string
+          default_commission?: number | null
+          payment_terms?: number | null
+          items_subtotal?: number
+          additional_costs_total?: number
+          total_amount?: number
+          status?: string
+          notes?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+      }
+      purchase_record_items: {
+        Row: {
+          id: string
+          purchase_record_id: string
+          product_id: string
+          sku_id: string
+          product_name: string
+          sku_code: string
+          category: string
+          quantity: number
+          unit_type: string
+          total_weight: number
+          market_price: number | null
+          commission: number | null
+          unit_price: number
+          total: number
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          purchase_record_id: string
+          product_id: string
+          sku_id: string
+          product_name: string
+          sku_code: string
+          category: string
+          quantity: number
+          unit_type: string
+          total_weight: number
+          market_price?: number | null
+          commission?: number | null
+          unit_price: number
+          total: number
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          purchase_record_id?: string
+          product_id?: string
+          sku_id?: string
+          product_name?: string
+          sku_code?: string
+          category?: string
+          quantity?: number
+          unit_type?: string
+          total_weight?: number
+          market_price?: number | null
+          commission?: number | null
+          unit_price?: number
+          total?: number
+          created_at?: string | null
+          updated_at?: string | null
+        }
+      }
+      purchase_record_costs: {
+        Row: {
+          id: string
+          purchase_record_id: string
+          name: string
+          amount: number
+          type: string
+          calculated_amount: number
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          purchase_record_id: string
+          name: string
+          amount: number
+          type: string
+          calculated_amount?: number
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          purchase_record_id?: string
+          name?: string
+          amount?: number
+          type?: string
+          calculated_amount?: number
+          created_at?: string | null
+        }
+      }
     }
   }
 }

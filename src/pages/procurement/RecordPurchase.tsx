@@ -2,21 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { Package2, Search, Filter, Eye, Pencil, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { getVehicleArrivals } from '../../lib/api';
+import { getPurchaseRecords } from '../../lib/api';
 
 interface RecordPurchase {
   id: string;
-  orderNumber: string;
+  record_number: string;
   supplier: string;
-  orderDate: string;
+  record_date: string;
   items: Array<{
-    name: string;
+    product_name: string;
     quantity: number;
-    totalWeight: number;
+    total_weight: number;
   }>;
-  totalAmount: number;
-  status: 'draft' | 'completed';
-  pricingModel: 'commission' | 'fixed';
+  total_amount: number;
+  status: 'draft' | 'completed' | 'cancelled';
+  pricing_model: 'commission' | 'fixed';
 }
 
 const RecordPurchase: React.FC = () => {
@@ -33,26 +33,23 @@ const RecordPurchase: React.FC = () => {
 
   const loadPurchaseRecords = async () => {
     try {
-      // Fetch vehicle arrivals with status 'po-created'
-      const vehicleArrivals = await getVehicleArrivals();
-      const purchaseRecords = vehicleArrivals
-        .filter(va => va.status === 'po-created')
-        .map(va => ({
-          id: va.id,
-          orderNumber: `PO-${va.id.substring(0, 8).toUpperCase()}`,
-          supplier: va.supplier,
-          orderDate: new Date(va.arrival_time).toLocaleString(),
-          items: va.vehicle_arrival_items.map(item => ({
-            name: item.product.name,
-            quantity: item.quantity,
-            totalWeight: item.total_weight
-          })),
-          totalAmount: 0, // Placeholder - would need pricing data to calculate
-          status: 'completed' as const, // Map po-created to completed
-          pricingModel: 'commission' as const // Default placeholder
-        }));
+      const purchaseRecords = await getPurchaseRecords();
+      const formattedRecords = purchaseRecords.map(record => ({
+        id: record.id,
+        record_number: record.record_number,
+        supplier: record.supplier,
+        record_date: new Date(record.record_date).toLocaleString(),
+        items: record.purchase_record_items.map((item: any) => ({
+          product_name: item.product_name,
+          quantity: item.quantity,
+          total_weight: item.total_weight
+        })),
+        total_amount: record.total_amount,
+        status: record.status as 'draft' | 'completed' | 'cancelled',
+        pricing_model: record.pricing_model as 'commission' | 'fixed'
+      }));
 
-      setOrders(purchaseRecords);
+      setOrders(formattedRecords);
     } catch (error) {
       console.error('Error loading purchase records:', error);
       toast.error('Failed to load purchase records');
@@ -63,11 +60,11 @@ const RecordPurchase: React.FC = () => {
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch = 
-      order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.record_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.supplier.toLowerCase().includes(searchTerm.toLowerCase());
       
     const matchesStatus = selectedStatus === 'all' || order.status === selectedStatus;
-    const matchesPricingModel = selectedPricingModel === 'all' || order.pricingModel === selectedPricingModel;
+    const matchesPricingModel = selectedPricingModel === 'all' || order.pricing_model === selectedPricingModel;
     
     return matchesSearch && matchesStatus && matchesPricingModel;
   });
@@ -87,6 +84,12 @@ const RecordPurchase: React.FC = () => {
           <Package2 className="h-6 w-6 text-green-600 mr-2" />
           <h1 className="text-2xl font-bold text-gray-800">Record Purchase</h1>
         </div>
+        <button 
+          onClick={() => navigate('/record-purchase/new')}
+          className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200"
+        >
+          New Purchase Record
+        </button>
       </div>
 
       {/* Summary Cards */}
@@ -133,7 +136,7 @@ const RecordPurchase: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-500">Total Value</p>
               <p className="text-2xl font-bold text-gray-800">
-                ₹{orders.reduce((sum, order) => sum + order.totalAmount, 0).toLocaleString()}
+                ₹{orders.reduce((sum, order) => sum + order.total_amount, 0).toLocaleString()}
               </p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-purple-100 text-purple-600">
@@ -169,6 +172,7 @@ const RecordPurchase: React.FC = () => {
               <option value="all">All Status</option>
               <option value="draft">Draft</option>
               <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </div>
           <select
@@ -218,10 +222,10 @@ const RecordPurchase: React.FC = () => {
                         <Package2 className="h-5 w-5" />
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{order.orderNumber}</div>
-                        <div className="text-sm text-gray-500">{order.orderDate}</div>
+                        <div className="text-sm font-medium text-gray-900">{order.record_number}</div>
+                        <div className="text-sm text-gray-500">{order.record_date}</div>
                         <div className="text-sm text-gray-500">
-                          {order.pricingModel === 'commission' ? 'Commission Sale' : 'Fixed Price'}
+                          {order.pricing_model === 'commission' ? 'Commission Sale' : 'Fixed Price'}
                         </div>
                       </div>
                     </div>
@@ -233,20 +237,21 @@ const RecordPurchase: React.FC = () => {
                     <div className="text-sm text-gray-900">
                       {order.items.map((item, index) => (
                         <div key={index} className="text-sm text-gray-500">
-                          {item.name} ({item.quantity} boxes)
+                          {item.product_name} ({item.quantity} units)
                         </div>
                       ))}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">₹{order.totalAmount.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">{order.pricingModel}</div>
+                    <div className="text-sm text-gray-900">₹{order.total_amount.toLocaleString()}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       order.status === 'completed'
                         ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
+                        : order.status === 'cancelled'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-yellow-100 text-yellow-800'
                     }`}>
                       {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                     </span>

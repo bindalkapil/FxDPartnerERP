@@ -240,6 +240,142 @@ export async function updateVehicleArrivalStatus(
   return data;
 }
 
+// Purchase Records
+export async function getPurchaseRecords() {
+  const { data, error } = await supabase
+    .from('purchase_records')
+    .select(`
+      *,
+      purchase_record_items(*),
+      purchase_record_costs(*)
+    `)
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function getPurchaseRecord(id: string) {
+  const { data, error } = await supabase
+    .from('purchase_records')
+    .select(`
+      *,
+      purchase_record_items(*),
+      purchase_record_costs(*)
+    `)
+    .eq('id', id)
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function createPurchaseRecord(
+  record: Tables['purchase_records']['Insert'],
+  items: Tables['purchase_record_items']['Insert'][],
+  costs: Tables['purchase_record_costs']['Insert'][]
+) {
+  // Create the purchase record
+  const { data: recordData, error: recordError } = await supabase
+    .from('purchase_records')
+    .insert(record)
+    .select()
+    .single();
+
+  if (recordError) throw recordError;
+
+  // Insert items
+  const itemsWithRecordId = items.map(item => ({
+    ...item,
+    purchase_record_id: recordData.id
+  }));
+
+  const { error: itemsError } = await supabase
+    .from('purchase_record_items')
+    .insert(itemsWithRecordId);
+
+  if (itemsError) throw itemsError;
+
+  // Insert costs
+  const costsWithRecordId = costs.map(cost => ({
+    ...cost,
+    purchase_record_id: recordData.id
+  }));
+
+  const { error: costsError } = await supabase
+    .from('purchase_record_costs')
+    .insert(costsWithRecordId);
+
+  if (costsError) throw costsError;
+
+  return recordData;
+}
+
+export async function updatePurchaseRecord(
+  id: string,
+  record: Partial<Tables['purchase_records']['Update']>,
+  items?: Tables['purchase_record_items']['Insert'][],
+  costs?: Tables['purchase_record_costs']['Insert'][]
+) {
+  // Update the record
+  const { data: recordData, error: recordError } = await supabase
+    .from('purchase_records')
+    .update(record)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (recordError) throw recordError;
+
+  // If items are provided, replace them
+  if (items) {
+    // Delete existing items
+    const { error: deleteItemsError } = await supabase
+      .from('purchase_record_items')
+      .delete()
+      .eq('purchase_record_id', id);
+
+    if (deleteItemsError) throw deleteItemsError;
+
+    // Insert new items
+    const itemsWithRecordId = items.map(item => ({
+      ...item,
+      purchase_record_id: id
+    }));
+
+    const { error: itemsError } = await supabase
+      .from('purchase_record_items')
+      .insert(itemsWithRecordId);
+
+    if (itemsError) throw itemsError;
+  }
+
+  // If costs are provided, replace them
+  if (costs) {
+    // Delete existing costs
+    const { error: deleteCostsError } = await supabase
+      .from('purchase_record_costs')
+      .delete()
+      .eq('purchase_record_id', id);
+
+    if (deleteCostsError) throw deleteCostsError;
+
+    // Insert new costs
+    const costsWithRecordId = costs.map(cost => ({
+      ...cost,
+      purchase_record_id: id
+    }));
+
+    const { error: costsError } = await supabase
+      .from('purchase_record_costs')
+      .insert(costsWithRecordId);
+
+    if (costsError) throw costsError;
+  }
+
+  return recordData;
+}
+
 // Storage
 export async function uploadAttachment(file: File) {
   const fileExt = file.name.split('.').pop();

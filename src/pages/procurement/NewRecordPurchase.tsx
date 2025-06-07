@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Package2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getVehicleArrival, getProducts, updateVehicleArrivalStatus } from '../../lib/api';
+import { getVehicleArrival, getProducts, updateVehicleArrivalStatus, createPurchaseRecord } from '../../lib/api';
 
 interface PurchaseOrderItem {
   id: string;
@@ -319,6 +319,11 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
     }));
   };
 
+  const generateRecordNumber = () => {
+    const timestamp = Date.now();
+    return `PR-${timestamp.toString().slice(-8)}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -352,14 +357,58 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
       }
     }
 
-    const orderData = {
-      ...formData,
-      items,
-      additionalCosts,
-      totalAmount: calculateTotalAmount()
-    };
-
     try {
+      const itemsSubtotal = items.reduce((sum, item) => sum + item.total, 0);
+      const marketValue = items.reduce((sum, item) => sum + ((item.marketPrice || 0) * item.quantity), 0);
+      const additionalCostsTotal = calculateAdditionalCosts(marketValue);
+      const totalAmount = calculateTotalAmount();
+
+      // Create purchase record
+      const recordData = {
+        vehicle_arrival_id: vehicleId || null,
+        record_number: generateRecordNumber(),
+        supplier: formData.supplier,
+        record_date: new Date().toISOString(),
+        arrival_timestamp: formData.arrivalTimestamp,
+        pricing_model: formData.pricingModel,
+        default_commission: commission,
+        payment_terms: 30,
+        items_subtotal: itemsSubtotal,
+        additional_costs_total: additionalCostsTotal,
+        total_amount: totalAmount,
+        status: 'completed',
+        notes: null
+      };
+
+      // Prepare items data
+      const itemsData = items.map(item => ({
+        product_id: item.productId,
+        sku_id: item.skuId,
+        product_name: item.productName,
+        sku_code: item.skuCode,
+        category: item.category,
+        quantity: item.quantity,
+        unit_type: item.unitType,
+        total_weight: item.totalWeight,
+        market_price: item.marketPrice || null,
+        commission: item.commission || null,
+        unit_price: formData.pricingModel === 'fixed' ? (item.unitPrice || 0) : calculateUnitPrice(item.marketPrice || 0, item.commission || 0),
+        total: item.total
+      }));
+
+      // Prepare costs data
+      const costsData = additionalCosts
+        .filter(cost => formData.pricingModel !== 'fixed' || cost.name === 'Vehicle Charges')
+        .map(cost => ({
+          name: cost.name,
+          amount: cost.amount,
+          type: cost.type,
+          calculated_amount: calculateSingleAdditionalCost(cost, marketValue, calculateTotalBoxes())
+        }));
+
+      // Create the purchase record
+      await createPurchaseRecord(recordData, itemsData, costsData);
+
       // If this is from a vehicle arrival, update the vehicle status to 'po-created'
       if (vehicleId) {
         await updateVehicleArrivalStatus(vehicleId, 'po-created');
