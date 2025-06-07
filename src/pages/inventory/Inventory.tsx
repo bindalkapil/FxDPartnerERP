@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Search, Filter, Plus, RefreshCw, Edit, TrendingDown, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Package, Search, Filter, Plus, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getProducts, createProduct, createSKU } from '../../lib/api';
 
@@ -30,7 +30,6 @@ const Inventory: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showNewProductModal, setShowNewProductModal] = useState(false);
-  const [showManageProductsModal, setShowManageProductsModal] = useState(false);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   
   const [newProduct, setNewProduct] = useState({
@@ -166,13 +165,6 @@ const Inventory: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-800">Inventory Management</h1>
         </div>
         <div className="flex space-x-2">
-          <button 
-            onClick={() => setShowManageProductsModal(true)}
-            className="bg-blue-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors duration-200 flex items-center"
-          >
-            <Edit className="h-4 w-4 mr-1" />
-            Manage Products
-          </button>
           <button 
             onClick={() => setShowNewProductModal(true)}
             className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"

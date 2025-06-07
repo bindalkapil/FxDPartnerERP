@@ -1,44 +1,101 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Package2, ArrowLeft, FileText, Pencil } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { getVehicleArrival } from '../../lib/api';
+
+interface VehicleArrivalData {
+  id: string;
+  vehicle_number: string | null;
+  supplier: string;
+  arrival_time: string;
+  status: string;
+  notes: string | null;
+  vehicle_arrival_items: Array<{
+    id: string;
+    product: {
+      id: string;
+      name: string;
+      category: string;
+    };
+    sku: {
+      id: string;
+      code: string;
+      unit_type: string;
+    };
+    quantity: number;
+    total_weight: number;
+    unit_type: string;
+  }>;
+}
 
 const ViewRecordPurchase: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [orderData, setOrderData] = useState<VehicleArrivalData | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data - in a real app, this would be fetched from an API
-  const orderData = {
-    id: 'RP001',
-    orderNumber: 'RP-2025-001',
-    supplier: 'Green Farms',
-    orderDate: '2025-06-18 08:30 AM',
-    arrivalTimestamp: '2025-06-18 08:30 AM',
-    paymentTerms: 30,
-    pricingModel: 'commission',
-    status: 'draft',
-    items: [
-      {
-        category: 'Pomegranate',
-        name: 'POMO MH',
-        sku: 'POMO-MH-001',
-        quantity: 100,
-        unitType: 'box',
-        unitWeight: 10,
-        totalWeight: 1000,
-        marketPrice: 1500,
-        commission: 8,
-        unitPrice: 1380,
-        total: 138000
-      }
-    ],
-    additionalCosts: [
-      { name: 'Labour Cost', amount: 5, type: 'per_box' },
-      { name: 'Handling Cost', amount: 3, type: 'per_box' },
-      { name: 'APMC Charge', amount: 1, type: 'percentage' },
-      { name: 'Vehicle Charges', amount: 2000, type: 'fixed' }
-    ],
-    totalAmount: 125000
+  useEffect(() => {
+    if (id) {
+      loadOrderData();
+    }
+  }, [id]);
+
+  const loadOrderData = async () => {
+    if (!id) return;
+    
+    try {
+      const data = await getVehicleArrival(id);
+      setOrderData(data);
+    } catch (error) {
+      console.error('Error loading purchase record:', error);
+      toast.error('Failed to load purchase record data');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  const getStatusDisplay = (status: string) => {
+    switch (status) {
+      case 'po-created':
+        return 'Completed';
+      default:
+        return status.charAt(0).toUpperCase() + status.slice(1);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'po-created':
+        return 'bg-green-100 text-green-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading purchase record...</div>
+      </div>
+    );
+  }
+
+  if (!orderData) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Purchase record not found</div>
+      </div>
+    );
+  }
+
+  const orderNumber = `PO-${orderData.id.substring(0, 8).toUpperCase()}`;
+  const totalAmount = 0; // Placeholder since pricing data isn't stored
+  const pricingModel = 'commission'; // Default placeholder
 
   return (
     <div className="space-y-6">
@@ -55,7 +112,7 @@ const ViewRecordPurchase: React.FC = () => {
             <h1 className="text-2xl font-bold text-gray-800">View Purchase Record</h1>
           </div>
         </div>
-        {orderData.status === 'draft' && (
+        {orderData.status === 'po-created' && (
           <button
             onClick={() => navigate(`/record-purchase/edit/${id}`)}
             className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
@@ -74,7 +131,7 @@ const ViewRecordPurchase: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-500">Record Number</label>
-                <p className="mt-1 text-sm text-gray-900">{orderData.orderNumber}</p>
+                <p className="mt-1 text-sm text-gray-900">{orderNumber}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-500">Supplier</label>
@@ -82,30 +139,26 @@ const ViewRecordPurchase: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-500">Record Date</label>
-                <p className="mt-1 text-sm text-gray-900">{orderData.orderDate}</p>
+                <p className="mt-1 text-sm text-gray-900">{formatDateTime(orderData.arrival_time)}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-500">Arrival Timestamp</label>
-                <p className="mt-1 text-sm text-gray-900">{orderData.arrivalTimestamp}</p>
+                <p className="mt-1 text-sm text-gray-900">{formatDateTime(orderData.arrival_time)}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-500">Payment Terms</label>
-                <p className="mt-1 text-sm text-gray-900">{orderData.paymentTerms} days</p>
+                <label className="block text-sm font-medium text-gray-500">Vehicle Number</label>
+                <p className="mt-1 text-sm text-gray-900">{orderData.vehicle_number || 'Not Available'}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-500">Pricing Model</label>
                 <p className="mt-1 text-sm text-gray-900">
-                  {orderData.pricingModel === 'commission' ? 'Commission Sale' : 'Fixed Price'}
+                  {pricingModel === 'commission' ? 'Commission Sale' : 'Fixed Price'}
                 </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-500">Status</label>
-                <span className={`mt-1 inline-flex px-2 text-xs leading-5 font-semibold rounded-full ${
-                  orderData.status === 'completed'
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-yellow-100 text-yellow-800'
-                }`}>
-                  {orderData.status.charAt(0).toUpperCase() + orderData.status.slice(1)}
+                <span className={`mt-1 inline-flex px-2 text-xs leading-5 font-semibold rounded-full ${getStatusColor(orderData.status)}`}>
+                  {getStatusDisplay(orderData.status)}
                 </span>
               </div>
             </div>
@@ -136,90 +189,72 @@ const ViewRecordPurchase: React.FC = () => {
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total Weight
                     </th>
-                    {orderData.pricingModel === 'commission' ? (
-                      <>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Market Price
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Commission
-                        </th>
-                      </>
-                    ) : null}
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Unit Price
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {orderData.items.map((item, index) => (
+                  {orderData.vehicle_arrival_items.map((item, index) => (
                     <tr key={index}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.category}
+                        {item.product.category}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.name}
+                        {item.product.name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {item.sku}
+                        {item.sku.code}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {item.quantity}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.unitType}
+                        {item.unit_type === 'box' ? 'Box/Crate' : 'Loose'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.totalWeight} kg
-                      </td>
-                      {orderData.pricingModel === 'commission' ? (
-                        <>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ₹{item.marketPrice}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {item.commission}%
-                          </td>
-                        </>
-                      ) : null}
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ₹{item.unitPrice}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ₹{item.total}
+                        {item.total_weight} kg
                       </td>
                     </tr>
                   ))}
                 </tbody>
+                <tfoot className="bg-gray-50">
+                  <tr>
+                    <td colSpan={3} className="px-6 py-3 text-sm font-medium text-gray-900 text-right">
+                      Total:
+                    </td>
+                    <td className="px-6 py-3 text-sm font-medium text-gray-900">
+                      {orderData.vehicle_arrival_items.reduce((sum, item) => sum + item.quantity, 0)} units
+                    </td>
+                    <td className="px-6 py-3 text-sm font-medium text-gray-900">
+                      -
+                    </td>
+                    <td className="px-6 py-3 text-sm font-medium text-gray-900">
+                      {orderData.vehicle_arrival_items.reduce((sum, item) => sum + item.total_weight, 0)} kg
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
 
-          {/* Additional Costs */}
-          <div className="border-t pt-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Additional Costs</h2>
-            <div className="space-y-2">
-              {orderData.additionalCosts.map((cost, index) => (
-                <div key={index} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">{cost.name}</span>
-                  <span className="text-gray-900">
-                    {cost.amount} {cost.type === 'percentage' ? '%' : cost.type === 'per_box' ? '₹/box' : '₹'}
-                  </span>
-                </div>
-              ))}
+          {/* Additional Notes */}
+          {orderData.notes && (
+            <div className="border-t pt-6">
+              <h2 className="text-lg font-medium text-gray-900 mb-4">Additional Notes</h2>
+              <div className="bg-gray-50 rounded-md p-4">
+                <p className="text-sm text-gray-600 whitespace-pre-wrap">{orderData.notes}</p>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Total Amount */}
           <div className="border-t pt-6">
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="flex justify-between text-lg font-medium">
                 <span className="text-gray-900">Total Amount:</span>
-                <span className="text-gray-900">₹{orderData.totalAmount.toLocaleString()}</span>
+                <span className="text-gray-900">₹{totalAmount.toLocaleString()}</span>
               </div>
+              <p className="text-xs text-gray-500 mt-1">
+                * Pricing information not available in current record
+              </p>
             </div>
           </div>
         </div>
