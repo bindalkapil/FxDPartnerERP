@@ -311,7 +311,7 @@ export async function createPurchaseRecord(
   return recordData;
 }
 
-export async function updatePurchaseRecord(
+async function updatePurchaseRecord(
   id: string,
   record: Partial<Tables['purchase_records']['Update']>,
   items?: Tables['purchase_record_items']['Insert'][],
