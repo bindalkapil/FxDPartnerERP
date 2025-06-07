@@ -1,153 +1,152 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Search, Filter, Plus, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Package, Search, Filter, RefreshCw, ChevronDown, ChevronUp, Truck, Calendar } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getProducts, createProduct, createSKU } from '../../lib/api';
+import { getVehicleArrivals } from '../../lib/api';
 
-interface Product {
+interface InventoryItem {
   id: string;
-  name: string;
+  productId: string;
+  productName: string;
   category: string;
-  description: string | null;
-  status: 'active' | 'inactive';
-  created_at: string;
-  skus: SKU[];
-}
-
-interface SKU {
-  id: string;
-  product_id: string;
-  code: string;
-  unit_type: 'box' | 'loose';
-  unit_weight: number | null;
-  status: 'active' | 'inactive';
-  created_at: string;
+  skuId: string;
+  skuCode: string;
+  unitType: 'box' | 'loose';
+  totalQuantity: number;
+  totalWeight: number;
+  lastArrival: string;
+  arrivalCount: number;
+  supplier: string;
+  vehicleArrivals: Array<{
+    id: string;
+    arrivalTime: string;
+    supplier: string;
+    vehicleNumber: string | null;
+    quantity: number;
+    weight: number;
+  }>;
 }
 
 const Inventory: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedUnitType, setSelectedUnitType] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [showNewProductModal, setShowNewProductModal] = useState(false);
-  const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
-  
-  const [newProduct, setNewProduct] = useState({
-    name: '',
-    category: '',
-    description: '',
-    status: 'active' as 'active' | 'inactive'
-  });
-
-  const [newSKU, setNewSKU] = useState({
-    code: '',
-    unit_type: 'box' as 'box' | 'loose',
-    unit_weight: 0
-  });
-
-  const [selectedProductForSKU, setSelectedProductForSKU] = useState<string | null>(null);
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
   useEffect(() => {
-    loadProducts();
+    loadInventoryData();
   }, []);
 
-  const loadProducts = async () => {
+  const loadInventoryData = async () => {
     try {
-      const data = await getProducts();
-      setProducts(data);
+      // Get all completed vehicle arrivals
+      const arrivals = await getVehicleArrivals();
+      const completedArrivals = arrivals.filter(arrival => arrival.status === 'completed');
+
+      // Group items by product and SKU to create inventory
+      const inventoryMap = new Map<string, InventoryItem>();
+
+      completedArrivals.forEach(arrival => {
+        arrival.vehicle_arrival_items.forEach((item: any) => {
+          const key = `${item.product.id}-${item.sku.id}`;
+          
+          if (inventoryMap.has(key)) {
+            // Update existing inventory item
+            const existingItem = inventoryMap.get(key)!;
+            existingItem.totalQuantity += item.quantity;
+            existingItem.totalWeight += item.total_weight;
+            existingItem.arrivalCount += 1;
+            
+            // Update last arrival if this one is more recent
+            if (new Date(arrival.arrival_time) > new Date(existingItem.lastArrival)) {
+              existingItem.lastArrival = arrival.arrival_time;
+              existingItem.supplier = arrival.supplier;
+            }
+            
+            // Add to vehicle arrivals list
+            existingItem.vehicleArrivals.push({
+              id: arrival.id,
+              arrivalTime: arrival.arrival_time,
+              supplier: arrival.supplier,
+              vehicleNumber: arrival.vehicle_number,
+              quantity: item.quantity,
+              weight: item.total_weight
+            });
+          } else {
+            // Create new inventory item
+            inventoryMap.set(key, {
+              id: key,
+              productId: item.product.id,
+              productName: item.product.name,
+              category: item.product.category,
+              skuId: item.sku.id,
+              skuCode: item.sku.code,
+              unitType: item.unit_type as 'box' | 'loose',
+              totalQuantity: item.quantity,
+              totalWeight: item.total_weight,
+              lastArrival: arrival.arrival_time,
+              arrivalCount: 1,
+              supplier: arrival.supplier,
+              vehicleArrivals: [{
+                id: arrival.id,
+                arrivalTime: arrival.arrival_time,
+                supplier: arrival.supplier,
+                vehicleNumber: arrival.vehicle_number,
+                quantity: item.quantity,
+                weight: item.total_weight
+              }]
+            });
+          }
+        });
+      });
+
+      // Sort vehicle arrivals by date (most recent first) for each item
+      inventoryMap.forEach(item => {
+        item.vehicleArrivals.sort((a, b) => 
+          new Date(b.arrivalTime).getTime() - new Date(a.arrivalTime).getTime()
+        );
+      });
+
+      setInventoryItems(Array.from(inventoryMap.values()));
     } catch (error) {
-      console.error('Error loading products:', error);
-      toast.error('Failed to load products');
+      console.error('Error loading inventory data:', error);
+      toast.error('Failed to load inventory data');
     } finally {
       setLoading(false);
     }
   };
-  
-  const filteredProducts = products.filter(product => {
+
+  const filteredItems = inventoryItems.filter(item => {
     const matchesSearch = 
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.category.toLowerCase().includes(searchTerm.toLowerCase());
+      item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.skuCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.supplier.toLowerCase().includes(searchTerm.toLowerCase());
       
-    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-    const matchesStatus = selectedStatus === 'all' || product.status === selectedStatus;
+    const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+    const matchesUnitType = selectedUnitType === 'all' || item.unitType === selectedUnitType;
     
-    return matchesSearch && matchesCategory && matchesStatus;
+    return matchesSearch && matchesCategory && matchesUnitType;
   });
 
-  const categories = Array.from(new Set(products.map(product => product.category)));
+  const categories = Array.from(new Set(inventoryItems.map(item => item.category)));
+  const unitTypes = Array.from(new Set(inventoryItems.map(item => item.unitType)));
 
-  const handleNewProduct = async () => {
-    if (!newProduct.name || !newProduct.category) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    try {
-      const createdProduct = await createProduct({
-        name: newProduct.name,
-        category: newProduct.category,
-        description: newProduct.description || null,
-        status: newProduct.status
-      });
-
-      setProducts(prev => [...prev, { ...createdProduct, skus: [] }]);
-      setShowNewProductModal(false);
-      setNewProduct({
-        name: '',
-        category: '',
-        description: '',
-        status: 'active'
-      });
-      toast.success('Product created successfully');
-    } catch (error) {
-      console.error('Error creating product:', error);
-      toast.error('Failed to create product');
-    }
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
   };
 
-  const handleNewSKU = async () => {
-    if (!selectedProductForSKU || !newSKU.code) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    if (newSKU.unit_type === 'box' && newSKU.unit_weight <= 0) {
-      toast.error('Please enter a valid unit weight for box type');
-      return;
-    }
-
-    try {
-      const createdSKU = await createSKU({
-        product_id: selectedProductForSKU,
-        code: newSKU.code,
-        unit_type: newSKU.unit_type,
-        unit_weight: newSKU.unit_type === 'box' ? newSKU.unit_weight : null,
-        status: 'active'
-      });
-
-      // Update the products state to include the new SKU
-      setProducts(prev => prev.map(product => 
-        product.id === selectedProductForSKU 
-          ? { ...product, skus: [...product.skus, createdSKU] }
-          : product
-      ));
-
-      setNewSKU({
-        code: '',
-        unit_type: 'box',
-        unit_weight: 0
-      });
-      setSelectedProductForSKU(null);
-      toast.success('SKU created successfully');
-    } catch (error) {
-      console.error('Error creating SKU:', error);
-      toast.error('Failed to create SKU');
-    }
+  const getTotalInventoryValue = () => {
+    return {
+      totalItems: inventoryItems.length,
+      totalQuantity: inventoryItems.reduce((sum, item) => sum + item.totalQuantity, 0),
+      totalWeight: inventoryItems.reduce((sum, item) => sum + item.totalWeight, 0),
+      totalArrivals: inventoryItems.reduce((sum, item) => sum + item.arrivalCount, 0)
+    };
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
-  };
+  const inventoryStats = getTotalInventoryValue();
 
   if (loading) {
     return (
@@ -164,23 +163,22 @@ const Inventory: React.FC = () => {
           <Package className="h-6 w-6 text-green-600 mr-2" />
           <h1 className="text-2xl font-bold text-gray-800">Inventory Management</h1>
         </div>
-        <div className="flex space-x-2">
-          <button 
-            onClick={() => setShowNewProductModal(true)}
-            className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            New Product
-          </button>
-        </div>
+        <button 
+          onClick={loadInventoryData}
+          className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
+        >
+          <RefreshCw className="h-4 w-4 mr-1" />
+          Refresh Inventory
+        </button>
       </div>
       
+      {/* Inventory Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Total Products</p>
-              <p className="text-2xl font-bold text-gray-800">{products.length}</p>
+              <p className="text-sm font-medium text-gray-500">Total SKUs</p>
+              <p className="text-2xl font-bold text-gray-800">{inventoryStats.totalItems}</p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
               <Package className="h-5 w-5" />
@@ -190,10 +188,8 @@ const Inventory: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Active Products</p>
-              <p className="text-2xl font-bold text-gray-800">
-                {products.filter(product => product.status === 'active').length}
-              </p>
+              <p className="text-sm font-medium text-gray-500">Total Quantity</p>
+              <p className="text-2xl font-bold text-gray-800">{inventoryStats.totalQuantity}</p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-blue-100 text-blue-600">
               <Package className="h-5 w-5" />
@@ -203,10 +199,8 @@ const Inventory: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Total SKUs</p>
-              <p className="text-2xl font-bold text-gray-800">
-                {products.reduce((sum, product) => sum + product.skus.length, 0)}
-              </p>
+              <p className="text-sm font-medium text-gray-500">Total Weight</p>
+              <p className="text-2xl font-bold text-gray-800">{inventoryStats.totalWeight} kg</p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-purple-100 text-purple-600">
               <Package className="h-5 w-5" />
@@ -216,16 +210,17 @@ const Inventory: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Categories</p>
-              <p className="text-2xl font-bold text-gray-800">{categories.length}</p>
+              <p className="text-sm font-medium text-gray-500">Total Arrivals</p>
+              <p className="text-2xl font-bold text-gray-800">{inventoryStats.totalArrivals}</p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-yellow-100 text-yellow-600">
-              <Package className="h-5 w-5" />
+              <Truck className="h-5 w-5" />
             </div>
           </div>
         </div>
       </div>
 
+      {/* Filters and Search */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-3 md:space-y-0 md:space-x-4">
         <div className="relative flex-1 max-w-xs">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -234,7 +229,7 @@ const Inventory: React.FC = () => {
           <input
             type="text"
             className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500"
-            placeholder="Search products..."
+            placeholder="Search inventory..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -254,21 +249,20 @@ const Inventory: React.FC = () => {
               ))}
             </select>
           </div>
-          <div className="flex items-center space-x-2">
-            <RefreshCw className="h-4 w-4 text-gray-500" />
-            <select
-              className="border border-gray-300 rounded-md text-sm py-2 px-3 bg-white focus:outline-none focus:ring-green-500 focus:border-green-500"
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
+          <select
+            className="border border-gray-300 rounded-md text-sm py-2 px-3 bg-white focus:outline-none focus:ring-green-500 focus:border-green-500"
+            value={selectedUnitType}
+            onChange={(e) => setSelectedUnitType(e.target.value)}
+          >
+            <option value="all">All Packaging Types</option>
+            {unitTypes.map(type => (
+              <option key={type} value={type}>{type === 'box' ? 'Box/Crate' : 'Loose'}</option>
+            ))}
+          </select>
         </div>
       </div>
       
+      {/* Inventory Table */}
       <div className="bg-white shadow-sm rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -278,16 +272,16 @@ const Inventory: React.FC = () => {
                   Product Details
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Category
+                  SKU & Packaging
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  SKUs
+                  Current Stock
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
+                  Last Arrival
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Created
+                  Arrivals Count
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
@@ -295,82 +289,96 @@ const Inventory: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredProducts.map((product) => (
-                <React.Fragment key={product.id}>
-                  <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedProduct(expandedProduct === product.id ? null : product.id)}>
+              {filteredItems.map((item) => (
+                <React.Fragment key={item.id}>
+                  <tr 
+                    className="hover:bg-gray-50 cursor-pointer" 
+                    onClick={() => setExpandedItem(expandedItem === item.id ? null : item.id)}
+                  >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
                           <Package className="h-5 w-5" />
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                          <div className="text-sm text-gray-500">{product.description}</div>
+                          <div className="text-sm font-medium text-gray-900">{item.productName}</div>
+                          <div className="text-sm text-gray-500">{item.category}</div>
                         </div>
-                        {expandedProduct === product.id ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
+                        {expandedItem === item.id ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {product.category}
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{product.skus.length} SKUs</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        product.status === 'active' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
+                      <div className="text-sm text-gray-900">{item.skuCode}</div>
+                      <span className={`inline-flex px-2 text-xs leading-5 font-semibold rounded-full ${
+                        item.unitType === 'box' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
                       }`}>
-                        {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
+                        {item.unitType === 'box' ? 'Box/Crate' : 'Loose'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(product.created_at)}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {item.totalQuantity} {item.unitType === 'box' ? 'boxes' : 'kg'}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        Total Weight: {item.totalWeight} kg
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{formatDateTime(item.lastArrival)}</div>
+                      <div className="text-sm text-gray-500">From: {item.supplier}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        {item.arrivalCount} arrivals
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedProductForSKU(product.id);
+                          setExpandedItem(expandedItem === item.id ? null : item.id);
                         }}
                         className="text-green-600 hover:text-green-900"
                       >
-                        Add SKU
+                        View History
                       </button>
                     </td>
                   </tr>
-                  {expandedProduct === product.id && (
+                  {expandedItem === item.id && (
                     <tr>
                       <td colSpan={6} className="px-6 py-4 bg-gray-50">
                         <div className="text-sm">
-                          <h4 className="font-medium text-gray-900 mb-2">SKUs for {product.name}</h4>
-                          {product.skus.length > 0 ? (
-                            <div className="grid grid-cols-4 gap-4 text-xs font-medium text-gray-500 uppercase mb-2">
-                              <div>SKU Code</div>
-                              <div>Packaging Type</div>
-                              <div>Unit Weight</div>
-                              <div>Status</div>
-                            </div>
-                          ) : (
-                            <p className="text-gray-500">No SKUs available for this product.</p>
-                          )}
-                          {product.skus.map((sku, index) => (
-                            <div key={index} className="grid grid-cols-4 gap-4 py-2 border-t border-gray-200">
-                              <div className="text-gray-900">{sku.code}</div>
-                              <div className="text-gray-900">{sku.unit_type}</div>
-                              <div className="text-gray-900">{sku.unit_weight ? `${sku.unit_weight} kg` : 'N/A'}</div>
-                              <div>
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                  sku.status === 'active' 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-red-100 text-red-800'
-                                }`}>
-                                  {sku.status}
-                                </span>
+                          <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                            <Truck className="h-4 w-4 mr-2" />
+                            Arrival History for {item.productName} ({item.skuCode})
+                          </h4>
+                          <div className="space-y-3">
+                            {item.vehicleArrivals.map((arrival, index) => (
+                              <div key={index} className="bg-white p-3 rounded-md border border-gray-200">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                                  <div>
+                                    <span className="font-medium text-gray-700">Arrival Date:</span>
+                                    <div className="text-gray-900">{formatDateTime(arrival.arrivalTime)}</div>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-700">Supplier:</span>
+                                    <div className="text-gray-900">{arrival.supplier}</div>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-700">Vehicle:</span>
+                                    <div className="text-gray-900">{arrival.vehicleNumber || 'Not specified'}</div>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-700">Quantity:</span>
+                                    <div className="text-gray-900">
+                                      {arrival.quantity} {item.unitType === 'box' ? 'boxes' : 'kg'} 
+                                      ({arrival.weight} kg total)
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -381,172 +389,41 @@ const Inventory: React.FC = () => {
           </table>
         </div>
         
-        {filteredProducts.length === 0 && (
-          <div className="py-6 text-center text-gray-500">
-            No products found.
+        {filteredItems.length === 0 && (
+          <div className="py-12 text-center text-gray-500">
+            <Package className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Inventory Items Found</h3>
+            <p className="text-sm text-gray-500">
+              {inventoryItems.length === 0 
+                ? "No completed vehicle arrivals found. Inventory will be populated automatically when vehicle arrivals are marked as completed."
+                : "No items match your current search and filter criteria."
+              }
+            </p>
           </div>
         )}
       </div>
 
-      {/* New Product Modal */}
-      {showNewProductModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
-                    <Package className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                      Create New Product
-                    </h3>
-                    <div className="mt-4 space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                          Product Name
-                        </label>
-                        <input
-                          type="text"
-                          value={newProduct.name}
-                          onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          placeholder="e.g., POMO MH, Alphonso"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                          Category
-                        </label>
-                        <input
-                          type="text"
-                          value={newProduct.category}
-                          onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          placeholder="e.g., Pomegranate, Mango, Imported"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                          Description
-                        </label>
-                        <textarea
-                          value={newProduct.description}
-                          onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                          rows={3}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          placeholder="Product description..."
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  onClick={handleNewProduct}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Create Product
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowNewProductModal(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
+      {/* Information Note */}
+      <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <Package className="h-5 w-5 text-blue-400" />
+          </div>
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-blue-800">
+              Inventory Management Information
+            </h3>
+            <div className="mt-2 text-sm text-blue-700">
+              <ul className="list-disc list-inside space-y-1">
+                <li>Inventory is automatically populated from completed vehicle arrivals</li>
+                <li>Stock quantities are aggregated from all completed arrivals for each product/SKU combination</li>
+                <li>Click on any row to view detailed arrival history for that item</li>
+                <li>Use the refresh button to update inventory with the latest arrival data</li>
+              </ul>
             </div>
           </div>
         </div>
-      )}
-
-      {/* New SKU Modal */}
-      {selectedProductForSKU && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
-                    <Package className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                      Add New SKU
-                    </h3>
-                    <div className="mt-4 space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                          SKU Code
-                        </label>
-                        <input
-                          type="text"
-                          value={newSKU.code}
-                          onChange={(e) => setNewSKU({ ...newSKU, code: e.target.value })}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          placeholder="e.g., POMO-MH-001"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                          Packaging Type
-                        </label>
-                        <select
-                          value={newSKU.unit_type}
-                          onChange={(e) => setNewSKU({ ...newSKU, unit_type: e.target.value as 'box' | 'loose' })}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                        >
-                          <option value="box">Box/Crate</option>
-                          <option value="loose">Loose</option>
-                        </select>
-                      </div>
-                      {newSKU.unit_type === 'box' && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">
-                            Unit Weight (kg)
-                          </label>
-                          <input
-                            type="number"
-                            value={newSKU.unit_weight}
-                            onChange={(e) => setNewSKU({ ...newSKU, unit_weight: Number(e.target.value) })}
-                            min="0"
-                            step="0.1"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  onClick={handleNewSKU}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Create SKU
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedProductForSKU(null)}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 };
