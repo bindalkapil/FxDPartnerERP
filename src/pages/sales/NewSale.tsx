@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, ArrowLeft, Plus, Trash2, User, Calendar, MapPin, CreditCard, AlertTriangle, Edit } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getCustomers, getAvailableInventory, createSalesOrder } from '../../lib/api';
+import ProductSearchInput from '../../components/forms/ProductSearchInput';
 
 interface SalesOrderItem {
   id: string;
@@ -661,18 +662,13 @@ const NewSale: React.FC = () => {
                   {items.map((item) => (
                     <tr key={item.id}>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <select
+                        <ProductSearchInput
+                          inventory={inventory}
                           value={item.skuId}
-                          onChange={(e) => handleItemChange(item.id, 'skuId', e.target.value)}
-                          className="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                        >
-                          <option value="">Select Product & SKU</option>
-                          {inventory.map((inv) => (
-                            <option key={inv.sku_id} value={inv.sku_id}>
-                              {inv.product_name} - {inv.sku_code} ({inv.unit_type})
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(skuId) => handleItemChange(item.id, 'skuId', skuId)}
+                          placeholder="Type to search products..."
+                          className="text-sm"
+                        />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {getAvailableQuantity(item.skuId)} {item.unitType === 'box' ? 'boxes' : 'kg'}
