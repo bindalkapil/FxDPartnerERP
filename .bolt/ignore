@@ -4,3 +4,5 @@ src/layouts/
 src/pages/auth/
 src/pages/dashboard/
 src/pages/inventory/
+src/pages/finance/
+src/pages/partners/
