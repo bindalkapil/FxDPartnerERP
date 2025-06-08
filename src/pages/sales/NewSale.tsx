@@ -54,8 +54,6 @@ const NewSale: React.FC = () => {
     deliveryAddress: '',
     paymentTerms: 30,
     paymentMode: 'cash',
-    paymentStatus: 'unpaid',
-    partialAmount: 0,
     notes: ''
   });
 
@@ -216,15 +214,6 @@ const NewSale: React.FC = () => {
       return;
     }
 
-    // Validate partial payment amount
-    if (formData.paymentStatus === 'partial') {
-      const orderTotal = calculateTotal();
-      if (formData.partialAmount <= 0 || formData.partialAmount >= orderTotal) {
-        toast.error('Partial payment amount must be greater than 0 and less than order total');
-        return;
-      }
-    }
-
     // Validate items
     for (const item of items) {
       if (!item.productId || !item.skuId || item.quantity <= 0 || item.unitPrice <= 0) {
@@ -258,7 +247,7 @@ const NewSale: React.FC = () => {
         delivery_address: saleType === 'outstation' ? formData.deliveryAddress : null,
         payment_terms: formData.paymentTerms,
         payment_mode: formData.paymentMode,
-        payment_status: formData.paymentStatus,
+        payment_status: 'unpaid', // Default to unpaid
         subtotal,
         tax_amount: 0, // Tax removed as requested
         discount_amount: discountAmount,
@@ -499,39 +488,6 @@ const NewSale: React.FC = () => {
                   <option value="upi">UPI</option>
                 </select>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Payment Status
-                </label>
-                <select
-                  value={formData.paymentStatus}
-                  onChange={(e) => setFormData(prev => ({ ...prev, paymentStatus: e.target.value }))}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                >
-                  <option value="unpaid">Unpaid</option>
-                  <option value="partial">Partial</option>
-                  <option value="paid">Paid</option>
-                </select>
-              </div>
-
-              {formData.paymentStatus === 'partial' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Amount Paid (₹) <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.partialAmount}
-                    onChange={(e) => setFormData(prev => ({ ...prev, partialAmount: Number(e.target.value) }))}
-                    min="0"
-                    max={calculateTotal()}
-                    step="0.01"
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                    required
-                  />
-                </div>
-              )}
             </div>
 
             {/* Credit Limit Warning */}
@@ -682,18 +638,6 @@ const NewSale: React.FC = () => {
                     <span className="text-gray-900">Total:</span>
                     <span className="text-green-600">₹{calculateTotal().toFixed(2)}</span>
                   </div>
-                  {formData.paymentStatus === 'partial' && formData.partialAmount > 0 && (
-                    <div className="border-t pt-2 space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Amount Paid:</span>
-                        <span className="text-green-600">₹{formData.partialAmount.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm font-medium">
-                        <span className="text-gray-600">Balance Due:</span>
-                        <span className="text-red-600">₹{(calculateTotal() - formData.partialAmount).toFixed(2)}</span>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
