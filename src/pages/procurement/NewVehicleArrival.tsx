@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Truck, ArrowLeft, Plus, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { createProduct, createSKU, createVehicleArrival, uploadAttachment } from '../../lib/api';
+import { createProduct, createSKU, createVehicleArrival, uploadAttachment, getSuppliers } from '../../lib/api';
 
 interface SKU {
   id: string;
@@ -24,10 +24,17 @@ interface Attachment {
   preview: string;
 }
 
+interface Supplier {
+  id: string;
+  company_name: string;
+}
+
 const NewVehicleArrival: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   
   const [formData, setFormData] = useState({
     vehicleNumber: '',
@@ -41,6 +48,22 @@ const NewVehicleArrival: React.FC = () => {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+
+  useEffect(() => {
+    loadSuppliers();
+  }, []);
+
+  const loadSuppliers = async () => {
+    try {
+      const data = await getSuppliers();
+      setSuppliers(data || []);
+    } catch (error) {
+      console.error('Error loading suppliers:', error);
+      toast.error('Failed to load suppliers');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddProduct = () => {
     const productId = `temp_${Date.now()}`;
@@ -277,6 +300,14 @@ const NewVehicleArrival: React.FC = () => {
     }));
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading suppliers...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -325,9 +356,11 @@ const NewVehicleArrival: React.FC = () => {
                 required
               >
                 <option value="">Select a supplier</option>
-                <option value="Green Farms">Green Farms</option>
-                <option value="Fresh Harvests">Fresh Harvests</option>
-                <option value="Organic Fruits Co.">Organic Fruits Co.</option>
+                {suppliers.map(supplier => (
+                  <option key={supplier.id} value={supplier.company_name}>
+                    {supplier.company_name}
+                  </option>
+                ))}
               </select>
             </div>
 
