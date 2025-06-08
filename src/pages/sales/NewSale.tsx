@@ -195,12 +195,12 @@ const NewSale: React.FC = () => {
       if (item.id === id) {
         const updatedItem = { ...item, [field]: value };
         
-        // If product is changed, update related fields
-        if (field === 'productId') {
-          const inventoryItem = inventory.find(inv => inv.product_id === value);
+        // If SKU is changed, update related fields
+        if (field === 'skuId') {
+          const inventoryItem = inventory.find(inv => inv.sku_id === value);
           if (inventoryItem) {
+            updatedItem.productId = inventoryItem.product_id;
             updatedItem.productName = inventoryItem.product_name;
-            updatedItem.skuId = inventoryItem.sku_id;
             updatedItem.skuCode = inventoryItem.sku_code;
             updatedItem.unitType = inventoryItem.unit_type;
           }
@@ -283,15 +283,13 @@ const NewSale: React.FC = () => {
 
     // Validate items
     for (const item of items) {
-      if (!item.productId || !item.skuId || item.quantity <= 0 || item.unitPrice <= 0) {
+      if (!item.skuId || item.quantity <= 0 || item.unitPrice <= 0) {
         toast.error('Please complete all item details');
         return;
       }
 
       // Check inventory availability
-      const inventoryItem = inventory.find(inv => 
-        inv.product_id === item.productId && inv.sku_id === item.skuId
-      );
+      const inventoryItem = inventory.find(inv => inv.sku_id === item.skuId);
       
       if (!inventoryItem || inventoryItem.available_quantity < item.quantity) {
         toast.error(`Insufficient inventory for ${item.productName}. Available: ${inventoryItem?.available_quantity || 0}`);
@@ -347,10 +345,8 @@ const NewSale: React.FC = () => {
     }
   };
 
-  const getAvailableQuantity = (productId: string, skuId: string) => {
-    const inventoryItem = inventory.find(inv => 
-      inv.product_id === productId && inv.sku_id === skuId
-    );
+  const getAvailableQuantity = (skuId: string) => {
+    const inventoryItem = inventory.find(inv => inv.sku_id === skuId);
     return inventoryItem?.available_quantity || 0;
   };
 
@@ -642,7 +638,7 @@ const NewSale: React.FC = () => {
                 <thead className="bg-gray-50">
                   <tr>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Product
+                      Product & SKU
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Available
@@ -666,20 +662,20 @@ const NewSale: React.FC = () => {
                     <tr key={item.id}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <select
-                          value={item.productId}
-                          onChange={(e) => handleItemChange(item.id, 'productId', e.target.value)}
+                          value={item.skuId}
+                          onChange={(e) => handleItemChange(item.id, 'skuId', e.target.value)}
                           className="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                         >
-                          <option value="">Select Product</option>
+                          <option value="">Select Product & SKU</option>
                           {inventory.map((inv) => (
-                            <option key={`${inv.product_id}-${inv.sku_id}`} value={inv.product_id}>
-                              {inv.product_name} ({inv.sku_code})
+                            <option key={inv.sku_id} value={inv.sku_id}>
+                              {inv.product_name} - {inv.sku_code} ({inv.unit_type})
                             </option>
                           ))}
                         </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {getAvailableQuantity(item.productId, item.skuId)} {item.unitType === 'box' ? 'boxes' : 'kg'}
+                        {getAvailableQuantity(item.skuId)} {item.unitType === 'box' ? 'boxes' : 'kg'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input
@@ -687,7 +683,7 @@ const NewSale: React.FC = () => {
                           value={item.quantity}
                           onChange={(e) => handleItemChange(item.id, 'quantity', Number(e.target.value))}
                           min="1"
-                          max={getAvailableQuantity(item.productId, item.skuId)}
+                          max={getAvailableQuantity(item.skuId)}
                           className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                         />
                       </td>
