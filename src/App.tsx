@@ -20,6 +20,9 @@ import ViewRecordPurchase from './pages/procurement/ViewRecordPurchase';
 import EditRecordPurchase from './pages/procurement/EditRecordPurchase';
 import Inventory from './pages/inventory/Inventory';
 import Sales from './pages/sales/Sales';
+import NewSale from './pages/sales/NewSale';
+import ViewSale from './pages/sales/ViewSale';
+import EditSale from './pages/sales/EditSale';
 import Dispatch from './pages/sales/Dispatch';
 import Suppliers from './pages/partners/Suppliers';
 import AddSupplier from './pages/partners/AddSupplier';
@@ -75,6 +78,9 @@ function App() {
               <Route path="record-purchase/edit/:id" element={<EditRecordPurchase />} />
               <Route path="inventory" element={<Inventory />} />
               <Route path="sales" element={<Sales />} />
+              <Route path="sales/new" element={<NewSale />} />
+              <Route path="sales/view/:id" element={<ViewSale />} />
+              <Route path="sales/edit/:id" element={<EditSale />} />
               <Route path="dispatch" element={<Dispatch />} />
               <Route path="suppliers" element={<Suppliers />} />
               <Route path="suppliers/new" element={<AddSupplier />} />
