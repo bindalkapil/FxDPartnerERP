@@ -1,8 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, ArrowLeft, Plus, Trash2, User, Calendar, MapPin } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ShoppingCart, ArrowLeft, Plus, Trash2, Save } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getCustomers, getAvailableInventory, createSalesOrder } from '../../lib/api';
+import { getSalesOrder, updateSalesOrder, getCustomers, getAvailableInventory } from '../../lib/api';
+
+interface SalesOrderItem {
+  id: string;
+  product_id: string;
+  product_name: string;
+  sku_id: string;
+  sku_code: string;
+  quantity: number;
+  unit_type: string;
+  unit_price: number;
+  total_price: number;
+}
 
 interface Customer {
   id: string;
@@ -25,99 +37,115 @@ interface InventoryItem {
   total_weight: number;
 }
 
-interface OrderItem {
-  id: string;
-  product_id: string;
-  product_name: string;
-  sku_id: string;
-  sku_code: string;
-  unit_type: string;
-  quantity: number;
-  unit_price: number;
-  total_price: number;
-  available_quantity: number;
-}
-
-const NewSalesOrder: React.FC = () => {
+const EditSalesOrder: React.FC = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   
   const [formData, setFormData] = useState({
-    customerId: '',
-    orderDate: new Date().toISOString().slice(0, 16),
-    deliveryDate: '',
-    deliveryAddress: '',
-    paymentMode: 'cash',
-    paymentTerms: 30,
+    order_number: '',
+    customer_id: '',
+    order_date: '',
+    delivery_date: '',
+    delivery_address: '',
+    payment_terms: 30,
+    payment_mode: 'cash',
+    payment_status: 'unpaid',
+    status: 'draft',
     notes: ''
   });
 
-  const [items, setItems] = useState<OrderItem[]>([]);
-  const [taxRate, setTaxRate] = useState(0);
+  const [items, setItems] = useState<SalesOrderItem[]>([]);
+  const [taxRate, setTaxRate] = useState(0); // GST rate
   const [discountAmount, setDiscountAmount] = useState(0);
 
   useEffect(() => {
-    loadCustomers();
-    loadInventory();
-  }, []);
+    loadInitialData();
+  }, [id]);
 
-  const loadCustomers = async () => {
+  const loadInitialData = async () => {
     try {
-      const data = await getCustomers();
-      setCustomers(data.filter(customer => customer.status === 'active'));
+      const [salesOrderData, customersData, inventoryData] = await Promise.all([
+        getSalesOrder(id!),
+        getCustomers(),
+        getAvailableInventory()
+      ]);
+
+      // Set form data
+      setFormData({
+        order_number: salesOrderData.order_number,
+        customer_id: salesOrderData.customer_id,
+        order_date: formatDateTimeForInput(salesOrderData.order_date),
+        delivery_date: salesOrderData.delivery_date ? formatDateTimeForInput(salesOrderData.delivery_date) : '',
+        delivery_address: salesOrderData.delivery_address || '',
+        payment_terms: salesOrderData.payment_terms || 30,
+        payment_mode: salesOrderData.payment_mode,
+        payment_status: salesOrderData.payment_status,
+        status: salesOrderData.status,
+        notes: salesOrderData.notes || ''
+      });
+
+      // Set items
+      setItems(salesOrderData.sales_order_items.map((item: any) => ({
+        id: item.id,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        sku_id: item.sku_id,
+        sku_code: item.sku_code,
+        quantity: item.quantity,
+        unit_type: item.unit_type,
+        unit_price: item.unit_price,
+        total_price: item.total_price
+      })));
+
+      setTaxRate((salesOrderData.tax_amount / salesOrderData.subtotal) * 100 || 0);
+      setDiscountAmount(salesOrderData.discount_amount || 0);
+      setCustomers(customersData);
+      setInventory(inventoryData);
     } catch (error) {
-      console.error('Error loading customers:', error);
-      toast.error('Failed to load customers');
+      console.error('Error loading data:', error);
+      toast.error('Failed to load sales order data');
+      navigate('/sales');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const loadInventory = async () => {
-    try {
-      const data = await getAvailableInventory();
-      setInventory(data);
-    } catch (error) {
-      console.error('Error loading inventory:', error);
-      toast.error('Failed to load inventory');
-    }
-  };
-
-  const handleCustomerChange = (customerId: string) => {
-    const customer = customers.find(c => c.id === customerId);
-    setSelectedCustomer(customer || null);
-    setFormData(prev => ({
-      ...prev,
-      customerId,
-      paymentTerms: customer?.payment_terms || 30,
-      deliveryAddress: customer?.address || ''
-    }));
+  const formatDateTimeForInput = (dateString: string) => {
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
   const handleAddItem = () => {
-    const newItem: OrderItem = {
-      id: `item_${Date.now()}`,
+    const newItem: SalesOrderItem = {
+      id: `temp_${Date.now()}`,
       product_id: '',
       product_name: '',
       sku_id: '',
       sku_code: '',
+      quantity: 1,
       unit_type: 'box',
-      quantity: 0,
       unit_price: 0,
-      total_price: 0,
-      available_quantity: 0
+      total_price: 0
     };
     setItems(prev => [...prev, newItem]);
   };
 
-  const handleRemoveItem = (id: string) => {
-    setItems(prev => prev.filter(item => item.id !== id));
+  const handleRemoveItem = (index: number) => {
+    setItems(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleItemChange = (id: string, field: keyof OrderItem, value: any) => {
-    setItems(prev => prev.map(item => {
-      if (item.id === id) {
+  const handleItemChange = (index: number, field: keyof SalesOrderItem, value: any) => {
+    setItems(prev => prev.map((item, i) => {
+      if (i === index) {
         const updatedItem = { ...item, [field]: value };
         
         // If inventory item is selected, update related fields
@@ -128,7 +156,6 @@ const NewSalesOrder: React.FC = () => {
             updatedItem.product_name = inventoryItem.product_name;
             updatedItem.sku_code = inventoryItem.sku_code;
             updatedItem.unit_type = inventoryItem.unit_type;
-            updatedItem.available_quantity = inventoryItem.available_quantity;
           }
         }
         
@@ -143,6 +170,18 @@ const NewSalesOrder: React.FC = () => {
     }));
   };
 
+  const handleCustomerChange = (customerId: string) => {
+    const customer = customers.find(c => c.id === customerId);
+    if (customer) {
+      setFormData(prev => ({
+        ...prev,
+        customer_id: customerId,
+        delivery_address: customer.address,
+        payment_terms: customer.payment_terms
+      }));
+    }
+  };
+
   const calculateSubtotal = () => {
     return items.reduce((sum, item) => sum + item.total_price, 0);
   };
@@ -151,19 +190,14 @@ const NewSalesOrder: React.FC = () => {
     return (calculateSubtotal() * taxRate) / 100;
   };
 
-  const calculateTotalAmount = () => {
+  const calculateTotal = () => {
     return calculateSubtotal() + calculateTaxAmount() - discountAmount;
-  };
-
-  const generateOrderNumber = () => {
-    const timestamp = Date.now();
-    return `SO-${timestamp.toString().slice(-8)}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.customerId) {
+    if (!formData.customer_id) {
       toast.error('Please select a customer');
       return;
     }
@@ -175,13 +209,8 @@ const NewSalesOrder: React.FC = () => {
 
     // Validate items
     for (const item of items) {
-      if (!item.sku_id || item.quantity <= 0 || item.unit_price <= 0) {
-        toast.error('Please complete all item details');
-        return;
-      }
-
-      if (item.quantity > item.available_quantity) {
-        toast.error(`Insufficient inventory for ${item.product_name}. Available: ${item.available_quantity}`);
+      if (!item.sku_id || item.quantity <= 0 || item.unit_price < 0) {
+        toast.error('Please complete all item details with valid values');
         return;
       }
     }
@@ -191,23 +220,23 @@ const NewSalesOrder: React.FC = () => {
     try {
       const subtotal = calculateSubtotal();
       const taxAmount = calculateTaxAmount();
-      const totalAmount = calculateTotalAmount();
+      const totalAmount = calculateTotal();
 
-      // Create sales order
+      // Prepare order data
       const orderData = {
-        order_number: generateOrderNumber(),
-        customer_id: formData.customerId,
-        order_date: formData.orderDate,
-        delivery_date: formData.deliveryDate || null,
-        delivery_address: formData.deliveryAddress || null,
-        payment_terms: formData.paymentTerms,
-        payment_mode: formData.paymentMode,
-        payment_status: 'unpaid',
+        order_number: formData.order_number,
+        customer_id: formData.customer_id,
+        order_date: formData.order_date,
+        delivery_date: formData.delivery_date || null,
+        delivery_address: formData.delivery_address || null,
+        payment_terms: formData.payment_terms,
+        payment_mode: formData.payment_mode,
+        payment_status: formData.payment_status,
         subtotal,
         tax_amount: taxAmount,
         discount_amount: discountAmount,
         total_amount: totalAmount,
-        status: 'draft',
+        status: formData.status,
         notes: formData.notes || null
       };
 
@@ -223,25 +252,29 @@ const NewSalesOrder: React.FC = () => {
         total_price: item.total_price
       }));
 
-      await createSalesOrder(orderData, itemsData);
-      
-      toast.success('Sales order created successfully!');
+      await updateSalesOrder(id!, orderData, itemsData);
+      toast.success('Sales order updated successfully!');
       navigate('/sales');
     } catch (error) {
-      console.error('Error creating sales order:', error);
-      toast.error('Failed to create sales order. Please try again.');
+      console.error('Error updating sales order:', error);
+      toast.error('Failed to update sales order. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'paymentTerms' ? Number(value) : value
-    }));
+  const getAvailableQuantity = (skuId: string) => {
+    const inventoryItem = inventory.find(item => item.sku_id === skuId);
+    return inventoryItem ? inventoryItem.available_quantity : 0;
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading sales order...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -255,24 +288,37 @@ const NewSalesOrder: React.FC = () => {
           </button>
           <div className="flex items-center">
             <ShoppingCart className="h-6 w-6 text-green-600 mr-2" />
-            <h1 className="text-2xl font-bold text-gray-800">New Sales Order</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Edit Sales Order</h1>
           </div>
         </div>
       </div>
 
       <div className="bg-white shadow-sm rounded-lg">
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Customer Selection */}
+          {/* Order Details */}
           <div>
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Customer Information</h2>
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Order Details</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Order Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.order_number}
+                  onChange={(e) => setFormData(prev => ({ ...prev, order_number: e.target.value }))}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  required
+                  disabled
+                />
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   Customer <span className="text-red-500">*</span>
                 </label>
                 <select
-                  name="customerId"
-                  value={formData.customerId}
+                  value={formData.customer_id}
                   onChange={(e) => handleCustomerChange(e.target.value)}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                   required
@@ -286,46 +332,17 @@ const NewSalesOrder: React.FC = () => {
                 </select>
               </div>
 
-              {selectedCustomer && (
-                <div className="bg-gray-50 p-4 rounded-md">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Customer Details</h3>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <div className="flex items-center">
-                      <User className="h-4 w-4 mr-1" />
-                      {selectedCustomer.contact}
-                    </div>
-                    <div>{selectedCustomer.email}</div>
-                    <div className="flex items-start">
-                      <MapPin className="h-4 w-4 mr-1 mt-0.5" />
-                      {selectedCustomer.address}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Order Details */}
-          <div className="border-t pt-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Order Details</h2>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   Order Date <span className="text-red-500">*</span>
                 </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Calendar className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="datetime-local"
-                    name="orderDate"
-                    value={formData.orderDate}
-                    onChange={handleChange}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-                    required
-                  />
-                </div>
+                <input
+                  type="datetime-local"
+                  value={formData.order_date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, order_date: e.target.value }))}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  required
+                />
               </div>
 
               <div>
@@ -334,9 +351,33 @@ const NewSalesOrder: React.FC = () => {
                 </label>
                 <input
                   type="datetime-local"
-                  name="deliveryDate"
-                  value={formData.deliveryDate}
-                  onChange={handleChange}
+                  value={formData.delivery_date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, delivery_date: e.target.value }))}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Delivery Address
+                </label>
+                <textarea
+                  value={formData.delivery_address}
+                  onChange={(e) => setFormData(prev => ({ ...prev, delivery_address: e.target.value }))}
+                  rows={3}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Payment Terms (Days)
+                </label>
+                <input
+                  type="number"
+                  value={formData.payment_terms}
+                  onChange={(e) => setFormData(prev => ({ ...prev, payment_terms: Number(e.target.value) }))}
+                  min="0"
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                 />
               </div>
@@ -346,9 +387,8 @@ const NewSalesOrder: React.FC = () => {
                   Payment Mode
                 </label>
                 <select
-                  name="paymentMode"
-                  value={formData.paymentMode}
-                  onChange={handleChange}
+                  value={formData.payment_mode}
+                  onChange={(e) => setFormData(prev => ({ ...prev, payment_mode: e.target.value }))}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                 >
                   <option value="cash">Cash</option>
@@ -360,30 +400,35 @@ const NewSalesOrder: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Payment Terms (Days)
+                  Payment Status
                 </label>
-                <input
-                  type="number"
-                  name="paymentTerms"
-                  value={formData.paymentTerms}
-                  onChange={handleChange}
-                  min="0"
+                <select
+                  value={formData.payment_status}
+                  onChange={(e) => setFormData(prev => ({ ...prev, payment_status: e.target.value }))}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                />
+                >
+                  <option value="unpaid">Unpaid</option>
+                  <option value="partial">Partial</option>
+                  <option value="paid">Paid</option>
+                </select>
               </div>
 
-              <div className="md:col-span-2">
+              <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Delivery Address
+                  Order Status
                 </label>
-                <textarea
-                  name="deliveryAddress"
-                  value={formData.deliveryAddress}
-                  onChange={handleChange}
-                  rows={3}
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                  placeholder="Enter delivery address..."
-                />
+                >
+                  <option value="draft">Draft</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="processing">Processing</option>
+                  <option value="dispatched">Dispatched</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
               </div>
             </div>
           </div>
@@ -401,59 +446,58 @@ const NewSalesOrder: React.FC = () => {
                 Add Item
               </button>
             </div>
-            
+
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Product & SKU
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Available
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Quantity
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Unit Price (₹)
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total (₹)
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {items.map((item) => (
+                  {items.map((item, index) => (
                     <tr key={item.id}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <select
                           value={item.sku_id}
-                          onChange={(e) => handleItemChange(item.id, 'sku_id', e.target.value)}
+                          onChange={(e) => handleItemChange(index, 'sku_id', e.target.value)}
                           className="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                         >
-                          <option value="">Select Product/SKU</option>
-                          {inventory.map((inv) => (
-                            <option key={inv.sku_id} value={inv.sku_id}>
-                              {inv.product_name} - {inv.sku_code} ({inv.unit_type})
+                          <option value="">Select Product & SKU</option>
+                          {inventory.map(invItem => (
+                            <option key={invItem.sku_id} value={invItem.sku_id}>
+                              {invItem.product_name} - {invItem.sku_code} ({invItem.unit_type})
                             </option>
                           ))}
                         </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.available_quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
+                        {item.sku_id ? getAvailableQuantity(item.sku_id) : '-'} {item.unit_type === 'box' ? 'boxes' : 'kg'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input
                           type="number"
                           value={item.quantity}
-                          onChange={(e) => handleItemChange(item.id, 'quantity', Number(e.target.value))}
-                          min="0"
-                          max={item.available_quantity}
-                          step="1"
+                          onChange={(e) => handleItemChange(index, 'quantity', Number(e.target.value))}
+                          min="1"
+                          max={getAvailableQuantity(item.sku_id)}
                           className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                         />
                       </td>
@@ -461,7 +505,7 @@ const NewSalesOrder: React.FC = () => {
                         <input
                           type="number"
                           value={item.unit_price}
-                          onChange={(e) => handleItemChange(item.id, 'unit_price', Number(e.target.value))}
+                          onChange={(e) => handleItemChange(index, 'unit_price', Number(e.target.value))}
                           min="0"
                           step="0.01"
                           className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
@@ -473,7 +517,7 @@ const NewSalesOrder: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <button
                           type="button"
-                          onClick={() => handleRemoveItem(item.id)}
+                          onClick={() => handleRemoveItem(index)}
                           className="text-red-600 hover:text-red-900"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -482,17 +526,6 @@ const NewSalesOrder: React.FC = () => {
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-gray-50">
-                  <tr>
-                    <td colSpan={4} className="px-6 py-3 text-sm font-medium text-gray-900 text-right">
-                      Subtotal:
-                    </td>
-                    <td className="px-6 py-3 text-sm font-medium text-gray-900">
-                      ₹{calculateSubtotal().toFixed(2)}
-                    </td>
-                    <td></td>
-                  </tr>
-                </tfoot>
               </table>
             </div>
 
@@ -503,10 +536,10 @@ const NewSalesOrder: React.FC = () => {
             )}
           </div>
 
-          {/* Pricing Summary */}
+          {/* Pricing Section */}
           <div className="border-t pt-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Pricing Summary</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Pricing</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   Tax Rate (%)
@@ -535,25 +568,27 @@ const NewSalesOrder: React.FC = () => {
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                 />
               </div>
+            </div>
 
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Subtotal:</span>
-                    <span className="text-gray-900">₹{calculateSubtotal().toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Tax ({taxRate}%):</span>
-                    <span className="text-gray-900">₹{calculateTaxAmount().toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Discount:</span>
-                    <span className="text-gray-900">-₹{discountAmount.toFixed(2)}</span>
-                  </div>
-                  <div className="border-t pt-2 flex justify-between text-lg font-bold">
-                    <span className="text-gray-900">Total:</span>
-                    <span className="text-green-600">₹{calculateTotalAmount().toFixed(2)}</span>
-                  </div>
+            {/* Order Summary */}
+            <div className="mt-6 bg-gray-50 rounded-lg p-4">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Order Summary</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Subtotal:</span>
+                  <span className="text-gray-900">₹{calculateSubtotal().toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Tax ({taxRate}%):</span>
+                  <span className="text-gray-900">₹{calculateTaxAmount().toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Discount:</span>
+                  <span className="text-gray-900">-₹{discountAmount.toFixed(2)}</span>
+                </div>
+                <div className="border-t pt-2 flex justify-between text-lg font-bold">
+                  <span className="text-gray-900">Total:</span>
+                  <span className="text-green-600">₹{calculateTotal().toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -562,15 +597,14 @@ const NewSalesOrder: React.FC = () => {
           {/* Notes */}
           <div className="border-t pt-6">
             <label className="block text-sm font-medium text-gray-700">
-              Additional Notes
+              Notes
             </label>
             <textarea
-              name="notes"
               value={formData.notes}
-              onChange={handleChange}
+              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
               rows={3}
               className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-              placeholder="Any special instructions or notes..."
+              placeholder="Any additional notes for this order..."
             />
           </div>
 
@@ -587,9 +621,19 @@ const NewSalesOrder: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
             >
-              {isSubmitting ? 'Creating Order...' : 'Create Sales Order'}
+              {isSubmitting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Update Order
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -598,4 +642,4 @@ const NewSalesOrder: React.FC = () => {
   );
 };
 
-export default NewSalesOrder;
+export default EditSalesOrder;
