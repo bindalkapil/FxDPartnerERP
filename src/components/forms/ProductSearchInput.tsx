@@ -163,7 +163,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+          className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-96 overflow-auto"
         >
           {filteredItems.length > 0 ? (
             <ul className="py-1">
