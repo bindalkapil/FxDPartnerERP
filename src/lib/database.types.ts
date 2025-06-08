@@ -17,6 +17,7 @@ export type Database = {
           contact: string
           email: string
           address: string
+          delivery_addresses: Json[] | null
           gst_number: string | null
           pan_number: string | null
           credit_limit: number
@@ -34,6 +35,7 @@ export type Database = {
           contact: string
           email: string
           address: string
+          delivery_addresses?: Json[] | null
           gst_number?: string | null
           pan_number?: string | null
           credit_limit?: number
@@ -51,6 +53,7 @@ export type Database = {
           contact?: string
           email?: string
           address?: string
+          delivery_addresses?: Json[] | null
           gst_number?: string | null
           pan_number?: string | null
           credit_limit?: number

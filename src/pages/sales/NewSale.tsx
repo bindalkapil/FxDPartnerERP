@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, ArrowLeft, Plus, Trash2, User, Calendar, MapPin, CreditCard, AlertTriangle } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, Plus, Trash2, User, Calendar, MapPin, CreditCard, AlertTriangle, Edit } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getCustomers, getAvailableInventory, createSalesOrder } from '../../lib/api';
 
@@ -16,6 +16,12 @@ interface SalesOrderItem {
   totalPrice: number;
 }
 
+interface DeliveryAddress {
+  label: string;
+  address: string;
+  is_default: boolean;
+}
+
 interface Customer {
   id: string;
   name: string;
@@ -23,6 +29,7 @@ interface Customer {
   contact: string;
   email: string;
   address: string;
+  delivery_addresses: DeliveryAddress[] | null;
   payment_terms: number;
   credit_limit: number;
   current_balance: number;
@@ -47,6 +54,9 @@ const NewSale: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const [saleType, setSaleType] = useState<'counter' | 'outstation'>('counter');
+  const [selectedAddressIndex, setSelectedAddressIndex] = useState<number>(-1);
+  const [isCustomAddress, setIsCustomAddress] = useState(false);
+  
   const [formData, setFormData] = useState({
     customerId: '',
     orderDate: new Date().toISOString().slice(0, 16),
@@ -84,11 +94,30 @@ const NewSale: React.FC = () => {
   const handleCustomerChange = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId);
     if (customer) {
+      // Reset address selection when customer changes
+      setSelectedAddressIndex(-1);
+      setIsCustomAddress(false);
+      
+      // Set default delivery address for outstation sales
+      let defaultAddress = '';
+      if (saleType === 'outstation') {
+        if (customer.delivery_addresses && customer.delivery_addresses.length > 0) {
+          // Find default address or use first one
+          const defaultAddr = customer.delivery_addresses.find(addr => addr.is_default) || customer.delivery_addresses[0];
+          defaultAddress = defaultAddr.address;
+          setSelectedAddressIndex(customer.delivery_addresses.findIndex(addr => addr === defaultAddr));
+        } else if (customer.address) {
+          // Use main address if no delivery addresses
+          defaultAddress = customer.address;
+          setIsCustomAddress(true);
+        }
+      }
+      
       setFormData(prev => ({
         ...prev,
         customerId,
         paymentTerms: customer.payment_terms,
-        deliveryAddress: saleType === 'outstation' ? customer.address : ''
+        deliveryAddress: defaultAddress
       }));
     }
   };
@@ -97,11 +126,49 @@ const NewSale: React.FC = () => {
     setSaleType(type);
     const customer = customers.find(c => c.id === formData.customerId);
     
+    // Reset address selection
+    setSelectedAddressIndex(-1);
+    setIsCustomAddress(false);
+    
+    let deliveryAddress = '';
+    if (type === 'outstation' && customer) {
+      if (customer.delivery_addresses && customer.delivery_addresses.length > 0) {
+        const defaultAddr = customer.delivery_addresses.find(addr => addr.is_default) || customer.delivery_addresses[0];
+        deliveryAddress = defaultAddr.address;
+        setSelectedAddressIndex(customer.delivery_addresses.findIndex(addr => addr === defaultAddr));
+      } else if (customer.address) {
+        deliveryAddress = customer.address;
+        setIsCustomAddress(true);
+      }
+    }
+    
     setFormData(prev => ({
       ...prev,
       deliveryDate: type === 'counter' ? '' : prev.deliveryDate,
-      deliveryAddress: type === 'outstation' ? (customer?.address || '') : ''
+      deliveryAddress
     }));
+  };
+
+  const handleAddressSelection = (value: string) => {
+    const customer = getSelectedCustomer();
+    if (!customer) return;
+
+    if (value === 'custom') {
+      setIsCustomAddress(true);
+      setSelectedAddressIndex(-1);
+      setFormData(prev => ({ ...prev, deliveryAddress: '' }));
+    } else {
+      const index = parseInt(value);
+      setSelectedAddressIndex(index);
+      setIsCustomAddress(false);
+      
+      if (customer.delivery_addresses && customer.delivery_addresses[index]) {
+        setFormData(prev => ({ 
+          ...prev, 
+          deliveryAddress: customer.delivery_addresses![index].address 
+        }));
+      }
+    }
   };
 
   const handleAddItem = () => {
@@ -425,24 +492,79 @@ const NewSale: React.FC = () => {
                 />
               </div>
 
-              {saleType === 'outstation' && (
+              {saleType === 'outstation' && selectedCustomer && (
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Delivery Address <span className="text-red-500">*</span>
                   </label>
-                  <div className="mt-1 relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <MapPin className="h-5 w-5 text-gray-400" />
+                  
+                  {/* Address Selection */}
+                  {selectedCustomer.delivery_addresses && selectedCustomer.delivery_addresses.length > 0 ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">
+                          Select Address
+                        </label>
+                        <select
+                          value={isCustomAddress ? 'custom' : selectedAddressIndex.toString()}
+                          onChange={(e) => handleAddressSelection(e.target.value)}
+                          className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        >
+                          {selectedCustomer.delivery_addresses.map((addr, index) => (
+                            <option key={index} value={index.toString()}>
+                              {addr.label} {addr.is_default ? '(Default)' : ''}
+                            </option>
+                          ))}
+                          <option value="custom">Custom Address</option>
+                        </select>
+                      </div>
+                      
+                      {/* Address Display/Edit */}
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <MapPin className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <textarea
+                          value={formData.deliveryAddress}
+                          onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddress: e.target.value }))}
+                          rows={3}
+                          className={`block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 ${
+                            !isCustomAddress && selectedAddressIndex >= 0 ? 'bg-gray-50' : ''
+                          }`}
+                          placeholder="Enter delivery address..."
+                          required={saleType === 'outstation'}
+                          readOnly={!isCustomAddress && selectedAddressIndex >= 0}
+                        />
+                        {!isCustomAddress && selectedAddressIndex >= 0 && (
+                          <div className="absolute top-2 right-2">
+                            <button
+                              type="button"
+                              onClick={() => handleAddressSelection('custom')}
+                              className="text-blue-600 hover:text-blue-800"
+                              title="Edit address"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <textarea
-                      value={formData.deliveryAddress}
-                      onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddress: e.target.value }))}
-                      rows={3}
-                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-                      placeholder="Enter delivery address..."
-                      required={saleType === 'outstation'}
-                    />
-                  </div>
+                  ) : (
+                    // No saved addresses - show editable field
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <MapPin className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <textarea
+                        value={formData.deliveryAddress}
+                        onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddress: e.target.value }))}
+                        rows={3}
+                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        placeholder="Enter delivery address..."
+                        required={saleType === 'outstation'}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -472,7 +594,7 @@ const NewSale: React.FC = () => {
           {/* Payment Information */}
           <div className="border-t pt-6">
             <h2 className="text-lg font-medium text-gray-900 mb-4">Payment Information</h2>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-1">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   Payment Mode
