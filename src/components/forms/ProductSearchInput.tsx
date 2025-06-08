@@ -45,12 +45,14 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   // Find the selected item to display its name
   const selectedItem = inventory.find(item => item.sku_id === value);
 
+  // Update search term when value changes or when dropdown closes
   useEffect(() => {
     if (selectedItem && !isOpen) {
       setSearchTerm(`${selectedItem.product_name} - ${selectedItem.sku_code}`);
     }
   }, [selectedItem, isOpen]);
 
+  // Filter items based on search term
   useEffect(() => {
     if (searchTerm.trim() === '') {
       setFilteredItems(inventory); // Show all items when empty
@@ -110,7 +112,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     setSearchTerm(newValue);
     setIsOpen(true);
     
-    // Clear selection if user is typing
+    // Clear selection if user is typing something different
     if (newValue !== `${selectedItem?.product_name} - ${selectedItem?.sku_code}`) {
       onChange('');
     }
@@ -172,10 +174,10 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     
     setTimeout(() => {
       setIsOpen(false);
-      // Restore the selected item name if nothing was selected
-      if (selectedItem && !value) {
+      // Restore the selected item name if we have a selection
+      if (selectedItem) {
         setSearchTerm(`${selectedItem.product_name} - ${selectedItem.sku_code}`);
-      } else if (!selectedItem) {
+      } else {
         setSearchTerm('');
       }
     }, 150);
