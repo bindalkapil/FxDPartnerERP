@@ -1,81 +1,125 @@
-import React, { useState } from 'react';
-import { ShoppingCart, Search, Filter, Plus, FileText, Trash2, Eye } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShoppingCart, Search, Filter, Plus, FileText, Trash2, Eye, Pencil } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
+import { getSalesOrders, deleteSalesOrder } from '../../lib/api';
 
-interface SaleOrder {
+interface SalesOrder {
   id: string;
-  customerName: string;
-  orderDate: string;
-  items: Array<{
+  order_number: string;
+  customer: {
+    id: string;
     name: string;
+    customer_type: string;
+  };
+  order_date: string;
+  delivery_date: string | null;
+  payment_mode: string;
+  payment_status: string;
+  subtotal: number;
+  tax_amount: number;
+  discount_amount: number;
+  total_amount: number;
+  status: string;
+  sales_order_items: Array<{
+    product_name: string;
+    sku_code: string;
     quantity: number;
-    unit: string;
-    price: number;
+    unit_type: string;
+    unit_price: number;
+    total_price: number;
   }>;
-  total: number;
-  status: 'pending' | 'processing' | 'completed' | 'cancelled';
-  paymentMode: 'cash' | 'credit';
-  paymentStatus: 'paid' | 'partial' | 'unpaid';
 }
 
-const mockSales: SaleOrder[] = [
-  {
-    id: 'SO001',
-    customerName: 'Fresh Mart',
-    orderDate: '2025-06-18 09:30 AM',
-    items: [
-      { name: 'Apples', quantity: 100, unit: 'kg', price: 120 },
-      { name: 'Oranges', quantity: 50, unit: 'kg', price: 80 }
-    ],
-    total: 16000,
-    status: 'completed',
-    paymentMode: 'cash',
-    paymentStatus: 'paid'
-  },
-  {
-    id: 'SO002',
-    customerName: 'Green Grocers',
-    orderDate: '2025-06-18 10:45 AM',
-    items: [
-      { name: 'Bananas', quantity: 80, unit: 'kg', price: 60 },
-      { name: 'Grapes', quantity: 30, unit: 'kg', price: 150 }
-    ],
-    total: 9300,
-    status: 'processing',
-    paymentMode: 'credit',
-    paymentStatus: 'unpaid'
-  },
-  {
-    id: 'SO003',
-    customerName: 'City Supermarket',
-    orderDate: '2025-06-18 11:15 AM',
-    items: [
-      { name: 'Mangoes', quantity: 60, unit: 'kg', price: 200 },
-      { name: 'Pineapples', quantity: 40, unit: 'kg', price: 100 }
-    ],
-    total: 16000,
-    status: 'pending',
-    paymentMode: 'credit',
-    paymentStatus: 'unpaid'
-  }
-];
-
 const Sales: React.FC = () => {
-  const [sales, setSales] = useState<SaleOrder[]>(mockSales);
+  const navigate = useNavigate();
+  const [sales, setSales] = useState<SalesOrder[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    loadSalesOrders();
+  }, []);
+
+  const loadSalesOrders = async () => {
+    try {
+      const data = await getSalesOrders();
+      setSales(data || []);
+    } catch (error) {
+      console.error('Error loading sales orders:', error);
+      toast.error('Failed to load sales orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteOrder = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this sales order?')) {
+      try {
+        await deleteSalesOrder(id);
+        setSales(prev => prev.filter(order => order.id !== id));
+        toast.success('Sales order deleted successfully');
+      } catch (error) {
+        console.error('Error deleting sales order:', error);
+        toast.error('Failed to delete sales order');
+      }
+    }
+  };
 
   const filteredSales = sales.filter(sale => {
     const matchesSearch = 
-      sale.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.id.toLowerCase().includes(searchTerm.toLowerCase());
+      sale.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sale.order_number.toLowerCase().includes(searchTerm.toLowerCase());
       
     const matchesStatus = selectedStatus === 'all' || sale.status === selectedStatus;
-    const matchesPaymentStatus = selectedPaymentStatus === 'all' || sale.paymentStatus === selectedPaymentStatus;
+    const matchesPaymentStatus = selectedPaymentStatus === 'all' || sale.payment_status === selectedPaymentStatus;
     
     return matchesSearch && matchesStatus && matchesPaymentStatus;
   });
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'delivered':
+        return 'bg-green-100 text-green-800';
+      case 'dispatched':
+        return 'bg-blue-100 text-blue-800';
+      case 'processing':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'confirmed':
+        return 'bg-purple-100 text-purple-800';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getPaymentStatusColor = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return 'bg-green-100 text-green-800';
+      case 'partial':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'unpaid':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading sales orders...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -85,7 +129,7 @@ const Sales: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-800">Sales Orders</h1>
         </div>
         <button 
-          onClick={() => setShowModal(true)}
+          onClick={() => navigate('/sales/new')}
           className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
         >
           <Plus className="h-4 w-4 mr-1" />
@@ -99,7 +143,9 @@ const Sales: React.FC = () => {
           <div className="flex justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">Total Sales</p>
-              <p className="text-2xl font-bold text-gray-800">₹41,300</p>
+              <p className="text-2xl font-bold text-gray-800">
+                ₹{sales.reduce((sum, sale) => sum + sale.total_amount, 0).toLocaleString()}
+              </p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
               <ShoppingCart className="h-5 w-5" />
@@ -109,9 +155,20 @@ const Sales: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
+              <p className="text-sm font-medium text-gray-500">Total Orders</p>
+              <p className="text-2xl font-bold text-gray-800">{sales.length}</p>
+            </div>
+            <div className="h-10 w-10 flex items-center justify-center rounded-full bg-blue-100 text-blue-600">
+              <FileText className="h-5 w-5" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow-sm">
+          <div className="flex justify-between">
+            <div>
               <p className="text-sm font-medium text-gray-500">Pending Orders</p>
               <p className="text-2xl font-bold text-gray-800">
-                {sales.filter(sale => sale.status === 'pending').length}
+                {sales.filter(sale => sale.status === 'draft' || sale.status === 'confirmed').length}
               </p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-yellow-100 text-yellow-600">
@@ -122,26 +179,13 @@ const Sales: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Processing</p>
+              <p className="text-sm font-medium text-gray-500">Delivered</p>
               <p className="text-2xl font-bold text-gray-800">
-                {sales.filter(sale => sale.status === 'processing').length}
-              </p>
-            </div>
-            <div className="h-10 w-10 flex items-center justify-center rounded-full bg-blue-100 text-blue-600">
-              <ShoppingCart className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="flex justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Completed</p>
-              <p className="text-2xl font-bold text-gray-800">
-                {sales.filter(sale => sale.status === 'completed').length}
+                {sales.filter(sale => sale.status === 'delivered').length}
               </p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
-              <FileText className="h-5 w-5" />
+              <ShoppingCart className="h-5 w-5" />
             </div>
           </div>
         </div>
@@ -171,25 +215,24 @@ const Sales: React.FC = () => {
               onChange={(e) => setSelectedStatus(e.target.value)}
             >
               <option value="all">All Status</option>
-              <option value="pending">Pending</option>
+              <option value="draft">Draft</option>
+              <option value="confirmed">Confirmed</option>
               <option value="processing">Processing</option>
-              <option value="completed">Completed</option>
+              <option value="dispatched">Dispatched</option>
+              <option value="delivered">Delivered</option>
               <option value="cancelled">Cancelled</option>
             </select>
           </div>
-          <div className="flex items-center space-x-2">
-            <Filter className="h-4 w-4 text-gray-500" />
-            <select
-              className="border border-gray-300 rounded-md text-sm py-2 px-3 bg-white focus:outline-none focus:ring-green-500 focus:border-green-500"
-              value={selectedPaymentStatus}
-              onChange={(e) => setSelectedPaymentStatus(e.target.value)}
-            >
-              <option value="all">All Payment Status</option>
-              <option value="paid">Paid</option>
-              <option value="partial">Partial</option>
-              <option value="unpaid">Unpaid</option>
-            </select>
-          </div>
+          <select
+            className="border border-gray-300 rounded-md text-sm py-2 px-3 bg-white focus:outline-none focus:ring-green-500 focus:border-green-500"
+            value={selectedPaymentStatus}
+            onChange={(e) => setSelectedPaymentStatus(e.target.value)}
+          >
+            <option value="all">All Payment Status</option>
+            <option value="paid">Paid</option>
+            <option value="partial">Partial</option>
+            <option value="unpaid">Unpaid</option>
+          </select>
         </div>
       </div>
 
@@ -201,6 +244,9 @@ const Sales: React.FC = () => {
               <tr>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Order Details
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Customer
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Items
@@ -228,60 +274,80 @@ const Sales: React.FC = () => {
                         <ShoppingCart className="h-5 w-5" />
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{sale.customerName}</div>
-                        <div className="text-sm text-gray-500">Order ID: {sale.id}</div>
-                        <div className="text-sm text-gray-500">{sale.orderDate}</div>
+                        <div className="text-sm font-medium text-gray-900">{sale.order_number}</div>
+                        <div className="text-sm text-gray-500">{formatDateTime(sale.order_date)}</div>
+                        {sale.delivery_date && (
+                          <div className="text-sm text-gray-500">Delivery: {formatDateTime(sale.delivery_date)}</div>
+                        )}
                       </div>
                     </div>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{sale.customer.name}</div>
+                    <div className="text-sm text-gray-500 capitalize">{sale.customer.customer_type}</div>
+                  </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900">
-                      {sale.items.map((item, index) => (
+                      {sale.sales_order_items.slice(0, 2).map((item, index) => (
                         <div key={index}>
-                          {item.name} - {item.quantity}{item.unit} @ ₹{item.price}/{item.unit}
+                          {item.product_name} - {item.quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
                         </div>
                       ))}
+                      {sale.sales_order_items.length > 2 && (
+                        <div className="text-sm text-gray-500">
+                          +{sale.sales_order_items.length - 2} more items
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">₹{sale.total}</div>
-                    <div className="text-sm text-gray-500">{sale.paymentMode}</div>
+                    <div className="text-sm text-gray-900">₹{sale.total_amount.toLocaleString()}</div>
+                    <div className="text-sm text-gray-500 capitalize">{sale.payment_mode}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      sale.status === 'completed'
-                        ? 'bg-green-100 text-green-800'
-                        : sale.status === 'processing'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : sale.status === 'cancelled'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-gray-100 text-gray-800'
-                    }`}>
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(sale.status)}`}>
                       {sale.status.charAt(0).toUpperCase() + sale.status.slice(1)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      sale.paymentStatus === 'paid'
-                        ? 'bg-green-100 text-green-800'
-                        : sale.paymentStatus === 'partial'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                    }`}>
-                      {sale.paymentStatus.charAt(0).toUpperCase() + sale.paymentStatus.slice(1)}
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getPaymentStatusColor(sale.payment_status)}`}>
+                      {sale.payment_status.charAt(0).toUpperCase() + sale.payment_status.slice(1)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <button className="text-indigo-600 hover:text-indigo-900">
+                      <button 
+                        onClick={() => navigate(`/sales/view/${sale.id}`)}
+                        className="text-indigo-600 hover:text-indigo-900"
+                        title="View Details"
+                      >
                         <Eye className="h-4 w-4" />
                       </button>
-                      <button className="text-gray-600 hover:text-gray-900">
+                      {(sale.status === 'draft' || sale.status === 'confirmed') && (
+                        <button 
+                          onClick={() => navigate(`/sales/edit/${sale.id}`)}
+                          className="text-gray-600 hover:text-gray-900"
+                          title="Edit Order"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => navigate(`/sales/invoice/${sale.id}`)}
+                        className="text-green-600 hover:text-green-900"
+                        title="Generate Invoice"
+                      >
                         <FileText className="h-4 w-4" />
                       </button>
-                      <button className="text-red-600 hover:text-red-900">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {sale.status === 'draft' && (
+                        <button 
+                          onClick={() => handleDeleteOrder(sale.id)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Delete Order"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -290,9 +356,24 @@ const Sales: React.FC = () => {
           </table>
         </div>
         
-        {filteredSales.length === 0 && (
-          <div className="py-6 text-center text-gray-500">
-            No sales orders found.
+        {filteredSales.length === 0 && !loading && (
+          <div className="py-12 text-center text-gray-500">
+            <ShoppingCart className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Sales Orders Found</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {sales.length === 0 
+                ? "Get started by creating your first sales order."
+                : "No orders match your current search and filter criteria."
+              }
+            </p>
+            {sales.length === 0 && (
+              <button
+                onClick={() => navigate('/sales/new')}
+                className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200"
+              >
+                Create First Sales Order
+              </button>
+            )}
           </div>
         )}
       </div>

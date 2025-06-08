@@ -1,4 +1,4 @@
-// Add customer-related API functions
+// Add sales-related API functions
 import { supabase } from './supabase';
 import type { Database } from './database.types';
 
@@ -120,6 +120,168 @@ export async function updateCustomer(id: string, customer: Tables['customers']['
   
   if (error) throw error;
   return data;
+}
+
+// Sales Orders
+export async function getSalesOrders() {
+  const { data, error } = await supabase
+    .from('sales_orders')
+    .select(`
+      *,
+      customer:customers(*),
+      sales_order_items(
+        *,
+        product:products(*),
+        sku:skus(*)
+      )
+    `)
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function getSalesOrder(id: string) {
+  const { data, error } = await supabase
+    .from('sales_orders')
+    .select(`
+      *,
+      customer:customers(*),
+      sales_order_items(
+        *,
+        product:products(*),
+        sku:skus(*)
+      )
+    `)
+    .eq('id', id)
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function createSalesOrder(
+  order: Tables['sales_orders']['Insert'],
+  items: Tables['sales_order_items']['Insert'][]
+) {
+  // Start a transaction
+  const { data: orderData, error: orderError } = await supabase
+    .from('sales_orders')
+    .insert(order)
+    .select()
+    .single();
+
+  if (orderError) throw orderError;
+
+  // Insert items with the order ID
+  const itemsWithOrderId = items.map(item => ({
+    ...item,
+    sales_order_id: orderData.id
+  }));
+
+  const { error: itemsError } = await supabase
+    .from('sales_order_items')
+    .insert(itemsWithOrderId);
+
+  if (itemsError) throw itemsError;
+
+  return orderData;
+}
+
+export async function updateSalesOrder(
+  id: string,
+  order: Partial<Tables['sales_orders']['Update']>,
+  items?: Tables['sales_order_items']['Insert'][]
+) {
+  // Update the order
+  const { data: orderData, error: orderError } = await supabase
+    .from('sales_orders')
+    .update(order)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (orderError) throw orderError;
+
+  // If items are provided, replace them
+  if (items) {
+    // Delete existing items
+    const { error: deleteItemsError } = await supabase
+      .from('sales_order_items')
+      .delete()
+      .eq('sales_order_id', id);
+
+    if (deleteItemsError) throw deleteItemsError;
+
+    // Insert new items
+    const itemsWithOrderId = items.map(item => ({
+      ...item,
+      sales_order_id: id
+    }));
+
+    const { error: itemsError } = await supabase
+      .from('sales_order_items')
+      .insert(itemsWithOrderId);
+
+    if (itemsError) throw itemsError;
+  }
+
+  return orderData;
+}
+
+export async function deleteSalesOrder(id: string) {
+  const { error } = await supabase
+    .from('sales_orders')
+    .delete()
+    .eq('id', id);
+  
+  if (error) throw error;
+}
+
+// Get available inventory (from completed vehicle arrivals)
+export async function getAvailableInventory() {
+  const { data, error } = await supabase
+    .from('vehicle_arrivals')
+    .select(`
+      id,
+      status,
+      vehicle_arrival_items(
+        *,
+        product:products(*),
+        sku:skus(*)
+      )
+    `)
+    .eq('status', 'completed');
+  
+  if (error) throw error;
+
+  // Group items by product and SKU to create inventory
+  const inventoryMap = new Map();
+  
+  data.forEach(arrival => {
+    arrival.vehicle_arrival_items.forEach((item: any) => {
+      const key = `${item.product.id}-${item.sku.id}`;
+      
+      if (inventoryMap.has(key)) {
+        const existingItem = inventoryMap.get(key);
+        existingItem.available_quantity += item.quantity;
+        existingItem.total_weight += item.total_weight;
+      } else {
+        inventoryMap.set(key, {
+          product_id: item.product.id,
+          product_name: item.product.name,
+          product_category: item.product.category,
+          sku_id: item.sku.id,
+          sku_code: item.sku.code,
+          unit_type: item.unit_type,
+          available_quantity: item.quantity,
+          total_weight: item.total_weight
+        });
+      }
+    });
+  });
+
+  return Array.from(inventoryMap.values());
 }
 
 // Vehicle Arrivals
