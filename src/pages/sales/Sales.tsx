@@ -14,13 +14,13 @@ interface SalesOrder {
   };
   order_date: string;
   delivery_date: string | null;
+  delivery_address: string | null;
   payment_mode: string;
-  payment_status: string;
   subtotal: number;
   tax_amount: number;
   discount_amount: number;
   total_amount: number;
-  status: string;
+  sale_type: string;
   sales_order_items: Array<{
     product_name: string;
     sku_code: string;
@@ -35,8 +35,6 @@ const Sales: React.FC = () => {
   const navigate = useNavigate();
   const [sales, setSales] = useState<SalesOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   useEffect(() => {
@@ -46,7 +44,14 @@ const Sales: React.FC = () => {
   const loadSalesOrders = async () => {
     try {
       const data = await getSalesOrders();
-      setSales(data || []);
+      
+      // Add sale_type to each order
+      const salesWithType = (data || []).map(order => ({
+        ...order,
+        sale_type: order.delivery_date || order.delivery_address ? 'outstation' : 'counter'
+      }));
+      
+      setSales(salesWithType);
     } catch (error) {
       console.error('Error loading sales orders:', error);
       toast.error('Failed to load sales orders');
@@ -73,39 +78,27 @@ const Sales: React.FC = () => {
       sale.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.order_number.toLowerCase().includes(searchTerm.toLowerCase());
       
-    const matchesStatus = selectedStatus === 'all' || sale.status === selectedStatus;
-    const matchesPaymentStatus = selectedPaymentStatus === 'all' || sale.payment_status === selectedPaymentStatus;
-    
-    return matchesSearch && matchesStatus && matchesPaymentStatus;
+    return matchesSearch;
   });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'delivered':
-        return 'bg-green-100 text-green-800';
-      case 'dispatched':
-        return 'bg-blue-100 text-blue-800';
-      case 'processing':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'confirmed':
-        return 'bg-purple-100 text-purple-800';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const getSaleTypeColor = (saleType: string) => {
+    return saleType === 'outstation' 
+      ? 'bg-blue-100 text-blue-800' 
+      : 'bg-green-100 text-green-800';
   };
 
-  const getPaymentStatusColor = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return 'bg-green-100 text-green-800';
-      case 'partial':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'unpaid':
-        return 'bg-red-100 text-red-800';
+  const getPaymentModeDisplay = (mode: string) => {
+    switch (mode) {
+      case 'bank_transfer':
+        return 'Bank Transfer';
+      case 'upi':
+        return 'UPI';
+      case 'cash':
+        return 'Cash';
+      case 'credit':
+        return 'Credit';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return mode.charAt(0).toUpperCase() + mode.slice(1);
     }
   };
 
@@ -138,7 +131,7 @@ const Sales: React.FC = () => {
       </div>
 
       {/* Sales Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
@@ -163,32 +156,6 @@ const Sales: React.FC = () => {
             </div>
           </div>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="flex justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Pending Orders</p>
-              <p className="text-2xl font-bold text-gray-800">
-                {sales.filter(sale => sale.status === 'draft' || sale.status === 'confirmed').length}
-              </p>
-            </div>
-            <div className="h-10 w-10 flex items-center justify-center rounded-full bg-yellow-100 text-yellow-600">
-              <FileText className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="flex justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Delivered</p>
-              <p className="text-2xl font-bold text-gray-800">
-                {sales.filter(sale => sale.status === 'delivered').length}
-              </p>
-            </div>
-            <div className="h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
-              <ShoppingCart className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Filters and Search */}
@@ -204,35 +171,6 @@ const Sales: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-        </div>
-        
-        <div className="flex flex-wrap gap-3">
-          <div className="flex items-center space-x-2">
-            <Filter className="h-4 w-4 text-gray-500" />
-            <select
-              className="border border-gray-300 rounded-md text-sm py-2 px-3 bg-white focus:outline-none focus:ring-green-500 focus:border-green-500"
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-            >
-              <option value="all">All Status</option>
-              <option value="draft">Draft</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="processing">Processing</option>
-              <option value="dispatched">Dispatched</option>
-              <option value="delivered">Delivered</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-          <select
-            className="border border-gray-300 rounded-md text-sm py-2 px-3 bg-white focus:outline-none focus:ring-green-500 focus:border-green-500"
-            value={selectedPaymentStatus}
-            onChange={(e) => setSelectedPaymentStatus(e.target.value)}
-          >
-            <option value="all">All Payment Status</option>
-            <option value="paid">Paid</option>
-            <option value="partial">Partial</option>
-            <option value="unpaid">Unpaid</option>
-          </select>
         </div>
       </div>
 
@@ -255,10 +193,10 @@ const Sales: React.FC = () => {
                   Total
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
+                  Sale Type
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Payment
+                  Payment Method
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
@@ -302,17 +240,14 @@ const Sales: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">₹{sale.total_amount.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500 capitalize">{sale.payment_mode}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(sale.status)}`}>
-                      {sale.status.charAt(0).toUpperCase() + sale.status.slice(1)}
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getSaleTypeColor(sale.sale_type)}`}>
+                      {sale.sale_type === 'outstation' ? 'Outstation' : 'Counter'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getPaymentStatusColor(sale.payment_status)}`}>
-                      {sale.payment_status.charAt(0).toUpperCase() + sale.payment_status.slice(1)}
-                    </span>
+                    <div className="text-sm text-gray-900">{getPaymentModeDisplay(sale.payment_mode)}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
@@ -323,31 +258,20 @@ const Sales: React.FC = () => {
                       >
                         <Eye className="h-4 w-4" />
                       </button>
-                      {(sale.status === 'draft' || sale.status === 'confirmed') && (
-                        <button 
-                          onClick={() => navigate(`/sales/edit/${sale.id}`)}
-                          className="text-gray-600 hover:text-gray-900"
-                          title="Edit Order"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      )}
                       <button 
-                        onClick={() => navigate(`/sales/invoice/${sale.id}`)}
-                        className="text-green-600 hover:text-green-900"
-                        title="Generate Invoice"
+                        onClick={() => navigate(`/sales/edit/${sale.id}`)}
+                        className="text-gray-600 hover:text-gray-900"
+                        title="Edit Order"
                       >
-                        <FileText className="h-4 w-4" />
+                        <Pencil className="h-4 w-4" />
                       </button>
-                      {sale.status === 'draft' && (
-                        <button 
-                          onClick={() => handleDeleteOrder(sale.id)}
-                          className="text-red-600 hover:text-red-900"
-                          title="Delete Order"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
+                      <button 
+                        onClick={() => handleDeleteOrder(sale.id)}
+                        className="text-red-600 hover:text-red-900"
+                        title="Delete Order"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -363,7 +287,7 @@ const Sales: React.FC = () => {
             <p className="text-sm text-gray-500 mb-4">
               {sales.length === 0 
                 ? "Get started by creating your first sales order."
-                : "No orders match your current search and filter criteria."
+                : "No orders match your current search criteria."
               }
             </p>
             {sales.length === 0 && (

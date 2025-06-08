@@ -479,13 +479,15 @@ const ViewSale: React.FC = () => {
                 <FileText className="h-4 w-4 mr-2" />
                 Print Order
               </button>
-              <button
-                onClick={() => navigate('/dispatch')}
-                className="w-full bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center justify-center"
-              >
-                <Truck className="h-4 w-4 mr-2" />
-                Create Dispatch
-              </button>
+              {saleType === 'outstation' && (
+                <button
+                  onClick={() => navigate('/dispatch')}
+                  className="w-full bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center justify-center"
+                >
+                  <Truck className="h-4 w-4 mr-2" />
+                  Create Dispatch
+                </button>
+              )}
             </div>
           </div>
         </div>
