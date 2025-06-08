@@ -179,7 +179,7 @@ export async function createSalesOrder(
   const isOutstation = order.delivery_date || order.delivery_address;
   const orderWithStatus = {
     ...order,
-    status: isOutstation ? 'processing' : 'completed'
+    status: 'processing'
   };
 
   // Start a transaction
