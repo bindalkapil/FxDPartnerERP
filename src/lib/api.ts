@@ -306,7 +306,7 @@ export async function getAvailableInventory() {
         sku:skus(*)
       )
     `)
-    .eq('status', 'completed');
+    .in('status', ['completed', 'po-created']);
   
   if (error) throw error;
 
