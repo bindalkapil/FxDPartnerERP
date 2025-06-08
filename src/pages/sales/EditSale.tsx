@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ShoppingCart, ArrowLeft, Plus, Trash2, User, Calendar, MapPin } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, Plus, Trash2, User, Calendar, MapPin, AlertTriangle, Edit } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getSalesOrder, updateSalesOrder, getCustomers, getAvailableInventory } from '../../lib/api';
 
@@ -16,6 +16,12 @@ interface SalesOrderItem {
   totalPrice: number;
 }
 
+interface DeliveryAddress {
+  label: string;
+  address: string;
+  is_default: boolean;
+}
+
 interface Customer {
   id: string;
   name: string;
@@ -23,7 +29,10 @@ interface Customer {
   contact: string;
   email: string;
   address: string;
+  delivery_addresses: DeliveryAddress[] | null;
   payment_terms: number;
+  credit_limit: number;
+  current_balance: number;
 }
 
 interface InventoryItem {
@@ -45,6 +54,10 @@ const EditSale: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
 
+  const [saleType, setSaleType] = useState<'counter' | 'outstation'>('counter');
+  const [selectedAddressIndex, setSelectedAddressIndex] = useState<number>(-1);
+  const [isCustomAddress, setIsCustomAddress] = useState(false);
+
   const [formData, setFormData] = useState({
     customerId: '',
     orderDate: '',
@@ -52,13 +65,11 @@ const EditSale: React.FC = () => {
     deliveryAddress: '',
     paymentTerms: 30,
     paymentMode: 'cash',
-    paymentStatus: 'unpaid',
     notes: ''
   });
 
   const [items, setItems] = useState<SalesOrderItem[]>([]);
   const [discountAmount, setDiscountAmount] = useState(0);
-  const [taxRate, setTaxRate] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -76,6 +87,10 @@ const EditSale: React.FC = () => {
         getAvailableInventory()
       ]);
 
+      // Determine sale type
+      const orderSaleType = orderData.delivery_date || orderData.delivery_address ? 'outstation' : 'counter';
+      setSaleType(orderSaleType);
+
       // Set form data
       setFormData({
         customerId: orderData.customer.id,
@@ -84,9 +99,26 @@ const EditSale: React.FC = () => {
         deliveryAddress: orderData.delivery_address || '',
         paymentTerms: orderData.payment_terms,
         paymentMode: orderData.payment_mode,
-        paymentStatus: orderData.payment_status,
         notes: orderData.notes || ''
       });
+
+      // Set address selection state
+      if (orderSaleType === 'outstation' && orderData.delivery_address) {
+        const customer = orderData.customer;
+        if (customer.delivery_addresses) {
+          const addressIndex = customer.delivery_addresses.findIndex(
+            addr => addr.address === orderData.delivery_address
+          );
+          if (addressIndex >= 0) {
+            setSelectedAddressIndex(addressIndex);
+            setIsCustomAddress(false);
+          } else {
+            setIsCustomAddress(true);
+          }
+        } else {
+          setIsCustomAddress(true);
+        }
+      }
 
       // Set items
       const orderItems = orderData.sales_order_items.map((item: any) => ({
@@ -102,13 +134,8 @@ const EditSale: React.FC = () => {
       }));
       setItems(orderItems);
 
-      // Set discount and tax
+      // Set discount
       setDiscountAmount(orderData.discount_amount || 0);
-      const subtotal = orderData.subtotal || 0;
-      const taxAmount = orderData.tax_amount || 0;
-      if (subtotal > 0) {
-        setTaxRate((taxAmount / (subtotal - (orderData.discount_amount || 0))) * 100);
-      }
 
       setCustomers(customersData || []);
       setInventory(inventoryData || []);
@@ -121,15 +148,81 @@ const EditSale: React.FC = () => {
     }
   };
 
+  const handleSaleTypeChange = (type: 'counter' | 'outstation') => {
+    setSaleType(type);
+    const customer = getSelectedCustomer();
+    
+    // Reset address selection
+    setSelectedAddressIndex(-1);
+    setIsCustomAddress(false);
+    
+    let deliveryAddress = '';
+    if (type === 'outstation' && customer) {
+      if (customer.delivery_addresses && customer.delivery_addresses.length > 0) {
+        const defaultAddr = customer.delivery_addresses.find(addr => addr.is_default) || customer.delivery_addresses[0];
+        deliveryAddress = defaultAddr.address;
+        setSelectedAddressIndex(customer.delivery_addresses.findIndex(addr => addr === defaultAddr));
+      } else if (customer.address) {
+        deliveryAddress = customer.address;
+        setIsCustomAddress(true);
+      }
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      deliveryDate: type === 'counter' ? '' : prev.deliveryDate,
+      deliveryAddress
+    }));
+  };
+
   const handleCustomerChange = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId);
     if (customer) {
+      // Reset address selection when customer changes
+      setSelectedAddressIndex(-1);
+      setIsCustomAddress(false);
+      
+      // Set default delivery address for outstation sales
+      let defaultAddress = '';
+      if (saleType === 'outstation') {
+        if (customer.delivery_addresses && customer.delivery_addresses.length > 0) {
+          const defaultAddr = customer.delivery_addresses.find(addr => addr.is_default) || customer.delivery_addresses[0];
+          defaultAddress = defaultAddr.address;
+          setSelectedAddressIndex(customer.delivery_addresses.findIndex(addr => addr === defaultAddr));
+        } else if (customer.address) {
+          defaultAddress = customer.address;
+          setIsCustomAddress(true);
+        }
+      }
+      
       setFormData(prev => ({
         ...prev,
         customerId,
         paymentTerms: customer.payment_terms,
-        deliveryAddress: customer.address
+        deliveryAddress: defaultAddress
       }));
+    }
+  };
+
+  const handleAddressSelection = (value: string) => {
+    const customer = getSelectedCustomer();
+    if (!customer) return;
+
+    if (value === 'custom') {
+      setIsCustomAddress(true);
+      setSelectedAddressIndex(-1);
+      setFormData(prev => ({ ...prev, deliveryAddress: '' }));
+    } else {
+      const index = parseInt(value);
+      setSelectedAddressIndex(index);
+      setIsCustomAddress(false);
+      
+      if (customer.delivery_addresses && customer.delivery_addresses[index]) {
+        setFormData(prev => ({ 
+          ...prev, 
+          deliveryAddress: customer.delivery_addresses![index].address 
+        }));
+      }
     }
   };
 
@@ -181,12 +274,29 @@ const EditSale: React.FC = () => {
     return items.reduce((sum, item) => sum + item.totalPrice, 0);
   };
 
-  const calculateTaxAmount = () => {
-    return (calculateSubtotal() - discountAmount) * (taxRate / 100);
+  const calculateTotal = () => {
+    return calculateSubtotal() - discountAmount;
   };
 
-  const calculateTotal = () => {
-    return calculateSubtotal() - discountAmount + calculateTaxAmount();
+  const getSelectedCustomer = () => {
+    return customers.find(c => c.id === formData.customerId);
+  };
+
+  const checkCreditLimit = () => {
+    const customer = getSelectedCustomer();
+    if (!customer || formData.paymentMode !== 'credit') return { valid: true, message: '' };
+
+    const orderTotal = calculateTotal();
+    const availableCredit = customer.credit_limit - customer.current_balance;
+    
+    if (orderTotal > availableCredit) {
+      return {
+        valid: false,
+        message: `Order total (₹${orderTotal.toFixed(2)}) exceeds available credit limit (₹${availableCredit.toFixed(2)})`
+      };
+    }
+    
+    return { valid: true, message: '' };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -199,6 +309,25 @@ const EditSale: React.FC = () => {
 
     if (items.length === 0) {
       toast.error('Please add at least one item');
+      return;
+    }
+
+    // Validate sale type specific requirements
+    if (saleType === 'outstation') {
+      if (!formData.deliveryDate) {
+        toast.error('Delivery date is required for outstation sales');
+        return;
+      }
+      if (!formData.deliveryAddress.trim()) {
+        toast.error('Delivery address is required for outstation sales');
+        return;
+      }
+    }
+
+    // Check credit limit for credit payments
+    const creditCheck = checkCreditLimit();
+    if (!creditCheck.valid) {
+      toast.error(creditCheck.message);
       return;
     }
 
@@ -226,20 +355,19 @@ const EditSale: React.FC = () => {
 
     try {
       const subtotal = calculateSubtotal();
-      const taxAmount = calculateTaxAmount();
       const totalAmount = calculateTotal();
 
       // Update sales order
       const orderData = {
         customer_id: formData.customerId,
         order_date: formData.orderDate,
-        delivery_date: formData.deliveryDate || null,
-        delivery_address: formData.deliveryAddress || null,
+        delivery_date: saleType === 'outstation' ? formData.deliveryDate : null,
+        delivery_address: saleType === 'outstation' ? formData.deliveryAddress : null,
         payment_terms: formData.paymentTerms,
         payment_mode: formData.paymentMode,
-        payment_status: formData.paymentStatus,
+        payment_status: 'unpaid', // Keep as unpaid
         subtotal,
-        tax_amount: taxAmount,
+        tax_amount: 0, // Tax removed
         discount_amount: discountAmount,
         total_amount: totalAmount,
         notes: formData.notes || null
@@ -284,6 +412,9 @@ const EditSale: React.FC = () => {
     );
   }
 
+  const selectedCustomer = getSelectedCustomer();
+  const creditCheck = checkCreditLimit();
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -303,8 +434,37 @@ const EditSale: React.FC = () => {
 
       <div className="bg-white shadow-sm rounded-lg">
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Customer Information */}
+          {/* Sale Type Selection */}
           <div>
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Sale Type</h2>
+            <div className="flex space-x-4">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="saleType"
+                  value="counter"
+                  checked={saleType === 'counter'}
+                  onChange={(e) => handleSaleTypeChange(e.target.value as 'counter' | 'outstation')}
+                  className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+                />
+                <span className="ml-2 text-sm font-medium text-gray-700">Counter Sale</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="saleType"
+                  value="outstation"
+                  checked={saleType === 'outstation'}
+                  onChange={(e) => handleSaleTypeChange(e.target.value as 'counter' | 'outstation')}
+                  className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+                />
+                <span className="ml-2 text-sm font-medium text-gray-700">Outstation Sale</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Customer Information */}
+          <div className="border-t pt-6">
             <h2 className="text-lg font-medium text-gray-900 mb-4">Customer Information</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
@@ -349,22 +509,25 @@ const EditSale: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Delivery Date
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Calendar className="h-5 w-5 text-gray-400" />
+              {saleType === 'outstation' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Delivery Date <span className="text-red-500">*</span>
+                  </label>
+                  <div className="mt-1 relative rounded-md shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Calendar className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="datetime-local"
+                      value={formData.deliveryDate}
+                      onChange={(e) => setFormData(prev => ({ ...prev, deliveryDate: e.target.value }))}
+                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                      required={saleType === 'outstation'}
+                    />
                   </div>
-                  <input
-                    type="datetime-local"
-                    value={formData.deliveryDate}
-                    onChange={(e) => setFormData(prev => ({ ...prev, deliveryDate: e.target.value }))}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-                  />
                 </div>
-              </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
@@ -379,30 +542,109 @@ const EditSale: React.FC = () => {
                 />
               </div>
 
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Delivery Address
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <MapPin className="h-5 w-5 text-gray-400" />
+              {saleType === 'outstation' && selectedCustomer && (
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Delivery Address <span className="text-red-500">*</span>
+                  </label>
+                  
+                  {/* Address Selection */}
+                  {selectedCustomer.delivery_addresses && selectedCustomer.delivery_addresses.length > 0 ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">
+                          Select Address
+                        </label>
+                        <select
+                          value={isCustomAddress ? 'custom' : selectedAddressIndex.toString()}
+                          onChange={(e) => handleAddressSelection(e.target.value)}
+                          className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        >
+                          {selectedCustomer.delivery_addresses.map((addr, index) => (
+                            <option key={index} value={index.toString()}>
+                              {addr.label} {addr.is_default ? '(Default)' : ''}
+                            </option>
+                          ))}
+                          <option value="custom">Custom Address</option>
+                        </select>
+                      </div>
+                      
+                      {/* Address Display/Edit */}
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <MapPin className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <textarea
+                          value={formData.deliveryAddress}
+                          onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddress: e.target.value }))}
+                          rows={3}
+                          className={`block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 ${
+                            !isCustomAddress && selectedAddressIndex >= 0 ? 'bg-gray-50' : ''
+                          }`}
+                          placeholder="Enter delivery address..."
+                          required={saleType === 'outstation'}
+                          readOnly={!isCustomAddress && selectedAddressIndex >= 0}
+                        />
+                        {!isCustomAddress && selectedAddressIndex >= 0 && (
+                          <div className="absolute top-2 right-2">
+                            <button
+                              type="button"
+                              onClick={() => handleAddressSelection('custom')}
+                              className="text-blue-600 hover:text-blue-800"
+                              title="Edit address"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    // No saved addresses - show editable field
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <MapPin className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <textarea
+                        value={formData.deliveryAddress}
+                        onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddress: e.target.value }))}
+                        rows={3}
+                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        placeholder="Enter delivery address..."
+                        required={saleType === 'outstation'}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Customer Credit Information */}
+            {selectedCustomer && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Customer Credit Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500">Credit Limit:</span>
+                    <span className="ml-2 font-medium">₹{selectedCustomer.credit_limit.toLocaleString()}</span>
                   </div>
-                  <textarea
-                    value={formData.deliveryAddress}
-                    onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddress: e.target.value }))}
-                    rows={3}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-                    placeholder="Enter delivery address..."
-                  />
+                  <div>
+                    <span className="text-gray-500">Outstanding:</span>
+                    <span className="ml-2 font-medium">₹{selectedCustomer.current_balance.toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Available Credit:</span>
+                    <span className="ml-2 font-medium">₹{(selectedCustomer.credit_limit - selectedCustomer.current_balance).toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Payment Information */}
           <div className="border-t pt-6">
             <h2 className="text-lg font-medium text-gray-900 mb-4">Payment Information</h2>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-1">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   Payment Mode
@@ -418,22 +660,17 @@ const EditSale: React.FC = () => {
                   <option value="upi">UPI</option>
                 </select>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Payment Status
-                </label>
-                <select
-                  value={formData.paymentStatus}
-                  onChange={(e) => setFormData(prev => ({ ...prev, paymentStatus: e.target.value }))}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                >
-                  <option value="unpaid">Unpaid</option>
-                  <option value="partial">Partial</option>
-                  <option value="paid">Paid</option>
-                </select>
-              </div>
             </div>
+
+            {/* Credit Limit Warning */}
+            {formData.paymentMode === 'credit' && !creditCheck.valid && (
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-center">
+                  <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
+                  <span className="text-sm font-medium text-red-800">{creditCheck.message}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Items Section */}
@@ -564,21 +801,6 @@ const EditSale: React.FC = () => {
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Tax Rate (%)
-                  </label>
-                  <input
-                    type="number"
-                    value={taxRate}
-                    onChange={(e) => setTaxRate(Number(e.target.value))}
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                  />
-                </div>
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4">
@@ -590,10 +812,6 @@ const EditSale: React.FC = () => {
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Discount:</span>
                     <span className="text-gray-900">-₹{discountAmount.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Tax ({taxRate}%):</span>
-                    <span className="text-gray-900">₹{calculateTaxAmount().toFixed(2)}</span>
                   </div>
                   <div className="border-t pt-2 flex justify-between text-lg font-bold">
                     <span className="text-gray-900">Total:</span>
@@ -630,7 +848,7 @@ const EditSale: React.FC = () => {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || (formData.paymentMode === 'credit' && !creditCheck.valid)}
               className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Updating Order...' : 'Update Sales Order'}

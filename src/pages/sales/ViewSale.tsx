@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, ArrowLeft, User, Calendar, MapPin, CreditCard, FileText, Edit } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, User, Calendar, MapPin, CreditCard, FileText, Edit, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getSalesOrder } from '../../lib/api';
+
+interface DeliveryAddress {
+  label: string;
+  address: string;
+  is_default: boolean;
+}
 
 interface SalesOrderData {
   id: string;
@@ -14,6 +20,9 @@ interface SalesOrderData {
     contact: string;
     email: string;
     address: string;
+    delivery_addresses: DeliveryAddress[] | null;
+    credit_limit: number;
+    current_balance: number;
   };
   order_date: string;
   delivery_date: string | null;
@@ -103,6 +112,15 @@ const ViewSale: React.FC = () => {
     return orderData && (orderData.status === 'draft' || orderData.status === 'confirmed');
   };
 
+  const getSaleType = () => {
+    return orderData?.delivery_date || orderData?.delivery_address ? 'outstation' : 'counter';
+  };
+
+  const getAvailableCredit = () => {
+    if (!orderData) return 0;
+    return orderData.customer.credit_limit - orderData.customer.current_balance;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -118,6 +136,9 @@ const ViewSale: React.FC = () => {
       </div>
     );
   }
+
+  const saleType = getSaleType();
+  const availableCredit = getAvailableCredit();
 
   return (
     <div className="space-y-6">
@@ -157,7 +178,7 @@ const ViewSale: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Order Information */}
+          {/* Sale Type & Order Information */}
           <div className="bg-white shadow-sm rounded-lg">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-medium text-gray-900 flex items-center">
@@ -168,6 +189,14 @@ const ViewSale: React.FC = () => {
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Sale Type</label>
+                    <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${
+                      saleType === 'outstation' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                    }`}>
+                      {saleType === 'outstation' ? 'Outstation Sale' : 'Counter Sale'}
+                    </span>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">Order Number</label>
                     <p className="text-sm text-gray-900">{orderData.order_number}</p>
@@ -247,7 +276,7 @@ const ViewSale: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-500 mb-1">Address</label>
                     <p className="text-sm text-gray-900">{orderData.customer.address}</p>
                   </div>
-                  {orderData.delivery_address && orderData.delivery_address !== orderData.customer.address && (
+                  {orderData.delivery_address && (
                     <div>
                       <label className="block text-sm font-medium text-gray-500 mb-1">Delivery Address</label>
                       <div className="flex items-start">
@@ -257,6 +286,35 @@ const ViewSale: React.FC = () => {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Customer Credit Information */}
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Customer Credit Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500">Credit Limit:</span>
+                    <span className="ml-2 font-medium">₹{orderData.customer.credit_limit.toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Outstanding:</span>
+                    <span className="ml-2 font-medium">₹{orderData.customer.current_balance.toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Available Credit:</span>
+                    <span className="ml-2 font-medium">₹{availableCredit.toLocaleString()}</span>
+                  </div>
+                </div>
+                {orderData.payment_mode === 'credit' && orderData.total_amount > availableCredit && (
+                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-center">
+                      <AlertTriangle className="h-4 w-4 text-red-600 mr-2" />
+                      <span className="text-sm font-medium text-red-800">
+                        Order total exceeds available credit limit
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -348,12 +406,6 @@ const ViewSale: React.FC = () => {
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Discount:</span>
                     <span className="text-red-600">-₹{orderData.discount_amount.toFixed(2)}</span>
-                  </div>
-                )}
-                {orderData.tax_amount > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Tax:</span>
-                    <span className="text-gray-900">₹{orderData.tax_amount.toFixed(2)}</span>
                   </div>
                 )}
                 <div className="border-t pt-3 flex justify-between text-lg font-bold">

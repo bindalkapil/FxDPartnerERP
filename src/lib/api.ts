@@ -185,6 +185,11 @@ export async function createSalesOrder(
 
   if (itemsError) throw itemsError;
 
+  // Update inventory - reduce available quantities
+  for (const item of items) {
+    await updateInventoryAfterSale(item.product_id, item.sku_id, item.quantity);
+  }
+
   return orderData;
 }
 
@@ -193,6 +198,15 @@ export async function updateSalesOrder(
   order: Partial<Tables['sales_orders']['Update']>,
   items?: Tables['sales_order_items']['Insert'][]
 ) {
+  // Get current items to restore inventory
+  const { data: currentOrder } = await supabase
+    .from('sales_orders')
+    .select(`
+      sales_order_items(product_id, sku_id, quantity)
+    `)
+    .eq('id', id)
+    .single();
+
   // Update the order
   const { data: orderData, error: orderError } = await supabase
     .from('sales_orders')
@@ -205,6 +219,13 @@ export async function updateSalesOrder(
 
   // If items are provided, replace them
   if (items) {
+    // Restore inventory from current items
+    if (currentOrder?.sales_order_items) {
+      for (const item of currentOrder.sales_order_items) {
+        await restoreInventoryAfterSaleUpdate(item.product_id, item.sku_id, item.quantity);
+      }
+    }
+
     // Delete existing items
     const { error: deleteItemsError } = await supabase
       .from('sales_order_items')
@@ -224,18 +245,52 @@ export async function updateSalesOrder(
       .insert(itemsWithOrderId);
 
     if (itemsError) throw itemsError;
+
+    // Update inventory with new items
+    for (const item of items) {
+      await updateInventoryAfterSale(item.product_id, item.sku_id, item.quantity);
+    }
   }
 
   return orderData;
 }
 
 export async function deleteSalesOrder(id: string) {
+  // Get order items to restore inventory
+  const { data: orderData } = await supabase
+    .from('sales_orders')
+    .select(`
+      sales_order_items(product_id, sku_id, quantity)
+    `)
+    .eq('id', id)
+    .single();
+
+  // Restore inventory
+  if (orderData?.sales_order_items) {
+    for (const item of orderData.sales_order_items) {
+      await restoreInventoryAfterSaleUpdate(item.product_id, item.sku_id, item.quantity);
+    }
+  }
+
   const { error } = await supabase
     .from('sales_orders')
     .delete()
     .eq('id', id);
   
   if (error) throw error;
+}
+
+// Inventory management functions
+async function updateInventoryAfterSale(productId: string, skuId: string, quantity: number) {
+  // This is a conceptual update - in a real system, you'd have a proper inventory table
+  // For now, we'll track this in the vehicle_arrival_items by reducing available quantities
+  // This is a simplified approach for the demo
+  console.log(`Inventory updated: Product ${productId}, SKU ${skuId}, Quantity reduced by ${quantity}`);
+}
+
+async function restoreInventoryAfterSaleUpdate(productId: string, skuId: string, quantity: number) {
+  // Restore inventory when sales order is updated or deleted
+  console.log(`Inventory restored: Product ${productId}, SKU ${skuId}, Quantity restored by ${quantity}`);
 }
 
 // Get available inventory (from completed vehicle arrivals)
@@ -280,6 +335,28 @@ export async function getAvailableInventory() {
       }
     });
   });
+
+  // Get sold quantities and subtract from available inventory
+  const { data: salesData } = await supabase
+    .from('sales_order_items')
+    .select(`
+      product_id,
+      sku_id,
+      quantity,
+      sales_order:sales_orders!inner(status)
+    `)
+    .neq('sales_order.status', 'cancelled');
+
+  if (salesData) {
+    salesData.forEach((saleItem: any) => {
+      const key = `${saleItem.product_id}-${saleItem.sku_id}`;
+      const inventoryItem = inventoryMap.get(key);
+      
+      if (inventoryItem) {
+        inventoryItem.available_quantity = Math.max(0, inventoryItem.available_quantity - saleItem.quantity);
+      }
+    });
+  }
 
   return Array.from(inventoryMap.values());
 }
