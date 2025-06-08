@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Search, Filter, RefreshCw, ChevronDown, ChevronUp, Truck, Calendar } from 'lucide-react';
+import { Package, Search, Filter, RefreshCw, ChevronDown, ChevronUp, Truck, Calendar, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getVehicleArrivals } from '../../lib/api';
 
@@ -23,6 +23,7 @@ interface InventoryItem {
     vehicleNumber: string | null;
     quantity: number;
     weight: number;
+    status: string;
   }>;
 }
 
@@ -33,6 +34,7 @@ const Inventory: React.FC = () => {
   const [selectedUnitType, setSelectedUnitType] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadInventoryData();
@@ -40,15 +42,32 @@ const Inventory: React.FC = () => {
 
   const loadInventoryData = async () => {
     try {
-      // Get all completed vehicle arrivals
+      setError(null);
+      setLoading(true);
+      
+      // Get all vehicle arrivals (not just completed ones)
       const arrivals = await getVehicleArrivals();
-      const completedArrivals = arrivals.filter(arrival => arrival.status === 'completed');
+      
+      if (!arrivals || arrivals.length === 0) {
+        setInventoryItems([]);
+        return;
+      }
 
       // Group items by product and SKU to create inventory
       const inventoryMap = new Map<string, InventoryItem>();
 
-      completedArrivals.forEach(arrival => {
+      arrivals.forEach(arrival => {
+        // Only process arrivals that have items
+        if (!arrival.vehicle_arrival_items || arrival.vehicle_arrival_items.length === 0) {
+          return;
+        }
+
         arrival.vehicle_arrival_items.forEach((item: any) => {
+          // Skip items without proper product/sku data
+          if (!item.product || !item.sku) {
+            return;
+          }
+
           const key = `${item.product.id}-${item.sku.id}`;
           
           if (inventoryMap.has(key)) {
@@ -71,7 +90,8 @@ const Inventory: React.FC = () => {
               supplier: arrival.supplier,
               vehicleNumber: arrival.vehicle_number,
               quantity: item.quantity,
-              weight: item.total_weight
+              weight: item.total_weight,
+              status: arrival.status
             });
           } else {
             // Create new inventory item
@@ -94,7 +114,8 @@ const Inventory: React.FC = () => {
                 supplier: arrival.supplier,
                 vehicleNumber: arrival.vehicle_number,
                 quantity: item.quantity,
-                weight: item.total_weight
+                weight: item.total_weight,
+                status: arrival.status
               }]
             });
           }
@@ -108,9 +129,15 @@ const Inventory: React.FC = () => {
         );
       });
 
-      setInventoryItems(Array.from(inventoryMap.values()));
+      const inventoryArray = Array.from(inventoryMap.values());
+      
+      // Sort inventory items by product name
+      inventoryArray.sort((a, b) => a.productName.localeCompare(b.productName));
+      
+      setInventoryItems(inventoryArray);
     } catch (error) {
       console.error('Error loading inventory data:', error);
+      setError('Failed to load inventory data. Please check your connection and try again.');
       toast.error('Failed to load inventory data');
     } finally {
       setLoading(false);
@@ -146,12 +173,54 @@ const Inventory: React.FC = () => {
     };
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'po-created':
+        return 'bg-blue-100 text-blue-800';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
   const inventoryStats = getTotalInventoryValue();
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-gray-500">Loading inventory...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <Package className="h-6 w-6 text-green-600 mr-2" />
+            <h1 className="text-2xl font-bold text-gray-800">Inventory Management</h1>
+          </div>
+          <button 
+            onClick={loadInventoryData}
+            className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
+          >
+            <RefreshCw className="h-4 w-4 mr-1" />
+            Retry
+          </button>
+        </div>
+        
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex items-center">
+            <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+            <span className="text-sm font-medium text-red-800">{error}</span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -355,7 +424,7 @@ const Inventory: React.FC = () => {
                           <div className="space-y-3">
                             {item.vehicleArrivals.map((arrival, index) => (
                               <div key={index} className="bg-white p-3 rounded-md border border-gray-200">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                                <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
                                   <div>
                                     <span className="font-medium text-gray-700">Arrival Date:</span>
                                     <div className="text-gray-900">{formatDateTime(arrival.arrivalTime)}</div>
@@ -373,6 +442,14 @@ const Inventory: React.FC = () => {
                                     <div className="text-gray-900">
                                       {arrival.quantity} {item.unitType === 'box' ? 'boxes' : 'kg'} 
                                       ({arrival.weight} kg total)
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-700">Status:</span>
+                                    <div>
+                                      <span className={`inline-flex px-2 py-1 text-xs leading-4 font-semibold rounded-full ${getStatusColor(arrival.status)}`}>
+                                        {arrival.status.charAt(0).toUpperCase() + arrival.status.slice(1)}
+                                      </span>
                                     </div>
                                   </div>
                                 </div>
@@ -395,7 +472,7 @@ const Inventory: React.FC = () => {
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Inventory Items Found</h3>
             <p className="text-sm text-gray-500">
               {inventoryItems.length === 0 
-                ? "No completed vehicle arrivals found. Inventory will be populated automatically when vehicle arrivals are marked as completed."
+                ? "No vehicle arrivals found. Inventory will be populated automatically when vehicle arrivals are recorded."
                 : "No items match your current search and filter criteria."
               }
             </p>
@@ -415,10 +492,11 @@ const Inventory: React.FC = () => {
             </h3>
             <div className="mt-2 text-sm text-blue-700">
               <ul className="list-disc list-inside space-y-1">
-                <li>Inventory is automatically populated from completed vehicle arrivals</li>
-                <li>Stock quantities are aggregated from all completed arrivals for each product/SKU combination</li>
+                <li>Inventory is automatically populated from all vehicle arrivals (regardless of status)</li>
+                <li>Stock quantities are aggregated from all arrivals for each product/SKU combination</li>
                 <li>Click on any row to view detailed arrival history for that item</li>
                 <li>Use the refresh button to update inventory with the latest arrival data</li>
+                <li>Status indicators show the current state of each vehicle arrival</li>
               </ul>
             </div>
           </div>
