@@ -20,6 +20,7 @@ interface SalesOrder {
   tax_amount: number;
   discount_amount: number;
   total_amount: number;
+  status: string;
   sale_type: string;
   sales_order_items: Array<{
     product_name: string;
@@ -35,6 +36,7 @@ const Sales: React.FC = () => {
   const navigate = useNavigate();
   const [sales, setSales] = useState<SalesOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   useEffect(() => {
@@ -78,13 +80,53 @@ const Sales: React.FC = () => {
       sale.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.order_number.toLowerCase().includes(searchTerm.toLowerCase());
       
-    return matchesSearch;
+    const matchesStatus = selectedStatus === 'all' || sale.status === selectedStatus;
+    
+    return matchesSearch && matchesStatus;
   });
 
   const getSaleTypeColor = (saleType: string) => {
     return saleType === 'outstation' 
       ? 'bg-blue-100 text-blue-800' 
       : 'bg-green-100 text-green-800';
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'processing':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'dispatched':
+        return 'bg-blue-100 text-blue-800';
+      case 'delivered':
+        return 'bg-green-100 text-green-800';
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800';
+      case 'draft':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusDisplayText = (status: string) => {
+    switch (status) {
+      case 'processing':
+        return 'Processing';
+      case 'dispatched':
+        return 'Dispatched';
+      case 'delivered':
+        return 'Delivered';
+      case 'completed':
+        return 'Completed';
+      case 'cancelled':
+        return 'Cancelled';
+      case 'draft':
+        return 'Draft';
+      default:
+        return status.charAt(0).toUpperCase() + status.slice(1);
+    }
   };
 
   const getPaymentModeDisplay = (mode: string) => {
@@ -131,7 +173,7 @@ const Sales: React.FC = () => {
       </div>
 
       {/* Sales Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
@@ -156,6 +198,32 @@ const Sales: React.FC = () => {
             </div>
           </div>
         </div>
+        <div className="bg-white p-4 rounded-lg shadow-sm">
+          <div className="flex justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Processing Orders</p>
+              <p className="text-2xl font-bold text-gray-800">
+                {sales.filter(sale => sale.status === 'processing').length}
+              </p>
+            </div>
+            <div className="h-10 w-10 flex items-center justify-center rounded-full bg-yellow-100 text-yellow-600">
+              <FileText className="h-5 w-5" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow-sm">
+          <div className="flex justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Completed</p>
+              <p className="text-2xl font-bold text-gray-800">
+                {sales.filter(sale => sale.status === 'completed' || sale.status === 'delivered').length}
+              </p>
+            </div>
+            <div className="h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
+              <ShoppingCart className="h-5 w-5" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Filters and Search */}
@@ -171,6 +239,25 @@ const Sales: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+        </div>
+        
+        <div className="flex flex-wrap gap-3">
+          <div className="flex items-center space-x-2">
+            <Filter className="h-4 w-4 text-gray-500" />
+            <select
+              className="border border-gray-300 rounded-md text-sm py-2 px-3 bg-white focus:outline-none focus:ring-green-500 focus:border-green-500"
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+            >
+              <option value="all">All Status</option>
+              <option value="draft">Draft</option>
+              <option value="processing">Processing</option>
+              <option value="dispatched">Dispatched</option>
+              <option value="delivered">Delivered</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -196,7 +283,7 @@ const Sales: React.FC = () => {
                   Sale Type
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Payment Method
+                  Status
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
@@ -240,6 +327,7 @@ const Sales: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">₹{sale.total_amount.toLocaleString()}</div>
+                    <div className="text-sm text-gray-500">{getPaymentModeDisplay(sale.payment_mode)}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getSaleTypeColor(sale.sale_type)}`}>
@@ -247,7 +335,9 @@ const Sales: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{getPaymentModeDisplay(sale.payment_mode)}</div>
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(sale.status)}`}>
+                      {getStatusDisplayText(sale.status)}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
@@ -258,20 +348,31 @@ const Sales: React.FC = () => {
                       >
                         <Eye className="h-4 w-4" />
                       </button>
+                      {(sale.status === 'draft' || sale.status === 'processing') && (
+                        <button 
+                          onClick={() => navigate(`/sales/edit/${sale.id}`)}
+                          className="text-gray-600 hover:text-gray-900"
+                          title="Edit Order"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
                       <button 
-                        onClick={() => navigate(`/sales/edit/${sale.id}`)}
-                        className="text-gray-600 hover:text-gray-900"
-                        title="Edit Order"
+                        onClick={() => navigate(`/sales/invoice/${sale.id}`)}
+                        className="text-green-600 hover:text-green-900"
+                        title="Generate Invoice"
                       >
-                        <Pencil className="h-4 w-4" />
+                        <FileText className="h-4 w-4" />
                       </button>
-                      <button 
-                        onClick={() => handleDeleteOrder(sale.id)}
-                        className="text-red-600 hover:text-red-900"
-                        title="Delete Order"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {sale.status === 'draft' && (
+                        <button 
+                          onClick={() => handleDeleteOrder(sale.id)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Delete Order"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

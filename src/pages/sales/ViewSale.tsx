@@ -83,7 +83,7 @@ const ViewSale: React.FC = () => {
   };
 
   const canEdit = () => {
-    return orderData && (orderData.status === 'draft' || orderData.status === 'confirmed');
+    return orderData && (orderData.status === 'draft' || orderData.status === 'processing');
   };
 
   const getSaleType = () => {
@@ -112,16 +112,39 @@ const ViewSale: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
-        return 'bg-green-100 text-green-800';
-      case 'dispatched':
-        return 'bg-blue-100 text-blue-800';
       case 'processing':
         return 'bg-yellow-100 text-yellow-800';
+      case 'dispatched':
+        return 'bg-blue-100 text-blue-800';
       case 'delivered':
         return 'bg-green-100 text-green-800';
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800';
+      case 'draft':
+        return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusDisplayText = (status: string) => {
+    switch (status) {
+      case 'processing':
+        return 'Processing';
+      case 'dispatched':
+        return 'Dispatched';
+      case 'delivered':
+        return 'Delivered';
+      case 'completed':
+        return 'Completed';
+      case 'cancelled':
+        return 'Cancelled';
+      case 'draft':
+        return 'Draft';
+      default:
+        return status.charAt(0).toUpperCase() + status.slice(1);
     }
   };
 
@@ -205,7 +228,7 @@ const ViewSale: React.FC = () => {
               {/* Status Badge */}
               <div>
                 <span className={`inline-flex px-4 py-2 text-sm font-medium rounded-full ${getStatusColor(orderData.status)}`}>
-                  {orderData.status.charAt(0).toUpperCase() + orderData.status.slice(1)}
+                  {getStatusDisplayText(orderData.status)}
                 </span>
               </div>
             </div>
@@ -308,6 +331,12 @@ const ViewSale: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">Payment Mode</label>
                     <p className="text-sm text-gray-900">{getPaymentModeDisplay(orderData.payment_mode)}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Current Status</label>
+                    <span className={`inline-flex px-3 py-1 text-xs leading-5 font-semibold rounded-full ${getStatusColor(orderData.status)}`}>
+                      {getStatusDisplayText(orderData.status)}
+                    </span>
                   </div>
                 </div>
               </div>
