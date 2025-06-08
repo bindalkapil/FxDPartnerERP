@@ -66,6 +66,60 @@ export type Database = {
         }
         Relationships: []
       }
+      payments: {
+        Row: {
+          id: string
+          type: string
+          amount: number
+          payment_date: string
+          party_id: string | null
+          party_type: string | null
+          party_name: string | null
+          reference_id: string | null
+          reference_type: string | null
+          reference_number: string | null
+          mode: string
+          status: string
+          notes: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          type: string
+          amount: number
+          payment_date?: string
+          party_id?: string | null
+          party_type?: string | null
+          party_name?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          reference_number?: string | null
+          mode?: string
+          status?: string
+          notes?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          type?: string
+          amount?: number
+          payment_date?: string
+          party_id?: string | null
+          party_type?: string | null
+          party_name?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          reference_number?: string | null
+          mode?: string
+          status?: string
+          notes?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           id: string

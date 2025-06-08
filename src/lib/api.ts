@@ -122,6 +122,17 @@ export async function updateCustomer(id: string, customer: Tables['customers']['
   return data;
 }
 
+// Suppliers
+export async function getSuppliers() {
+  const { data, error } = await supabase
+    .from('suppliers')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data;
+}
+
 // Sales Orders
 export async function getSalesOrders() {
   const { data, error } = await supabase
@@ -769,6 +780,49 @@ async function updatePurchaseRecord(
   }
 
   return recordData;
+}
+
+// Payments API functions
+export async function getPayments() {
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*')
+    .order('payment_date', { ascending: false });
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function createPayment(payment: Tables['payments']['Insert']) {
+  const { data, error } = await supabase
+    .from('payments')
+    .insert(payment)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function updatePayment(id: string, payment: Tables['payments']['Update']) {
+  const { data, error } = await supabase
+    .from('payments')
+    .update(payment)
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function deletePayment(id: string) {
+  const { error } = await supabase
+    .from('payments')
+    .delete()
+    .eq('id', id);
+  
+  if (error) throw error;
 }
 
 // Storage
