@@ -271,6 +271,7 @@ export type Database = {
         Row: {
           id: string
           vehicle_arrival_id: string | null
+          supplier_id: string | null
           record_number: string
           supplier: string
           record_date: string
@@ -289,6 +290,7 @@ export type Database = {
         Insert: {
           id?: string
           vehicle_arrival_id?: string | null
+          supplier_id?: string | null
           record_number: string
           supplier: string
           record_date: string
@@ -307,6 +309,7 @@ export type Database = {
         Update: {
           id?: string
           vehicle_arrival_id?: string | null
+          supplier_id?: string | null
           record_number?: string
           supplier?: string
           record_date?: string
@@ -328,6 +331,13 @@ export type Database = {
             columns: ["vehicle_arrival_id"]
             isOneToOne: false
             referencedRelation: "vehicle_arrivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_records_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
             referencedColumns: ["id"]
           }
         ]

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Package2, Plus, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { FileText, ArrowLeft, Plus, Trash2, Building, Calendar, DollarSign, Package } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getVehicleArrival, getProducts, updateVehicleArrivalStatus, createPurchaseRecord } from '../../lib/api';
+import { getVehicleArrivals, createPurchaseRecord, getSuppliers } from '../../lib/api';
 
-interface PurchaseOrderItem {
+interface PurchaseRecordItem {
   id: string;
   productId: string;
   productName: string;
@@ -14,304 +14,161 @@ interface PurchaseOrderItem {
   quantity: number;
   unitType: string;
   totalWeight: number;
-  commission?: number;
-  unitPrice?: number;
-  marketPrice?: number;
+  marketPrice: number;
+  commission: number;
+  unitPrice: number;
   total: number;
 }
 
 interface AdditionalCost {
+  id: string;
   name: string;
   amount: number;
   type: 'fixed' | 'percentage' | 'per_box';
+  calculatedAmount: number;
 }
 
-interface PurchaseOrderData {
-  id?: string;
-  orderNumber?: string;
+interface VehicleArrival {
+  id: string;
   supplier: string;
-  arrivalTimestamp: string;
-  pricingModel: 'commission' | 'fixed';
-  items: PurchaseOrderItem[];
-  additionalCosts: AdditionalCost[];
-  totalAmount: number;
+  arrival_time: string;
+  vehicle_number: string | null;
+  vehicle_arrival_items: Array<{
+    id: string;
+    product: {
+      id: string;
+      name: string;
+      category: string;
+    };
+    sku: {
+      id: string;
+      code: string;
+    };
+    quantity: number;
+    unit_type: string;
+    total_weight: number;
+  }>;
 }
 
-interface NewRecordPurchaseProps {
-  initialData?: PurchaseOrderData;
+interface Supplier {
+  id: string;
+  company_name: string;
+  payment_terms: number;
 }
 
-const defaultAdditionalCosts: AdditionalCost[] = [
-  { name: 'Labour Cost', amount: 5, type: 'per_box' },
-  { name: 'Handling Cost', amount: 3, type: 'per_box' },
-  { name: 'APMC Charge', amount: 1, type: 'percentage' },
-  { name: 'Vehicle Charges', amount: 2000, type: 'fixed' }
-];
-
-const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) => {
+const NewRecordPurchase: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const queryParams = new URLSearchParams(location.search);
-  const vehicleId = queryParams.get('vehicleId');
-
-  const [loading, setLoading] = useState(false);
-  const [products, setProducts] = useState<any[]>([]);
-  const [vehicleData, setVehicleData] = useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [vehicleArrivals, setVehicleArrivals] = useState<VehicleArrival[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [formData, setFormData] = useState({
-    supplier: initialData?.supplier || '',
-    arrivalTimestamp: initialData?.arrivalTimestamp || '',
-    pricingModel: initialData?.pricingModel || 'commission'
+    vehicleArrivalId: '',
+    supplierId: '',
+    recordNumber: '',
+    supplier: '',
+    recordDate: new Date().toISOString().slice(0, 16),
+    arrivalTimestamp: '',
+    pricingModel: 'commission',
+    defaultCommission: 8,
+    paymentTerms: 30,
+    notes: ''
   });
 
-  const [items, setItems] = useState<PurchaseOrderItem[]>(initialData?.items || []);
-  const [commission, setCommission] = useState(8); // Default commission
-  const [additionalCosts, setAdditionalCosts] = useState<AdditionalCost[]>(
-    initialData?.additionalCosts || [...defaultAdditionalCosts]
-  );
-  
-  const [newCost, setNewCost] = useState({
-    name: '',
-    amount: 0,
-    type: 'fixed' as const | 'percentage' | 'per_box'
-  });
+  const [items, setItems] = useState<PurchaseRecordItem[]>([]);
+  const [additionalCosts, setAdditionalCosts] = useState<AdditionalCost[]>([]);
 
   useEffect(() => {
-    loadProducts();
-    if (vehicleId && !initialData) {
-      loadVehicleData();
-    }
-  }, [vehicleId, initialData]);
+    loadInitialData();
+  }, []);
 
-  const loadProducts = async () => {
+  const loadInitialData = async () => {
     try {
-      const data = await getProducts();
-      setProducts(data);
-    } catch (error) {
-      console.error('Error loading products:', error);
-      toast.error('Failed to load products');
-    }
-  };
-
-  const loadVehicleData = async () => {
-    if (!vehicleId) return;
-    
-    setLoading(true);
-    try {
-      const data = await getVehicleArrival(vehicleId);
-      setVehicleData(data);
+      const [arrivalsData, suppliersData] = await Promise.all([
+        getVehicleArrivals(),
+        getSuppliers()
+      ]);
       
-      // Format arrival_time to YYYY-MM-DDTHH:mm
-      const formatDateTime = (dateString: string) => {
-        const date = new Date(dateString);
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        return `${year}-${month}-${day}T${hours}:${minutes}`;
-      };
-
-      // Pre-populate form with vehicle data
-      setFormData(prev => ({
-        ...prev,
-        supplier: data.supplier,
-        arrivalTimestamp: formatDateTime(data.arrival_time)
-      }));
-
-      // Convert vehicle arrival items to purchase order items
-      const poItems: PurchaseOrderItem[] = data.vehicle_arrival_items.map((item: any, index: number) => ({
-        id: `item_${index}`,
-        productId: item.product_id,
-        productName: item.product.name,
-        skuId: item.sku_id,
-        skuCode: item.sku.code,
-        category: item.product.category,
-        quantity: item.quantity,
-        unitType: item.unit_type,
-        totalWeight: item.total_weight,
-        commission: commission,
-        marketPrice: 0,
-        unitPrice: 0,
-        total: 0
-      }));
-
-      setItems(poItems);
+      // Filter completed arrivals that don't have purchase records yet
+      const completedArrivals = arrivalsData?.filter(arrival => 
+        arrival.status === 'completed'
+      ) || [];
+      
+      setVehicleArrivals(completedArrivals);
+      setSuppliers(suppliersData || []);
     } catch (error) {
-      console.error('Error loading vehicle data:', error);
-      toast.error('Failed to load vehicle arrival data');
+      console.error('Error loading data:', error);
+      toast.error('Failed to load required data');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCommissionChange = (value: number) => {
-    setCommission(value);
-    setItems(prev => prev.map(item => ({
-      ...item,
-      commission: value,
-      total: calculateItemTotal({ ...item, commission: value })
-    })));
-  };
+  const handleVehicleArrivalChange = (arrivalId: string) => {
+    const arrival = vehicleArrivals.find(a => a.id === arrivalId);
+    if (arrival) {
+      // Find supplier by name
+      const supplier = suppliers.find(s => s.company_name === arrival.supplier);
+      
+      setFormData(prev => ({
+        ...prev,
+        vehicleArrivalId: arrivalId,
+        supplierId: supplier?.id || '',
+        supplier: arrival.supplier,
+        arrivalTimestamp: arrival.arrival_time,
+        paymentTerms: supplier?.payment_terms || 30
+      }));
 
-  const handleItemCommissionChange = (id: string, value: number) => {
-    setItems(prev => prev.map(item => 
-      item.id === id ? { 
-        ...item, 
-        commission: value,
-        total: calculateItemTotal({ ...item, commission: value })
-      } : item
-    ));
-  };
+      // Populate items from vehicle arrival
+      const arrivalItems = arrival.vehicle_arrival_items.map(item => ({
+        id: `item_${Date.now()}_${Math.random()}`,
+        productId: item.product.id,
+        productName: item.product.name,
+        skuId: item.sku.id,
+        skuCode: item.sku.code,
+        category: item.product.category,
+        quantity: item.quantity,
+        unitType: item.unit_type,
+        totalWeight: item.total_weight,
+        marketPrice: 0,
+        commission: formData.defaultCommission,
+        unitPrice: 0,
+        total: 0
+      }));
 
-  const handleItemPriceChange = (id: string, field: 'unitPrice' | 'marketPrice', value: number) => {
-    setItems(prev => prev.map(item => 
-      item.id === id ? { 
-        ...item, 
-        [field]: value,
-        total: calculateItemTotal({ ...item, [field]: value })
-      } : item
-    ));
-  };
-
-  const calculateItemTotal = (item: PurchaseOrderItem): number => {
-    if (formData.pricingModel === 'fixed') {
-      return (item.unitPrice || 0) * item.quantity;
-    }
-
-    const marketPrice = item.marketPrice || 0;
-    const commission = item.commission || 0;
-    const unitPrice = marketPrice - (marketPrice * commission / 100);
-    return unitPrice * item.quantity;
-  };
-
-  const calculateUnitPrice = (marketPrice: number, commission: number): number => {
-    return marketPrice - (marketPrice * commission / 100);
-  };
-
-  const calculateTotalBoxes = (): number => {
-    return items.reduce((sum, item) => sum + item.quantity, 0);
-  };
-
-  const calculateSingleAdditionalCost = (cost: AdditionalCost, marketValue: number, totalBoxes: number): number => {
-    if (formData.pricingModel === 'fixed' && cost.name !== 'Vehicle Charges') {
-      return 0;
-    }
-
-    switch (cost.type) {
-      case 'per_box':
-        return cost.amount * totalBoxes;
-      case 'percentage':
-        return marketValue * (cost.amount / 100);
-      case 'fixed':
-        return cost.amount;
-      default:
-        return 0;
+      setItems(arrivalItems);
     }
   };
 
-  const calculateAdditionalCosts = (marketValue: number = 0): number => {
-    const totalBoxes = calculateTotalBoxes();
-    
-    return additionalCosts.reduce((total, cost) => {
-      return total + calculateSingleAdditionalCost(cost, marketValue, totalBoxes);
-    }, 0);
-  };
-
-  const handleAdditionalCostChange = (index: number, field: keyof AdditionalCost, value: any) => {
-    setAdditionalCosts(prev => {
-      const newCosts = [...prev];
-      newCosts[index] = {
-        ...newCosts[index],
-        [field]: field === 'amount' ? Number(value) : value
-      };
-      return newCosts;
-    });
-  };
-
-  const calculateTotalAmount = (): number => {
-    const itemsTotal = items.reduce((sum, item) => sum + item.total, 0);
-    
-    if (formData.pricingModel === 'fixed') {
-      return itemsTotal - calculateAdditionalCosts(itemsTotal);
+  const handleSupplierChange = (supplierId: string) => {
+    const supplier = suppliers.find(s => s.id === supplierId);
+    if (supplier) {
+      setFormData(prev => ({
+        ...prev,
+        supplierId,
+        supplier: supplier.company_name,
+        paymentTerms: supplier.payment_terms
+      }));
     }
-
-    const marketValue = items.reduce((sum, item) => sum + ((item.marketPrice || 0) * item.quantity), 0);
-    return itemsTotal - calculateAdditionalCosts(marketValue);
   };
 
-  const handleAddCost = () => {
-    if (!newCost.name || newCost.amount <= 0) {
-      toast.error('Please enter valid cost details');
-      return;
-    }
-    setAdditionalCosts(prev => [...prev, newCost]);
-    setNewCost({ name: '', amount: 0, type: 'fixed' });
-  };
-
-  const handleRemoveCost = (index: number) => {
-    setAdditionalCosts(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleAddItem = () => {
-    if (products.length === 0) {
-      toast.error('No products available. Please add products first.');
-      return;
-    }
-
-    const newItem: PurchaseOrderItem = {
-      id: `item_${Date.now()}`,
-      productId: '',
-      productName: '',
-      skuId: '',
-      skuCode: '',
-      category: '',
-      quantity: 0,
-      unitType: 'box',
-      totalWeight: 0,
-      commission: commission,
-      marketPrice: 0,
-      unitPrice: 0,
-      total: 0
-    };
-
-    setItems(prev => [...prev, newItem]);
-  };
-
-  const handleRemoveItem = (id: string) => {
-    setItems(prev => prev.filter(item => item.id !== id));
-  };
-
-  const handleItemChange = (id: string, field: keyof PurchaseOrderItem, value: any) => {
+  const handleItemChange = (id: string, field: keyof PurchaseRecordItem, value: any) => {
     setItems(prev => prev.map(item => {
       if (item.id === id) {
         const updatedItem = { ...item, [field]: value };
         
-        // If product is changed, update related fields
-        if (field === 'productId') {
-          const product = products.find(p => p.id === value);
-          if (product) {
-            updatedItem.productName = product.name;
-            updatedItem.category = product.category;
-            updatedItem.skuId = '';
-            updatedItem.skuCode = '';
+        // Recalculate unit price and total based on pricing model
+        if (field === 'marketPrice' || field === 'commission') {
+          if (formData.pricingModel === 'commission') {
+            updatedItem.unitPrice = updatedItem.marketPrice * (1 - updatedItem.commission / 100);
           }
+          updatedItem.total = updatedItem.quantity * updatedItem.unitPrice;
+        } else if (field === 'unitPrice') {
+          updatedItem.total = updatedItem.quantity * updatedItem.unitPrice;
+        } else if (field === 'quantity') {
+          updatedItem.total = updatedItem.quantity * updatedItem.unitPrice;
         }
-        
-        // If SKU is changed, update SKU code
-        if (field === 'skuId') {
-          const product = products.find(p => p.id === item.productId);
-          if (product) {
-            const sku = product.skus.find((s: any) => s.id === value);
-            if (sku) {
-              updatedItem.skuCode = sku.code;
-              updatedItem.unitType = sku.unit_type;
-            }
-          }
-        }
-
-        // Recalculate total
-        updatedItem.total = calculateItemTotal(updatedItem);
         
         return updatedItem;
       }
@@ -319,16 +176,70 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
     }));
   };
 
+  const handleAddCost = () => {
+    const newCost: AdditionalCost = {
+      id: `cost_${Date.now()}`,
+      name: '',
+      amount: 0,
+      type: 'fixed',
+      calculatedAmount: 0
+    };
+    setAdditionalCosts(prev => [...prev, newCost]);
+  };
+
+  const handleRemoveCost = (id: string) => {
+    setAdditionalCosts(prev => prev.filter(cost => cost.id !== id));
+  };
+
+  const handleCostChange = (id: string, field: keyof AdditionalCost, value: any) => {
+    setAdditionalCosts(prev => prev.map(cost => {
+      if (cost.id === id) {
+        const updatedCost = { ...cost, [field]: value };
+        
+        // Calculate the actual cost amount
+        const itemsSubtotal = calculateItemsSubtotal();
+        const totalBoxes = items.reduce((sum, item) => sum + (item.unitType === 'box' ? item.quantity : 0), 0);
+        
+        switch (updatedCost.type) {
+          case 'fixed':
+            updatedCost.calculatedAmount = updatedCost.amount;
+            break;
+          case 'percentage':
+            updatedCost.calculatedAmount = (itemsSubtotal * updatedCost.amount) / 100;
+            break;
+          case 'per_box':
+            updatedCost.calculatedAmount = updatedCost.amount * totalBoxes;
+            break;
+        }
+        
+        return updatedCost;
+      }
+      return cost;
+    }));
+  };
+
+  const calculateItemsSubtotal = () => {
+    return items.reduce((sum, item) => sum + item.total, 0);
+  };
+
+  const calculateAdditionalCostsTotal = () => {
+    return additionalCosts.reduce((sum, cost) => sum + cost.calculatedAmount, 0);
+  };
+
+  const calculateTotal = () => {
+    return calculateItemsSubtotal() + calculateAdditionalCostsTotal();
+  };
+
   const generateRecordNumber = () => {
     const timestamp = Date.now();
-    return `PR-${timestamp.toString().slice(-8)}`;
+    return `PR-${new Date().getFullYear()}-${timestamp.toString().slice(-6)}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.supplier || !formData.arrivalTimestamp) {
-      toast.error('Please fill in all required fields');
+    if (!formData.supplierId) {
+      toast.error('Please select a supplier');
       return;
     }
 
@@ -339,45 +250,35 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
 
     // Validate items
     for (const item of items) {
-      if (!item.productId || !item.skuId || item.quantity <= 0) {
-        toast.error('Please complete all item details');
+      if (item.quantity <= 0 || item.unitPrice <= 0) {
+        toast.error('Please complete all item details with valid values');
         return;
-      }
-
-      if (formData.pricingModel === 'fixed') {
-        if (!item.unitPrice || item.unitPrice <= 0) {
-          toast.error('Please enter valid unit prices for all items');
-          return;
-        }
-      } else {
-        if (!item.marketPrice || item.marketPrice <= 0) {
-          toast.error('Please enter valid market prices for all items');
-          return;
-        }
       }
     }
 
+    setIsSubmitting(true);
+
     try {
-      const itemsSubtotal = items.reduce((sum, item) => sum + item.total, 0);
-      const marketValue = items.reduce((sum, item) => sum + ((item.marketPrice || 0) * item.quantity), 0);
-      const additionalCostsTotal = calculateAdditionalCosts(marketValue);
-      const totalAmount = calculateTotalAmount();
+      const itemsSubtotal = calculateItemsSubtotal();
+      const additionalCostsTotal = calculateAdditionalCostsTotal();
+      const totalAmount = calculateTotal();
 
       // Create purchase record
       const recordData = {
-        vehicle_arrival_id: vehicleId || null,
-        record_number: generateRecordNumber(),
+        vehicle_arrival_id: formData.vehicleArrivalId || null,
+        supplier_id: formData.supplierId,
+        record_number: formData.recordNumber || generateRecordNumber(),
         supplier: formData.supplier,
-        record_date: new Date().toISOString(),
-        arrival_timestamp: formData.arrivalTimestamp,
+        record_date: formData.recordDate,
+        arrival_timestamp: formData.arrivalTimestamp || formData.recordDate,
         pricing_model: formData.pricingModel,
-        default_commission: commission,
-        payment_terms: 30,
+        default_commission: formData.defaultCommission,
+        payment_terms: formData.paymentTerms,
         items_subtotal: itemsSubtotal,
         additional_costs_total: additionalCostsTotal,
         total_amount: totalAmount,
-        status: 'completed',
-        notes: null
+        status: 'draft',
+        notes: formData.notes || null
       };
 
       // Prepare items data
@@ -390,37 +291,29 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
         quantity: item.quantity,
         unit_type: item.unitType,
         total_weight: item.totalWeight,
-        market_price: item.marketPrice || null,
-        commission: item.commission || null,
-        unit_price: formData.pricingModel === 'fixed' ? (item.unitPrice || 0) : calculateUnitPrice(item.marketPrice || 0, item.commission || 0),
+        market_price: item.marketPrice,
+        commission: item.commission,
+        unit_price: item.unitPrice,
         total: item.total
       }));
 
       // Prepare costs data
-      const costsData = additionalCosts
-        .filter(cost => formData.pricingModel !== 'fixed' || cost.name === 'Vehicle Charges')
-        .map(cost => ({
-          name: cost.name,
-          amount: cost.amount,
-          type: cost.type,
-          calculated_amount: calculateSingleAdditionalCost(cost, marketValue, calculateTotalBoxes())
-        }));
+      const costsData = additionalCosts.map(cost => ({
+        name: cost.name,
+        amount: cost.amount,
+        type: cost.type,
+        calculated_amount: cost.calculatedAmount
+      }));
 
-      // Create the purchase record
       await createPurchaseRecord(recordData, itemsData, costsData);
-
-      // If this is from a vehicle arrival, update the vehicle status to 'po-created'
-      if (vehicleId) {
-        await updateVehicleArrivalStatus(vehicleId, 'po-created');
-        toast.success('Purchase record created and vehicle arrival updated successfully');
-      } else {
-        toast.success('Purchase record created successfully');
-      }
       
+      toast.success('Purchase record created successfully!');
       navigate('/record-purchase');
     } catch (error) {
       console.error('Error creating purchase record:', error);
-      toast.error('Failed to create purchase record');
+      toast.error('Failed to create purchase record. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -438,104 +331,147 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
         <div className="flex items-center space-x-4">
           <button
             onClick={() => navigate('/record-purchase')}
-            className="text-gray-600 hover:text-gray-900"
+            className="text-gray-600 hover:text-gray-900 transition-colors duration-200"
           >
             <ArrowLeft className="h-6 w-6" />
           </button>
           <div className="flex items-center">
-            <Package2 className="h-6 w-6 text-green-600 mr-2" />
-            <h1 className="text-2xl font-bold text-gray-800">
-              {initialData ? 'Edit Purchase Record' : 'New Purchase Record'}
-            </h1>
+            <FileText className="h-6 w-6 text-green-600 mr-2" />
+            <h1 className="text-2xl font-bold text-gray-800">New Purchase Record</h1>
           </div>
         </div>
       </div>
 
       <div className="bg-white shadow-sm rounded-lg">
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Basic Details */}
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Supplier <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.supplier}
-                onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                required
-                disabled={!!vehicleId}
-              />
-            </div>
+          {/* Basic Information */}
+          <div>
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h2>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Vehicle Arrival (Optional)
+                </label>
+                <select
+                  value={formData.vehicleArrivalId}
+                  onChange={(e) => handleVehicleArrivalChange(e.target.value)}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                >
+                  <option value="">Select vehicle arrival (optional)</option>
+                  {vehicleArrivals.map(arrival => (
+                    <option key={arrival.id} value={arrival.id}>
+                      {arrival.supplier} - {new Date(arrival.arrival_time).toLocaleDateString()} 
+                      {arrival.vehicle_number && ` (${arrival.vehicle_number})`}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Arrival Timestamp <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="datetime-local"
-                value={formData.arrivalTimestamp}
-                onChange={(e) => setFormData({ ...formData, arrivalTimestamp: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                required
-                disabled={!!vehicleId}
-              />
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Supplier <span className="text-red-500">*</span>
+                </label>
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Building className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <select
+                    value={formData.supplierId}
+                    onChange={(e) => handleSupplierChange(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                    required
+                  >
+                    <option value="">Select a supplier</option>
+                    {suppliers.map(supplier => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.company_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Pricing Model <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.pricingModel}
-                onChange={(e) => setFormData({ ...formData, pricingModel: e.target.value as 'commission' | 'fixed' })}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-              >
-                <option value="commission">Commission Sale</option>
-                <option value="fixed">Fixed Price Buy</option>
-              </select>
-            </div>
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Record Number
+                </label>
+                <input
+                  type="text"
+                  value={formData.recordNumber}
+                  onChange={(e) => setFormData(prev => ({ ...prev, recordNumber: e.target.value }))}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  placeholder="Auto-generated if empty"
+                />
+              </div>
 
-          {/* Commission Settings */}
-          {formData.pricingModel === 'commission' && (
-            <div className="border-t pt-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Commission Settings</h2>
-              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Record Date <span className="text-red-500">*</span>
+                </label>
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Calendar className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="datetime-local"
+                    value={formData.recordDate}
+                    onChange={(e) => setFormData(prev => ({ ...prev, recordDate: e.target.value }))}
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Pricing Model
+                </label>
+                <select
+                  value={formData.pricingModel}
+                  onChange={(e) => setFormData(prev => ({ ...prev, pricingModel: e.target.value }))}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                >
+                  <option value="commission">Commission Based</option>
+                  <option value="fixed">Fixed Price</option>
+                </select>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   Default Commission (%)
                 </label>
                 <input
                   type="number"
-                  value={commission}
-                  onChange={(e) => handleCommissionChange(parseFloat(e.target.value))}
-                  step="0.1"
+                  value={formData.defaultCommission}
+                  onChange={(e) => setFormData(prev => ({ ...prev, defaultCommission: Number(e.target.value) }))}
                   min="0"
                   max="100"
-                  className="mt-1 block w-32 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  step="0.1"
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Payment Terms (Days)
+                </label>
+                <input
+                  type="number"
+                  value={formData.paymentTerms}
+                  onChange={(e) => setFormData(prev => ({ ...prev, paymentTerms: Number(e.target.value) }))}
+                  min="0"
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                 />
               </div>
             </div>
-          )}
+          </div>
 
           {/* Items Section */}
           <div className="border-t pt-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-medium text-gray-900">Items</h2>
-              {!vehicleId && (
-                <button
-                  type="button"
-                  onClick={handleAddItem}
-                  className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Item
-                </button>
-              )}
+              <h2 className="text-lg font-medium text-gray-900">Purchase Items</h2>
             </div>
-            
+
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -544,303 +480,216 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
                       Product
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      SKU
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Quantity
                     </th>
-                    {formData.pricingModel === 'commission' ? (
-                      <>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Market Price (₹)
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Commission (%)
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Unit Price (₹)
-                        </th>
-                      </>
-                    ) : (
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Unit Price (₹)
-                      </th>
-                    )}
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Market Price (₹)
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Commission (%)
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Unit Price (₹)
+                    </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total (₹)
                     </th>
-                    {!vehicleId && (
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {items.map((item) => (
                     <tr key={item.id}>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {vehicleId ? (
+                        <div className="flex items-center">
+                          <Package className="h-4 w-4 text-gray-400 mr-2" />
                           <div>
                             <div className="text-sm font-medium text-gray-900">{item.productName}</div>
+                            <div className="text-sm text-gray-500">{item.skuCode} • {item.category}</div>
                           </div>
-                        ) : (
-                          <select
-                            value={item.productId}
-                            onChange={(e) => handleItemChange(item.id, 'productId', e.target.value)}
-                            className="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          >
-                            <option value="">Select Product</option>
-                            {products.map((product) => (
-                              <option key={product.id} value={product.id}>
-                                {product.name} ({product.category})
-                              </option>
-                            ))}
-                          </select>
-                        )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {vehicleId ? (
-                          <div className="text-sm text-gray-900">{item.skuCode}</div>
-                        ) : (
-                          <select
-                            value={item.skuId}
-                            onChange={(e) => handleItemChange(item.id, 'skuId', e.target.value)}
-                            className="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            disabled={!item.productId}
-                          >
-                            <option value="">Select SKU</option>
-                            {item.productId && products.find(p => p.id === item.productId)?.skus.map((sku: any) => (
-                              <option key={sku.id} value={sku.id}>
-                                {sku.code}
-                              </option>
-                            ))}
-                          </select>
-                        )}
+                        <div className="text-sm text-gray-900">
+                          {item.quantity} {item.unitType === 'box' ? 'boxes' : 'kg'}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {item.totalWeight} kg total
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {vehicleId ? (
-                          <div className="text-sm text-gray-900">
-                            {item.quantity} {item.unitType === 'box' ? 'boxes' : 'kg'}
-                          </div>
-                        ) : (
-                          <input
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => handleItemChange(item.id, 'quantity', Number(e.target.value))}
-                            min="0"
-                            step="1"
-                            className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          />
-                        )}
+                        <input
+                          type="number"
+                          value={item.marketPrice}
+                          onChange={(e) => handleItemChange(item.id, 'marketPrice', Number(e.target.value))}
+                          min="0"
+                          step="0.01"
+                          className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        />
                       </td>
-                      {formData.pricingModel === 'commission' ? (
-                        <>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <input
-                              type="number"
-                              value={item.marketPrice || ''}
-                              onChange={(e) => handleItemPriceChange(item.id, 'marketPrice', parseFloat(e.target.value))}
-                              step="0.1"
-                              min="0"
-                              className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            />
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <input
-                              type="number"
-                              value={item.commission}
-                              onChange={(e) => handleItemCommissionChange(item.id, parseFloat(e.target.value))}
-                              step="0.1"
-                              min="0"
-                              max="100"
-                              className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            />
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ₹{calculateUnitPrice(item.marketPrice || 0, item.commission || 0).toFixed(2)}
-                          </td>
-                        </>
-                      ) : (
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <input
-                            type="number"
-                            value={item.unitPrice || ''}
-                            onChange={(e) => handleItemPriceChange(item.id, 'unitPrice', parseFloat(e.target.value))}
-                            step="0.1"
-                            min="0"
-                            className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                          />
-                        </td>
-                      )}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <input
+                          type="number"
+                          value={item.commission}
+                          onChange={(e) => handleItemChange(item.id, 'commission', Number(e.target.value))}
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <input
+                          type="number"
+                          value={item.unitPrice}
+                          onChange={(e) => handleItemChange(item.id, 'unitPrice', Number(e.target.value))}
+                          min="0"
+                          step="0.01"
+                          className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        />
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         ₹{item.total.toFixed(2)}
                       </td>
-                      {!vehicleId && (
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(item.id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </td>
-                      )}
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-gray-50">
-                  <tr>
-                    <td colSpan={formData.pricingModel === 'commission' ? (vehicleId ? 6 : 7) : (vehicleId ? 4 : 5)} className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
-                      Items Subtotal:
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      ₹{items.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
-                    </td>
-                    {!vehicleId && <td></td>}
-                  </tr>
-                </tfoot>
               </table>
             </div>
 
             {items.length === 0 && (
               <div className="text-center py-8 text-gray-500">
-                No items added yet. {!vehicleId && 'Click "Add Item" to get started.'}
+                No items added yet. Select a vehicle arrival to populate items automatically.
               </div>
             )}
           </div>
 
           {/* Additional Costs */}
           <div className="border-t pt-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Additional Costs</h2>
-            
-            <div className="space-y-2 mb-4">
-              {additionalCosts
-                .filter(cost => formData.pricingModel !== 'fixed' || cost.name === 'Vehicle Charges')
-                .map((cost, index) => {
-                  const originalIndex = additionalCosts.findIndex(c => c.name === cost.name);
-                  const costValue = calculateSingleAdditionalCost(cost, 
-                    items.reduce((sum, item) => sum + ((item.marketPrice || 0) * item.quantity), 0),
-                    calculateTotalBoxes()
-                  );
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-gray-900">Additional Costs</h2>
+              <button
+                type="button"
+                onClick={handleAddCost}
+                className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Cost
+              </button>
+            </div>
 
-                  return (
-                    <div key={cost.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                      <div className="flex items-center space-x-4">
-                        <span className="text-sm font-medium text-gray-700 w-32">{cost.name}</span>
-                        <div className="flex items-center space-x-2">
+            {additionalCosts.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Cost Name
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Amount
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Calculated
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {additionalCosts.map((cost) => (
+                      <tr key={cost.id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <input
-                            type="number"
-                            value={cost.amount}
-                            onChange={(e) => handleAdditionalCostChange(originalIndex, 'amount', e.target.value)}
-                            className="w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            step={cost.type === 'percentage' ? '0.1' : '1'}
-                            min="0"
+                            type="text"
+                            value={cost.name}
+                            onChange={(e) => handleCostChange(cost.id, 'name', e.target.value)}
+                            className="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            placeholder="Cost name"
                           />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <select
                             value={cost.type}
-                            onChange={(e) => handleAdditionalCostChange(originalIndex, 'type', e.target.value as any)}
-                            className="border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            onChange={(e) => handleCostChange(cost.id, 'type', e.target.value)}
+                            className="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                           >
-                            <option value="fixed">Fixed (₹)</option>
-                            <option value="per_box">Per Box (₹/box)</option>
-                            <option value="percentage">Percentage (%)</option>
+                            <option value="fixed">Fixed Amount</option>
+                            <option value="percentage">Percentage</option>
+                            <option value="per_box">Per Box</option>
                           </select>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm font-medium text-gray-900">
-                          ₹{costValue.toFixed(2)}
-                        </span>
-                        {cost.name !== 'Vehicle Charges' && (
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="relative">
+                            <input
+                              type="number"
+                              value={cost.amount}
+                              onChange={(e) => handleCostChange(cost.id, 'amount', Number(e.target.value))}
+                              min="0"
+                              step="0.01"
+                              className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            />
+                            {cost.type === 'percentage' && (
+                              <span className="absolute right-2 top-1 text-xs text-gray-500">%</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          ₹{cost.calculatedAmount.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <button
                             type="button"
-                            onClick={() => handleRemoveCost(originalIndex)}
+                            onClick={() => handleRemoveCost(cost.id)}
                             className="text-red-600 hover:text-red-900"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-
-            <div className="flex items-end space-x-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Add New Cost</label>
-                <input
-                  type="text"
-                  value={newCost.name}
-                  onChange={(e) => setNewCost({ ...newCost, name: e.target.value })}
-                  className="mt-1 block w-48 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                  placeholder="e.g., Transport Cost"
-                />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Amount</label>
-                <input
-                  type="number"
-                  value={newCost.amount}
-                  onChange={(e) => setNewCost({ ...newCost, amount: parseFloat(e.target.value) })}
-                  min="0"
-                  step="0.1"
-                  className="mt-1 block w-32 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Type</label>
-                <select
-                  value={newCost.type}
-                  onChange={(e) => setNewCost({ ...newCost, type: e.target.value as 'fixed' | 'percentage' | 'per_box' })}
-                  className="mt-1 block w-32 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                >
-                  <option value="fixed">Fixed (₹)</option>
-                  <option value="percentage">Percentage (%)</option>
-                  <option value="per_box">Per Box (₹)</option>
-                </select>
-              </div>
-              <button
-                type="button"
-                onClick={handleAddCost}
-                className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-            </div>
+            )}
           </div>
 
-          {/* Total Summary */}
+          {/* Summary */}
           <div className="border-t pt-6">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm font-medium">
-                  <span className="text-gray-600">Items Subtotal:</span>
-                  <span className="text-gray-900">₹{items.reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span>
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Purchase Summary</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Notes
+                  </label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    rows={3}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                    placeholder="Any additional notes..."
+                  />
                 </div>
-                {additionalCosts
-                  .filter(cost => formData.pricingModel !== 'fixed' || cost.name === 'Vehicle Charges')
-                  .map((cost, index) => {
-                    const costValue = calculateSingleAdditionalCost(
-                      cost,
-                      items.reduce((sum, item) => sum + ((item.marketPrice || 0) * item.quantity), 0),
-                      calculateTotalBoxes()
-                    );
-                    
-                    return (
-                      <div key={cost.name} className="flex justify-between text-sm">
-                        <span className="text-gray-600">{cost.name}:</span>
-                        <span className="text-gray-900">
-                          ₹{costValue.toFixed(2)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                <div className="border-t pt-2 flex justify-between text-lg font-bold">
-                  <span className="text-gray-900">Total Amount:</span>
-                  <span className="text-gray-900">₹{calculateTotalAmount().toFixed(2)}</span>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Items Subtotal:</span>
+                    <span className="text-gray-900">₹{calculateItemsSubtotal().toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Additional Costs:</span>
+                    <span className="text-gray-900">₹{calculateAdditionalCostsTotal().toFixed(2)}</span>
+                  </div>
+                  <div className="border-t pt-2 flex justify-between text-lg font-bold">
+                    <span className="text-gray-900">Total Amount:</span>
+                    <span className="text-green-600">₹{calculateTotal().toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -852,14 +701,16 @@ const NewRecordPurchase: React.FC<NewRecordPurchaseProps> = ({ initialData }) =>
               type="button"
               onClick={() => navigate('/record-purchase')}
               className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              disabled={isSubmitting}
+              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              {initialData ? 'Update Purchase Record' : 'Create Purchase Record'}
+              {isSubmitting ? 'Creating Record...' : 'Create Purchase Record'}
             </button>
           </div>
         </form>

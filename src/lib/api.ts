@@ -214,6 +214,65 @@ export async function getSuppliers() {
   return data;
 }
 
+export async function getSupplier(id: string) {
+  const { data, error } = await supabase
+    .from('suppliers')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function createSupplier(supplier: Tables['suppliers']['Insert']) {
+  const { data, error } = await supabase
+    .from('suppliers')
+    .insert(supplier)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function updateSupplier(id: string, supplier: Tables['suppliers']['Update']) {
+  const { data, error } = await supabase
+    .from('suppliers')
+    .update(supplier)
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteSupplier(id: string) {
+  const { error } = await supabase
+    .from('suppliers')
+    .delete()
+    .eq('id', id);
+  
+  if (error) throw error;
+}
+
+// Get Purchase Records by Supplier ID
+export async function getPurchaseRecordsBySupplierId(supplierId: string) {
+  const { data, error } = await supabase
+    .from('purchase_records')
+    .select(`
+      *,
+      purchase_record_items(*),
+      purchase_record_costs(*)
+    `)
+    .eq('supplier_id', supplierId)
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data;
+}
+
 // Sales Orders
 export async function getSalesOrders() {
   const { data, error } = await supabase
@@ -842,15 +901,29 @@ export async function createPurchaseRecord(
 
   if (costsError) throw costsError;
 
+  // Update supplier balance if supplier_id is provided
+  if (record.supplier_id) {
+    await updateSupplierBalance(record.supplier_id, record.total_amount || 0, 'add');
+  }
+
   return recordData;
 }
 
-async function updatePurchaseRecord(
+export async function updatePurchaseRecord(
   id: string,
   record: Partial<Tables['purchase_records']['Update']>,
   items?: Tables['purchase_record_items']['Insert'][],
   costs?: Tables['purchase_record_costs']['Insert'][]
 ) {
+  // Get current record to check for amount changes
+  const { data: currentRecord } = await supabase
+    .from('purchase_records')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (!currentRecord) throw new Error('Purchase record not found');
+
   // Update the record
   const { data: recordData, error: recordError } = await supabase
     .from('purchase_records')
@@ -860,6 +933,14 @@ async function updatePurchaseRecord(
     .single();
 
   if (recordError) throw recordError;
+
+  // Handle supplier balance updates for amount changes
+  if (record.total_amount !== undefined && record.supplier_id) {
+    const amountDifference = record.total_amount - currentRecord.total_amount;
+    if (amountDifference !== 0) {
+      await updateSupplierBalance(record.supplier_id, Math.abs(amountDifference), amountDifference > 0 ? 'add' : 'subtract');
+    }
+  }
 
   // If items are provided, replace them
   if (items) {
@@ -908,6 +989,27 @@ async function updatePurchaseRecord(
   }
 
   return recordData;
+}
+
+export async function deletePurchaseRecord(id: string) {
+  // Get record details to update supplier balance
+  const { data: recordData } = await supabase
+    .from('purchase_records')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (recordData && recordData.supplier_id) {
+    // Update supplier balance by subtracting the record amount
+    await updateSupplierBalance(recordData.supplier_id, recordData.total_amount, 'subtract');
+  }
+
+  const { error } = await supabase
+    .from('purchase_records')
+    .delete()
+    .eq('id', id);
+  
+  if (error) throw error;
 }
 
 // Payments API functions
