@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, ArrowLeft, User, Calendar, MapPin, CreditCard, FileText, Edit, AlertTriangle, CheckCircle, Clock, Truck } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, User, Calendar, MapPin, CreditCard, FileText, Edit, AlertTriangle, Truck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getSalesOrder } from '../../lib/api';
 
@@ -78,66 +78,6 @@ const ViewSale: React.FC = () => {
     return new Date(dateString).toLocaleString();
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'delivered':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'dispatched':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'processing':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'confirmed':
-        return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getPaymentStatusColor = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'partial':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'unpaid':
-        return 'bg-red-100 text-red-800 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'delivered':
-        return <CheckCircle className="h-5 w-5" />;
-      case 'dispatched':
-        return <Truck className="h-5 w-5" />;
-      case 'processing':
-        return <Clock className="h-5 w-5" />;
-      case 'confirmed':
-        return <CheckCircle className="h-5 w-5" />;
-      case 'cancelled':
-        return <AlertTriangle className="h-5 w-5" />;
-      default:
-        return <Clock className="h-5 w-5" />;
-    }
-  };
-
-  const getPaymentIcon = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return <CheckCircle className="h-5 w-5" />;
-      case 'partial':
-        return <Clock className="h-5 w-5" />;
-      case 'unpaid':
-        return <AlertTriangle className="h-5 w-5" />;
-      default:
-        return <Clock className="h-5 w-5" />;
-    }
-  };
-
   const canEdit = () => {
     return orderData && (orderData.status === 'draft' || orderData.status === 'confirmed');
   };
@@ -149,6 +89,21 @@ const ViewSale: React.FC = () => {
   const getAvailableCredit = () => {
     if (!orderData) return 0;
     return orderData.customer.credit_limit - orderData.customer.current_balance;
+  };
+
+  const getPaymentModeDisplay = (mode: string) => {
+    switch (mode) {
+      case 'bank_transfer':
+        return 'Bank Transfer';
+      case 'upi':
+        return 'UPI';
+      case 'cash':
+        return 'Cash';
+      case 'credit':
+        return 'Credit';
+      default:
+        return mode.charAt(0).toUpperCase() + mode.slice(1);
+    }
   };
 
   if (loading) {
@@ -205,54 +160,42 @@ const ViewSale: React.FC = () => {
         </div>
       </div>
 
-      {/* Order Overview - Prominent Status Display */}
+      {/* Order Overview */}
       <div className="bg-white shadow-sm rounded-lg border-l-4 border-green-500">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">{orderData.order_number}</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                {saleType === 'outstation' ? 'Outstation Sale' : 'Counter Sale'} • Created {formatDateTime(orderData.order_date)}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-green-600">₹{orderData.total_amount.toLocaleString()}</p>
-              <p className="text-sm text-gray-500 capitalize">{orderData.payment_mode.replace('_', ' ')}</p>
-            </div>
-          </div>
-
-          {/* Status Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Order Status */}
-            <div className={`p-4 rounded-lg border-2 ${getStatusColor(orderData.status)}`}>
-              <div className="flex items-center">
-                {getStatusIcon(orderData.status)}
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium">Order Status</h3>
-                  <p className="text-lg font-semibold capitalize">
-                    {orderData.status.charAt(0).toUpperCase() + orderData.status.slice(1)}
-                  </p>
-                </div>
+            <div className="flex items-center space-x-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">{orderData.order_number}</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Created {formatDateTime(orderData.order_date)}
+                </p>
+              </div>
+              
+              {/* Sale Type Badge */}
+              <div>
+                <span className={`inline-flex px-4 py-2 text-sm font-medium rounded-full ${
+                  saleType === 'outstation' 
+                    ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                    : 'bg-green-100 text-green-800 border border-green-200'
+                }`}>
+                  {saleType === 'outstation' ? 'Outstation Sale' : 'Counter Sale'}
+                </span>
               </div>
             </div>
-
-            {/* Payment Status */}
-            <div className={`p-4 rounded-lg border-2 ${getPaymentStatusColor(orderData.payment_status)}`}>
-              <div className="flex items-center">
-                {getPaymentIcon(orderData.payment_status)}
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium">Payment Status</h3>
-                  <p className="text-lg font-semibold capitalize">
-                    {orderData.payment_status.charAt(0).toUpperCase() + orderData.payment_status.slice(1)}
-                  </p>
-                </div>
+            
+            <div className="text-right">
+              <p className="text-2xl font-bold text-green-600">₹{orderData.total_amount.toLocaleString()}</p>
+              <div className="flex items-center justify-end mt-1">
+                <CreditCard className="h-4 w-4 text-gray-400 mr-1" />
+                <p className="text-lg font-medium text-gray-700">{getPaymentModeDisplay(orderData.payment_mode)}</p>
               </div>
             </div>
           </div>
 
           {/* Delivery Information for Outstation Sales */}
           {saleType === 'outstation' && orderData.delivery_date && (
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
               <div className="flex items-center">
                 <Truck className="h-5 w-5 text-blue-600 mr-2" />
                 <div>
@@ -307,7 +250,7 @@ const ViewSale: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">Payment Mode</label>
-                    <p className="text-sm text-gray-900 capitalize">{orderData.payment_mode.replace('_', ' ')}</p>
+                    <p className="text-sm text-gray-900">{getPaymentModeDisplay(orderData.payment_mode)}</p>
                   </div>
                 </div>
               </div>
