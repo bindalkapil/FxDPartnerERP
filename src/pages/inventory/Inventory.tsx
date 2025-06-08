@@ -47,7 +47,7 @@ const Inventory: React.FC = () => {
       
       // Get all vehicle arrivals and filter for only completed ones
       const arrivals = (await getVehicleArrivals()).filter(
-        (arrival: any) => arrival.status === 'completed'
+        (arrival: any) => arrival.status === 'completed' || arrival.status === 'po-created'
       );
       
       if (!arrivals || arrivals.length === 0) {
