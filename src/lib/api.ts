@@ -164,10 +164,17 @@ export async function createSalesOrder(
   order: Tables['sales_orders']['Insert'],
   items: Tables['sales_order_items']['Insert'][]
 ) {
+  // Determine status based on sale type
+  const isOutstation = order.delivery_date || order.delivery_address;
+  const orderWithStatus = {
+    ...order,
+    status: isOutstation ? 'processing' : 'completed'
+  };
+
   // Start a transaction
   const { data: orderData, error: orderError } = await supabase
     .from('sales_orders')
-    .insert(order)
+    .insert(orderWithStatus)
     .select()
     .single();
 
@@ -250,9 +257,91 @@ export async function updateSalesOrder(
     for (const item of items) {
       await updateInventoryAfterSale(item.product_id, item.sku_id, item.quantity);
     }
+
+    // Recalculate order totals
+    const subtotal = items.reduce((sum, item) => sum + item.total_price, 0);
+    const totalAmount = subtotal - (order.discount_amount || 0);
+
+    // Update the order with new totals
+    await supabase
+      .from('sales_orders')
+      .update({
+        subtotal,
+        total_amount: totalAmount
+      })
+      .eq('id', id);
   }
 
   return orderData;
+}
+
+export async function updateSalesOrderDispatchDetails(
+  id: string,
+  dispatchDetails: {
+    vehicle_number: string;
+    driver_name: string;
+    driver_contact: string;
+    delivery_location_confirmed: boolean;
+    items: Array<{
+      id: string;
+      final_loaded_quantity: number;
+    }>;
+  }
+) {
+  // Get current order and items
+  const { data: currentOrder } = await supabase
+    .from('sales_orders')
+    .select(`
+      *,
+      sales_order_items(*)
+    `)
+    .eq('id', id)
+    .single();
+
+  if (!currentOrder) throw new Error('Sales order not found');
+
+  // Update item quantities and recalculate totals
+  let newSubtotal = 0;
+  
+  for (const itemUpdate of dispatchDetails.items) {
+    const currentItem = currentOrder.sales_order_items.find((item: any) => item.id === itemUpdate.id);
+    if (currentItem) {
+      const newTotalPrice = itemUpdate.final_loaded_quantity * currentItem.unit_price;
+      
+      // Update the item
+      await supabase
+        .from('sales_order_items')
+        .update({
+          quantity: itemUpdate.final_loaded_quantity,
+          total_price: newTotalPrice
+        })
+        .eq('id', itemUpdate.id);
+      
+      newSubtotal += newTotalPrice;
+    }
+  }
+
+  // Calculate new total amount
+  const newTotalAmount = newSubtotal - (currentOrder.discount_amount || 0);
+
+  // Update the sales order with dispatch details and new totals
+  const { data, error } = await supabase
+    .from('sales_orders')
+    .update({
+      status: 'dispatched',
+      vehicle_number: dispatchDetails.vehicle_number,
+      driver_name: dispatchDetails.driver_name,
+      driver_contact: dispatchDetails.driver_contact,
+      delivery_location_confirmed: dispatchDetails.delivery_location_confirmed,
+      subtotal: newSubtotal,
+      total_amount: newTotalAmount
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 export async function deleteSalesOrder(id: string) {
@@ -278,6 +367,27 @@ export async function deleteSalesOrder(id: string) {
     .eq('id', id);
   
   if (error) throw error;
+}
+
+// Get outstation sales orders for dispatch management
+export async function getOutstationSalesOrders() {
+  const { data, error } = await supabase
+    .from('sales_orders')
+    .select(`
+      *,
+      customer:customers(*),
+      sales_order_items(
+        *,
+        product:products(*),
+        sku:skus(*)
+      )
+    `)
+    .not('delivery_date', 'is', null)
+    .in('status', ['processing', 'dispatched'])
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data;
 }
 
 // Inventory management functions

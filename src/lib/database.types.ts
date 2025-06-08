@@ -364,6 +364,10 @@ export type Database = {
           notes: string | null
           created_at: string | null
           updated_at: string | null
+          vehicle_number: string | null
+          driver_name: string | null
+          driver_contact: string | null
+          delivery_location_confirmed: boolean | null
         }
         Insert: {
           id?: string
@@ -383,6 +387,10 @@ export type Database = {
           notes?: string | null
           created_at?: string | null
           updated_at?: string | null
+          vehicle_number?: string | null
+          driver_name?: string | null
+          driver_contact?: string | null
+          delivery_location_confirmed?: boolean | null
         }
         Update: {
           id?: string
@@ -402,6 +410,10 @@ export type Database = {
           notes?: string | null
           created_at?: string | null
           updated_at?: string | null
+          vehicle_number?: string | null
+          driver_name?: string | null
+          driver_contact?: string | null
+          delivery_location_confirmed?: boolean | null
         }
         Relationships: [
           {

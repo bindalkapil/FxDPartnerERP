@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, ArrowLeft, User, Calendar, MapPin, CreditCard, FileText, Edit, AlertTriangle, Truck } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, User, Calendar, MapPin, CreditCard, FileText, Edit, AlertTriangle, Truck, Phone } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getSalesOrder } from '../../lib/api';
 
@@ -36,6 +36,10 @@ interface SalesOrderData {
   total_amount: number;
   status: string;
   notes: string | null;
+  vehicle_number: string | null;
+  driver_name: string | null;
+  driver_contact: string | null;
+  delivery_location_confirmed: boolean | null;
   sales_order_items: Array<{
     id: string;
     product_name: string;
@@ -103,6 +107,21 @@ const ViewSale: React.FC = () => {
         return 'Credit';
       default:
         return mode.charAt(0).toUpperCase() + mode.slice(1);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'dispatched':
+        return 'bg-blue-100 text-blue-800';
+      case 'processing':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'delivered':
+        return 'bg-green-100 text-green-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -182,6 +201,13 @@ const ViewSale: React.FC = () => {
                   {saleType === 'outstation' ? 'Outstation Sale' : 'Counter Sale'}
                 </span>
               </div>
+
+              {/* Status Badge */}
+              <div>
+                <span className={`inline-flex px-4 py-2 text-sm font-medium rounded-full ${getStatusColor(orderData.status)}`}>
+                  {orderData.status.charAt(0).toUpperCase() + orderData.status.slice(1)}
+                </span>
+              </div>
             </div>
             
             <div className="text-right">
@@ -201,6 +227,37 @@ const ViewSale: React.FC = () => {
                 <div>
                   <h3 className="text-sm font-medium text-blue-800">Delivery Scheduled</h3>
                   <p className="text-sm text-blue-700">{formatDateTime(orderData.delivery_date)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Dispatch Information */}
+          {saleType === 'outstation' && orderData.status === 'dispatched' && orderData.vehicle_number && (
+            <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+              <div className="flex items-start">
+                <Truck className="h-5 w-5 text-green-600 mr-2 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium text-green-800 mb-2">Dispatch Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-green-700 font-medium">Vehicle:</span>
+                      <span className="ml-2 text-green-800">{orderData.vehicle_number}</span>
+                    </div>
+                    <div>
+                      <span className="text-green-700 font-medium">Driver:</span>
+                      <span className="ml-2 text-green-800">{orderData.driver_name}</span>
+                    </div>
+                    <div>
+                      <span className="text-green-700 font-medium">Contact:</span>
+                      <span className="ml-2 text-green-800">{orderData.driver_contact}</span>
+                    </div>
+                  </div>
+                  {orderData.delivery_location_confirmed && (
+                    <div className="mt-2 text-sm text-green-700">
+                      ✓ Delivery location confirmed
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -479,13 +536,13 @@ const ViewSale: React.FC = () => {
                 <FileText className="h-4 w-4 mr-2" />
                 Print Order
               </button>
-              {saleType === 'outstation' && (
+              {saleType === 'outstation' && orderData.status === 'processing' && (
                 <button
                   onClick={() => navigate('/dispatch')}
                   className="w-full bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center justify-center"
                 >
                   <Truck className="h-4 w-4 mr-2" />
-                  Create Dispatch
+                  Manage Dispatch
                 </button>
               )}
             </div>
