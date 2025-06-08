@@ -3,5 +3,4 @@ src/contexts/
 src/layouts/
 src/pages/auth/
 src/pages/dashboard/
-src/pages/partners
 src/pages/inventory/
