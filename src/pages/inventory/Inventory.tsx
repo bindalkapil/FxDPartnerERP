@@ -45,8 +45,10 @@ const Inventory: React.FC = () => {
       setError(null);
       setLoading(true);
       
-      // Get all vehicle arrivals (not just completed ones)
-      const arrivals = await getVehicleArrivals();
+      // Get all vehicle arrivals and filter for only completed ones
+      const arrivals = (await getVehicleArrivals()).filter(
+        (arrival: any) => arrival.status === 'completed'
+      );
       
       if (!arrivals || arrivals.length === 0) {
         setInventoryItems([]);
