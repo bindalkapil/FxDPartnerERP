@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, ChevronDown, Package } from 'lucide-react';
 
 interface InventoryItem {
@@ -20,6 +21,12 @@ interface ProductSearchInputProps {
   className?: string;
 }
 
+interface DropdownPosition {
+  top: number;
+  left: number;
+  width: number;
+}
+
 const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   inventory,
   value,
@@ -31,6 +38,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [dropdownPosition, setDropdownPosition] = useState<DropdownPosition>({ top: 0, left: 0, width: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -60,6 +68,42 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     }
     setSelectedIndex(-1);
   }, [searchTerm, inventory]);
+
+  // Calculate dropdown position when it opens
+  useLayoutEffect(() => {
+    if (isOpen && inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width
+      });
+    }
+  }, [isOpen]);
+
+  // Update position on scroll or resize
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const updatePosition = () => {
+      if (inputRef.current) {
+        const rect = inputRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + window.scrollY,
+          left: rect.left + window.scrollX,
+          width: rect.width
+        });
+      }
+    };
+
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isOpen]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
@@ -137,6 +181,60 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     }, 150);
   };
 
+  // Get portal root element
+  const portalRoot = document.getElementById('portal-root');
+
+  const dropdownContent = isOpen && portalRoot ? (
+    <div
+      ref={dropdownRef}
+      style={{
+        position: 'fixed',
+        top: dropdownPosition.top,
+        left: dropdownPosition.left,
+        width: dropdownPosition.width,
+        zIndex: 9999
+      }}
+      className="bg-white border border-gray-300 rounded-md shadow-lg max-h-96 overflow-auto"
+    >
+      {filteredItems.length > 0 ? (
+        <ul className="py-1">
+          {filteredItems.map((item, index) => (
+            <li
+              key={item.sku_id}
+              onClick={() => handleItemSelect(item)}
+              className={`px-3 py-2 cursor-pointer transition-colors duration-150 ${
+                index === selectedIndex
+                  ? 'bg-green-50 text-green-900'
+                  : 'hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Package className="h-4 w-4 text-gray-400 mr-2" />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">
+                      {item.product_name}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {item.sku_code} • {item.product_category} • {item.unit_type}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500">
+                  {item.available_quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="px-3 py-2 text-sm text-gray-500 text-center">
+          {searchTerm.trim() === '' ? 'Start typing to search products...' : 'No products found'}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="relative">
       <div className="relative">
@@ -160,49 +258,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
         </div>
       </div>
 
-      {isOpen && (
-        <div
-          ref={dropdownRef}
-          className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-96 overflow-auto"
-        >
-          {filteredItems.length > 0 ? (
-            <ul className="py-1">
-              {filteredItems.map((item, index) => (
-                <li
-                  key={item.sku_id}
-                  onClick={() => handleItemSelect(item)}
-                  className={`px-3 py-2 cursor-pointer transition-colors duration-150 ${
-                    index === selectedIndex
-                      ? 'bg-green-50 text-green-900'
-                      : 'hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <Package className="h-4 w-4 text-gray-400 mr-2" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {item.product_name}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {item.sku_code} • {item.product_category} • {item.unit_type}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {item.available_quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="px-3 py-2 text-sm text-gray-500 text-center">
-              {searchTerm.trim() === '' ? 'Start typing to search products...' : 'No products found'}
-            </div>
-          )}
-        </div>
-      )}
+      {portalRoot && dropdownContent && createPortal(dropdownContent, portalRoot)}
     </div>
   );
 };
