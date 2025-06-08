@@ -77,6 +77,56 @@ export async function createSKU(sku: Tables['skus']['Insert']) {
   return data;
 }
 
+// Customer Balance Management
+export async function updateCustomerBalance(customerId: string, amount: number, operation: 'add' | 'subtract') {
+  const { data: customer, error: fetchError } = await supabase
+    .from('customers')
+    .select('current_balance')
+    .eq('id', customerId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  const newBalance = operation === 'add' 
+    ? customer.current_balance + amount 
+    : customer.current_balance - amount;
+
+  const { data, error } = await supabase
+    .from('customers')
+    .update({ current_balance: newBalance })
+    .eq('id', customerId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Supplier Balance Management
+export async function updateSupplierBalance(supplierId: string, amount: number, operation: 'add' | 'subtract') {
+  const { data: supplier, error: fetchError } = await supabase
+    .from('suppliers')
+    .select('current_balance')
+    .eq('id', supplierId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  const newBalance = operation === 'add' 
+    ? supplier.current_balance + amount 
+    : supplier.current_balance - amount;
+
+  const { data, error } = await supabase
+    .from('suppliers')
+    .update({ current_balance: newBalance })
+    .eq('id', supplierId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 // Customers
 export async function getCustomers() {
   const { data, error } = await supabase
@@ -117,6 +167,37 @@ export async function updateCustomer(id: string, customer: Tables['customers']['
     .eq('id', id)
     .select()
     .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+// Get Sales Orders by Customer ID
+export async function getSalesOrdersByCustomerId(customerId: string) {
+  const { data, error } = await supabase
+    .from('sales_orders')
+    .select(`
+      *,
+      sales_order_items(
+        *,
+        product:products(*),
+        sku:skus(*)
+      )
+    `)
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data;
+}
+
+// Get Payments by Party ID
+export async function getPaymentsByPartyId(partyId: string) {
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*')
+    .eq('party_id', partyId)
+    .order('payment_date', { ascending: false });
   
   if (error) throw error;
   return data;
@@ -208,6 +289,11 @@ export async function createSalesOrder(
     await updateInventoryAfterSale(item.product_id, item.sku_id, item.quantity);
   }
 
+  // Update customer balance if payment mode is credit
+  if (order.payment_mode === 'credit' && order.customer_id) {
+    await updateCustomerBalance(order.customer_id, order.total_amount || 0, 'add');
+  }
+
   return orderData;
 }
 
@@ -216,14 +302,17 @@ export async function updateSalesOrder(
   order: Partial<Tables['sales_orders']['Update']>,
   items?: Tables['sales_order_items']['Insert'][]
 ) {
-  // Get current items to restore inventory
+  // Get current order to check for payment mode changes
   const { data: currentOrder } = await supabase
     .from('sales_orders')
     .select(`
+      *,
       sales_order_items(product_id, sku_id, quantity)
     `)
     .eq('id', id)
     .single();
+
+  if (!currentOrder) throw new Error('Sales order not found');
 
   // Update the order
   const { data: orderData, error: orderError } = await supabase
@@ -234,6 +323,29 @@ export async function updateSalesOrder(
     .single();
 
   if (orderError) throw orderError;
+
+  // Handle customer balance updates for payment mode changes
+  if (order.payment_mode !== undefined && order.customer_id) {
+    const oldPaymentMode = currentOrder.payment_mode;
+    const newPaymentMode = order.payment_mode;
+    const orderAmount = order.total_amount || currentOrder.total_amount;
+
+    // If changing from credit to non-credit, reduce customer balance
+    if (oldPaymentMode === 'credit' && newPaymentMode !== 'credit') {
+      await updateCustomerBalance(order.customer_id, orderAmount, 'subtract');
+    }
+    // If changing from non-credit to credit, increase customer balance
+    else if (oldPaymentMode !== 'credit' && newPaymentMode === 'credit') {
+      await updateCustomerBalance(order.customer_id, orderAmount, 'add');
+    }
+    // If both are credit but amount changed, adjust the difference
+    else if (oldPaymentMode === 'credit' && newPaymentMode === 'credit') {
+      const amountDifference = orderAmount - currentOrder.total_amount;
+      if (amountDifference !== 0) {
+        await updateCustomerBalance(order.customer_id, Math.abs(amountDifference), amountDifference > 0 ? 'add' : 'subtract');
+      }
+    }
+  }
 
   // If items are provided, replace them
   if (items) {
@@ -335,6 +447,14 @@ export async function updateSalesOrderDispatchDetails(
   // Calculate new total amount
   const newTotalAmount = newSubtotal - (currentOrder.discount_amount || 0);
 
+  // Update customer balance if payment mode is credit and amount changed
+  if (currentOrder.payment_mode === 'credit' && currentOrder.customer_id) {
+    const amountDifference = newTotalAmount - currentOrder.total_amount;
+    if (amountDifference !== 0) {
+      await updateCustomerBalance(currentOrder.customer_id, Math.abs(amountDifference), amountDifference > 0 ? 'add' : 'subtract');
+    }
+  }
+
   // Update the sales order with dispatch details and new totals
   const { data, error } = await supabase
     .from('sales_orders')
@@ -356,19 +476,27 @@ export async function updateSalesOrderDispatchDetails(
 }
 
 export async function deleteSalesOrder(id: string) {
-  // Get order items to restore inventory
+  // Get order details to restore inventory and update customer balance
   const { data: orderData } = await supabase
     .from('sales_orders')
     .select(`
+      *,
       sales_order_items(product_id, sku_id, quantity)
     `)
     .eq('id', id)
     .single();
 
-  // Restore inventory
-  if (orderData?.sales_order_items) {
-    for (const item of orderData.sales_order_items) {
-      await restoreInventoryAfterSaleUpdate(item.product_id, item.sku_id, item.quantity);
+  if (orderData) {
+    // Restore inventory
+    if (orderData.sales_order_items) {
+      for (const item of orderData.sales_order_items) {
+        await restoreInventoryAfterSaleUpdate(item.product_id, item.sku_id, item.quantity);
+      }
+    }
+
+    // Update customer balance if payment mode was credit
+    if (orderData.payment_mode === 'credit' && orderData.customer_id) {
+      await updateCustomerBalance(orderData.customer_id, orderData.total_amount, 'subtract');
     }
   }
 
@@ -801,6 +929,18 @@ export async function createPayment(payment: Tables['payments']['Insert']) {
     .single();
   
   if (error) throw error;
+
+  // Update customer/supplier balance based on payment type
+  if (payment.party_id && payment.party_type) {
+    if (payment.party_type === 'customer' && payment.type === 'received') {
+      // Payment received from customer - reduce their outstanding balance
+      await updateCustomerBalance(payment.party_id, payment.amount, 'subtract');
+    } else if (payment.party_type === 'supplier' && payment.type === 'made') {
+      // Payment made to supplier - reduce their outstanding balance
+      await updateSupplierBalance(payment.party_id, payment.amount, 'subtract');
+    }
+  }
+
   return data;
 }
 
@@ -817,6 +957,23 @@ export async function updatePayment(id: string, payment: Tables['payments']['Upd
 }
 
 export async function deletePayment(id: string) {
+  // Get payment details before deletion to reverse balance updates
+  const { data: paymentData } = await supabase
+    .from('payments')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (paymentData && paymentData.party_id && paymentData.party_type) {
+    if (paymentData.party_type === 'customer' && paymentData.type === 'received') {
+      // Reverse payment received - increase customer balance
+      await updateCustomerBalance(paymentData.party_id, paymentData.amount, 'add');
+    } else if (paymentData.party_type === 'supplier' && paymentData.type === 'made') {
+      // Reverse payment made - increase supplier balance
+      await updateSupplierBalance(paymentData.party_id, paymentData.amount, 'add');
+    }
+  }
+
   const { error } = await supabase
     .from('payments')
     .delete()
