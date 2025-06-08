@@ -53,7 +53,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
 
   useEffect(() => {
     if (searchTerm.trim() === '') {
-      setFilteredItems(inventory.slice(0, 10)); // Show first 10 items when empty
+      setFilteredItems(inventory); // Show all items when empty
     } else {
       const filtered = inventory.filter(item => {
         const searchLower = searchTerm.toLowerCase();
@@ -62,7 +62,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
           item.sku_code.toLowerCase().includes(searchLower) ||
           item.product_category.toLowerCase().includes(searchLower)
         );
-      }).slice(0, 10); // Limit to 10 results
+      });
       
       setFilteredItems(filtered);
     }
