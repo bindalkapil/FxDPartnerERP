@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FileText, ArrowLeft, Plus, Trash2, Building, Calendar, DollarSign, Package } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getVehicleArrivals, createPurchaseRecord, getSuppliers } from '../../lib/api';
@@ -58,6 +58,9 @@ interface Supplier {
 
 const NewRecordPurchase: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const vehicleIdFromUrl = searchParams.get('vehicleId');
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [vehicleArrivals, setVehicleArrivals] = useState<VehicleArrival[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -82,6 +85,16 @@ const NewRecordPurchase: React.FC = () => {
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  // Auto-populate from URL parameter
+  useEffect(() => {
+    if (vehicleIdFromUrl && vehicleArrivals.length > 0) {
+      const matchingVehicle = vehicleArrivals.find(arrival => arrival.id === vehicleIdFromUrl);
+      if (matchingVehicle) {
+        handleVehicleArrivalChange(vehicleIdFromUrl);
+      }
+    }
+  }, [vehicleIdFromUrl, vehicleArrivals]);
 
   const loadInitialData = async () => {
     try {
