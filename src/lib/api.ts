@@ -762,25 +762,21 @@ export async function updateVehicleArrival(
 
   if (arrivalError) throw arrivalError;
 
-  // If items are provided, replace them
+  // If items are provided, update them
   if (items) {
-    // Delete existing items
-    const { error: deleteItemsError } = await supabase
-      .from('vehicle_arrival_items')
-      .delete()
-      .eq('vehicle_arrival_id', id);
-
-    if (deleteItemsError) throw deleteItemsError;
-
-    // Insert new items
+    // Transform items to include vehicle_arrival_id
     const itemsWithArrivalId = items.map(item => ({
       ...item,
       vehicle_arrival_id: id
     }));
 
+    // Use upsert to update existing items and insert new ones
     const { error: itemsError } = await supabase
       .from('vehicle_arrival_items')
-      .insert(itemsWithArrivalId);
+      .upsert(itemsWithArrivalId, {
+        onConflict: 'id', // This will update existing items and insert new ones
+        ignoreDuplicates: false
+      });
 
     if (itemsError) throw itemsError;
   }
@@ -813,20 +809,137 @@ export async function updateVehicleArrival(
   return arrivalData;
 }
 
+// Add type for vehicle arrival items update
+type VehicleArrivalItemUpdate = {
+  id?: string;
+  vehicle_arrival_id?: string;
+  product_id?: string;
+  sku_id?: string;
+  unit_type?: string;
+  unit_weight?: number | null;
+  quantity?: number;
+  total_weight?: number;
+  final_quantity?: number;
+  final_total_weight?: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export async function updateVehicleArrivalStatus(
   id: string,
   status: string,
-  updates: Partial<Tables['vehicle_arrivals']['Update']> = {}
+  updates: Partial<Tables['vehicle_arrivals']['Update']> = {},
+  finalQuantities?: Array<{
+    item_id: string;
+    final_quantity: number;
+    final_total_weight: number;
+  }>
 ) {
-  const { data, error } = await supabase
-    .from('vehicle_arrivals')
-    .update({ status, ...updates })
-    .eq('id', id)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
+  console.log('Starting status update with data:', {
+    id,
+    status,
+    updates,
+    finalQuantities: finalQuantities?.map(q => ({
+      ...q,
+      final_quantity: Number(q.final_quantity),
+      final_total_weight: Number(q.final_total_weight)
+    }))
+  });
+
+  try {
+    // Start a transaction by updating the arrival status first
+    const updateData = {
+      status,
+      notes: updates.notes,
+      updated_at: new Date().toISOString()
+    };
+    console.log('Updating vehicle arrival with:', updateData);
+
+    const { data: arrivalData, error: arrivalError } = await supabase
+      .from('vehicle_arrivals')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (arrivalError) {
+      console.error('Error updating arrival status:', {
+        error: arrivalError,
+        updateData,
+        id
+      });
+      throw arrivalError;
+    }
+
+    console.log('Successfully updated arrival status:', arrivalData);
+
+    // If marking as completed and final quantities provided, update them
+    if (status === 'completed' && finalQuantities && finalQuantities.length > 0) {
+      console.log('Updating final quantities for items:', finalQuantities);
+      
+      // Update each item's final quantities
+      for (const item of finalQuantities) {
+        const itemUpdateData = {
+          final_quantity: Number(item.final_quantity),
+          final_total_weight: Number(item.final_total_weight),
+          updated_at: new Date().toISOString()
+        };
+        console.log('Updating item with data:', {
+          itemId: item.item_id,
+          updateData: itemUpdateData
+        });
+
+        const { data: itemData, error: itemError } = await supabase
+          .from('vehicle_arrival_items')
+          .update(itemUpdateData)
+          .eq('id', item.item_id)
+          .eq('vehicle_arrival_id', id)
+          .select()
+          .single();
+
+        if (itemError) {
+          console.error('Error updating item final quantities:', {
+            error: itemError,
+            itemId: item.item_id,
+            updateData: itemUpdateData
+          });
+          throw itemError;
+        }
+
+        console.log('Successfully updated item:', itemData);
+      }
+    }
+
+    // Get the updated arrival data with items
+    const { data: updatedData, error: fetchError } = await supabase
+      .from('vehicle_arrivals')
+      .select(`
+        *,
+        vehicle_arrival_items(*)
+      `)
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching updated data:', {
+        error: fetchError,
+        id
+      });
+      throw fetchError;
+    }
+
+    console.log('Successfully fetched updated arrival data:', updatedData);
+    return updatedData;
+  } catch (error) {
+    console.error('Error in updateVehicleArrivalStatus:', {
+      error,
+      id,
+      status,
+      updates,
+      finalQuantities
+    });
+    throw error;
+  }
 }
 
 // Purchase Records

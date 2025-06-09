@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Truck, ArrowLeft, Plus, Trash2, Upload, X, Save, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getVehicleArrival, updateVehicleArrival, uploadAttachment } from '../../lib/api';
+import { getVehicleArrival, updateVehicleArrival, uploadAttachment, getSuppliers } from '../../lib/api';
 
 interface SKU {
   id: string;
@@ -11,6 +11,7 @@ interface SKU {
   quantity: number;
   totalWeight: number;
   isNew?: boolean; // Flag to identify newly added SKUs
+  vehicle_arrival_item_id?: string; // Add this to track existing item IDs
 }
 
 interface Product {
@@ -40,6 +41,8 @@ const EditVehicleArrival: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [suppliers, setSuppliers] = useState<Array<{ id: string; company_name: string }>>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
   
   const [formData, setFormData] = useState({
     vehicleNumber: '',
@@ -55,6 +58,26 @@ const EditVehicleArrival: React.FC = () => {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [existingAttachments, setExistingAttachments] = useState<ExistingAttachment[]>([]);
   const [removedAttachments, setRemovedAttachments] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoadingSuppliers(true);
+        const suppliersData = await getSuppliers();
+        setSuppliers(suppliersData?.map(s => ({
+          id: s.id,
+          company_name: s.company_name
+        })) || []);
+      } catch (error) {
+        console.error('Error fetching suppliers:', error);
+        toast.error('Failed to load suppliers');
+      } finally {
+        setLoadingSuppliers(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   useEffect(() => {
     if (id) {
@@ -98,21 +121,22 @@ const EditVehicleArrival: React.FC = () => {
         
         if (!productMap.has(productId)) {
           productMap.set(productId, {
-            id: productId, // Use actual database ID
+            id: productId,
             name: productName,
             skus: [],
-            isNew: false // Mark as existing
+            isNew: false
           });
         }
         
         const product = productMap.get(productId)!;
         product.skus.push({
-          id: item.sku.id, // Use actual database ID
+          id: item.sku.id,
           code: item.sku.code,
           unitType: item.unit_type as 'box' | 'loose',
           quantity: item.quantity,
           totalWeight: item.total_weight,
-          isNew: false // Mark as existing
+          isNew: false,
+          vehicle_arrival_item_id: item.id // Store the vehicle arrival item ID
         });
       });
 
@@ -308,7 +332,14 @@ const EditVehicleArrival: React.FC = () => {
       for (const attachment of attachments) {
         try {
           const uploadResult = await uploadAttachment(attachment.file);
-          newAttachmentData.push(uploadResult);
+          // Transform the upload result to match the expected format
+          newAttachmentData.push({
+            vehicle_arrival_id: id!,
+            file_name: uploadResult.fileName,
+            file_type: uploadResult.fileType,
+            file_size: uploadResult.fileSize,
+            file_url: uploadResult.fileUrl
+          });
         } catch (error) {
           console.warn('Failed to upload attachment:', attachment.file.name, error);
         }
@@ -319,11 +350,11 @@ const EditVehicleArrival: React.FC = () => {
       
       for (const product of products) {
         for (const sku of product.skus) {
-          // For existing items, use their actual database IDs
-          // For new items, we would need to create them first (but this should be rare in edit mode)
+          // For existing items, include the vehicle_arrival_item_id
           if (!product.isNew && !sku.isNew) {
-            // Existing product and SKU - just update quantities
             itemsData.push({
+              id: sku.vehicle_arrival_item_id, // Include the existing item ID
+              vehicle_arrival_id: id!, // Include the vehicle arrival ID
               product_id: product.id,
               sku_id: sku.id,
               unit_type: sku.unitType,
@@ -333,7 +364,6 @@ const EditVehicleArrival: React.FC = () => {
             });
           } else {
             // This shouldn't happen in normal edit flow
-            // If we have new products/SKUs, we'd need to create them first
             toast.error('Cannot add new products/SKUs in edit mode. Please use the New Vehicle Arrival page.');
             return;
           }
@@ -444,19 +474,28 @@ const EditVehicleArrival: React.FC = () => {
                 <label htmlFor="supplier" className="block text-sm font-medium text-gray-700">
                   Supplier <span className="text-red-500">*</span>
                 </label>
-                <select
-                  id="supplier"
-                  name="supplier"
-                  value={formData.supplier}
-                  onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                  required
-                >
-                  <option value="">Select a supplier</option>
-                  <option value="Green Farms">Green Farms</option>
-                  <option value="Fresh Harvests">Fresh Harvests</option>
-                  <option value="Organic Fruits Co.">Organic Fruits Co.</option>
-                </select>
+                {loadingSuppliers ? (
+                  <div className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-100 animate-pulse">
+                    Loading suppliers...
+                  </div>
+                ) : (
+                  <select
+                    id="supplier"
+                    name="supplier"
+                    value={formData.supplier}
+                    onChange={handleChange}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                    required
+                    disabled={!canEdit()}
+                  >
+                    <option value="">Select a supplier</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.company_name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>

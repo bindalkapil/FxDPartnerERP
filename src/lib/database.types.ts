@@ -644,6 +644,8 @@ export type Database = {
           unit_weight: number | null
           quantity: number
           total_weight: number
+          final_quantity: number
+          final_total_weight: number
           created_at: string | null
           updated_at: string | null
         }
@@ -656,6 +658,7 @@ export type Database = {
           unit_weight?: number | null
           quantity: number
           total_weight: number
+          final_quantity?: number
           created_at?: string | null
           updated_at?: string | null
         }

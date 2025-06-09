@@ -12,6 +12,7 @@ interface VehicleArrival {
   status: 'pending' | 'completed' | 'po-created' | 'cancelled';
   notes: string | null;
   vehicle_arrival_items: Array<{
+    id: string;
     product: {
       name: string;
       category: string;
@@ -55,7 +56,11 @@ const VehicleArrival: React.FC = () => {
   const loadVehicleArrivals = async () => {
     try {
       const data = await getVehicleArrivals();
-      setVehicles(data);
+      const typedData = data.map(vehicle => ({
+        ...vehicle,
+        status: vehicle.status as 'pending' | 'completed' | 'po-created' | 'cancelled'
+      }));
+      setVehicles(typedData);
     } catch (error) {
       console.error('Error loading vehicle arrivals:', error);
       toast.error('Failed to load vehicle arrivals');
@@ -176,16 +181,14 @@ const VehicleArrival: React.FC = () => {
   };
 
   const confirmStatusUpdate = async () => {
-    if (!selectedVehicle || !statusAction) return;
+    if (!selectedVehicle || !statusAction || !statusUpdateData.unloadedItems) return;
 
     try {
       if (statusAction === 'complete') {
-        // Validate unloaded quantities
-        if (!statusUpdateData.unloadedItems) {
-          toast.error('Please confirm all item quantities');
-          return;
-        }
+        console.log('Starting completion process for vehicle:', selectedVehicle);
+        console.log('Unloaded items data:', statusUpdateData.unloadedItems);
 
+        // Validate unloaded quantities
         const hasInvalidQuantity = statusUpdateData.unloadedItems.some(
           item => item.unloadedQuantity < 0
         );
@@ -195,8 +198,45 @@ const VehicleArrival: React.FC = () => {
           return;
         }
 
-        await updateVehicleArrivalStatus(selectedVehicle.id, 'completed');
+        // Prepare final quantities for each item
+        const finalQuantities = selectedVehicle.vehicle_arrival_items.map((item, index) => {
+          const unloadedItem = statusUpdateData.unloadedItems[index];
+          if (!unloadedItem) {
+            console.error('Missing unloaded item data for index:', index);
+            throw new Error(`Missing unloaded quantity data for item ${item.id}`);
+          }
+          const finalQuantity = unloadedItem.unloadedQuantity;
+          const finalTotalWeight = item.unit_type === 'box' 
+            ? finalQuantity * 1 // Assuming 1 kg per box
+            : finalQuantity; // For loose items, quantity is weight
+
+          console.log('Preparing final quantity for item:', {
+            itemId: item.id,
+            originalQuantity: item.quantity,
+            finalQuantity,
+            finalTotalWeight,
+            unitType: item.unit_type
+          });
+
+          return {
+            item_id: item.id,
+            final_quantity: finalQuantity,
+            final_total_weight: finalTotalWeight
+          };
+        });
+
+        console.log('Final quantities prepared:', finalQuantities);
+
+        // Update status with final quantities
+        await updateVehicleArrivalStatus(
+          selectedVehicle.id, 
+          'completed',
+          {},
+          finalQuantities
+        );
         
+        console.log('Status update completed successfully');
+
         setVehicles(prev => 
           prev.map(vehicle => 
             vehicle.id === selectedVehicle.id 
@@ -222,7 +262,7 @@ const VehicleArrival: React.FC = () => {
         } else {
           toast.success('Vehicle arrival marked as completed - all quantities match exactly');
         }
-      } else if (statusAction === 'create-record') {
+
         // Redirect to Record Purchase creation page with vehicle data
         navigate(`/record-purchase/new?vehicleId=${selectedVehicle.id}`);
         setShowStatusModal(false);
