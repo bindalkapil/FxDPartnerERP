@@ -75,8 +75,8 @@ const Inventory: React.FC = () => {
           if (inventoryMap.has(key)) {
             // Update existing inventory item
             const existingItem = inventoryMap.get(key)!;
-            existingItem.totalQuantity += item.quantity;
-            existingItem.totalWeight += item.total_weight;
+            existingItem.totalQuantity += item.final_quantity || item.quantity;
+            existingItem.totalWeight += item.final_total_weight || item.total_weight;
             existingItem.arrivalCount += 1;
             
             // Update last arrival if this one is more recent
@@ -91,8 +91,8 @@ const Inventory: React.FC = () => {
               arrivalTime: arrival.arrival_time,
               supplier: arrival.supplier,
               vehicleNumber: arrival.vehicle_number,
-              quantity: item.quantity,
-              weight: item.total_weight,
+              quantity: item.final_quantity || item.quantity,
+              weight: item.final_total_weight || item.total_weight,
               status: arrival.status
             });
           } else {
@@ -105,8 +105,8 @@ const Inventory: React.FC = () => {
               skuId: item.sku.id,
               skuCode: item.sku.code,
               unitType: item.unit_type as 'box' | 'loose',
-              totalQuantity: item.quantity,
-              totalWeight: item.total_weight,
+              totalQuantity: item.final_quantity || item.quantity, 
+              totalWeight: item.final_total_weight || item.total_weight,
               lastArrival: arrival.arrival_time,
               arrivalCount: 1,
               supplier: arrival.supplier,
@@ -115,8 +115,8 @@ const Inventory: React.FC = () => {
                 arrivalTime: arrival.arrival_time,
                 supplier: arrival.supplier,
                 vehicleNumber: arrival.vehicle_number,
-                quantity: item.quantity,
-                weight: item.total_weight,
+                quantity: item.final_quantity || item.quantity,
+                weight: item.final_total_weight || item.total_weight,
                 status: arrival.status
               }]
             });
