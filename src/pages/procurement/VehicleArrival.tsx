@@ -23,6 +23,8 @@ interface VehicleArrival {
     quantity: number;
     total_weight: number;
     unit_type: string;
+    final_quantity?: number;
+    final_total_weight?: number;
   }>;
 }
 
@@ -268,8 +270,7 @@ const VehicleArrival: React.FC = () => {
           toast.success('Vehicle arrival marked as completed - all quantities match exactly');
         }
 
-        // Redirect to Record Purchase creation page with vehicle data
-        navigate(`/record-purchase/new?vehicleId=${selectedVehicle.id}`);
+        // Closing the modal after completion
         setShowStatusModal(false);
         return;
       } else if (statusAction === 'cancel' && statusUpdateData.unloadedItems) {
@@ -580,7 +581,7 @@ const VehicleArrival: React.FC = () => {
                     <div className="text-sm text-gray-900">
                       {vehicle.vehicle_arrival_items.map((item, index) => (
                         <div key={index} className="text-sm text-gray-500">
-                          {item.product.name} ({item.quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'} - {item.total_weight}kg)
+                          {item.product.name} ({item.quantity}/{item.final_quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'} - {item.total_weight}/{item.final_total_weight}kg)
                         </div>
                       ))}
                     </div>
