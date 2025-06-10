@@ -459,20 +459,22 @@ const EditRecordPurchase: React.FC = () => {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Default Commission (%)
-                </label>
-                <input
-                  type="number"
-                  value={formData.defaultCommission}
-                  onChange={(e) => setFormData(prev => ({ ...prev, defaultCommission: Number(e.target.value) }))}
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                />
-              </div>
+              {formData.pricingModel === 'commission' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Default Commission (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.defaultCommission}
+                    onChange={(e) => setFormData(prev => ({ ...prev, defaultCommission: Number(e.target.value) }))}
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
@@ -508,9 +510,11 @@ const EditRecordPurchase: React.FC = () => {
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Market Price (₹)
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Commission (%)
-                    </th>
+                    {formData.pricingModel === 'commission' && (
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Commission (%)
+                      </th>
+                    )}
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Unit Price (₹)
                     </th>
@@ -549,17 +553,19 @@ const EditRecordPurchase: React.FC = () => {
                           className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                         />
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <input
-                          type="number"
-                          value={item.commission}
-                          onChange={(e) => handleItemChange(item.id, 'commission', Number(e.target.value))}
-                          min="0"
-                          max="100"
-                          step="0.1"
-                          className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                        />
-                      </td>
+                      {formData.pricingModel === 'commission' && (
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input
+                            type="number"
+                            value={item.commission}
+                            onChange={(e) => handleItemChange(item.id, 'commission', Number(e.target.value))}
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                          />
+                        </td>
+                      )}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input
                           type="number"
