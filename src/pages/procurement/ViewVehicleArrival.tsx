@@ -30,6 +30,8 @@ interface VehicleArrivalData {
     quantity: number;
     total_weight: number;
     unit_type: string;
+    final_quantity?: number;
+    final_total_weight?: number;
   }>;
   vehicle_arrival_attachments: Array<{
     id: string;
@@ -258,7 +260,13 @@ const ViewVehicleArrival: React.FC = () => {
                       Quantity
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Final Quantity
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total Weight
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Final Total Weight
                     </th>
                   </tr>
                 </thead>
@@ -283,7 +291,13 @@ const ViewVehicleArrival: React.FC = () => {
                         {item.quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.final_quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {item.total_weight} kg
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.final_total_weight} kg
                       </td>
                     </tr>
                   ))}
