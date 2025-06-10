@@ -318,7 +318,7 @@ const NewSale: React.FC = () => {
         tax_amount: 0, // Tax removed as requested
         discount_amount: discountAmount,
         total_amount: totalAmount,
-        status: 'draft',
+        status: saleType === 'counter' ? 'completed' : 'processing', // Set status based on sale type
         notes: formData.notes || null
       };
 

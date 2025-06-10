@@ -85,7 +85,7 @@ ALTER TABLE sales_orders ADD CONSTRAINT sales_orders_payment_status_check
   CHECK (payment_status = ANY (ARRAY['paid'::text, 'partial'::text, 'unpaid'::text]));
 
 ALTER TABLE sales_orders ADD CONSTRAINT sales_orders_status_check 
-  CHECK (status = ANY (ARRAY['draft'::text, 'confirmed'::text, 'processing'::text, 'dispatched'::text, 'delivered'::text, 'cancelled'::text]));
+  CHECK (status = ANY (ARRAY['draft'::text, 'processing'::text, 'completed'::text, 'cancelled'::text]));
 
 ALTER TABLE sales_order_items ADD CONSTRAINT sales_order_items_quantity_check 
   CHECK (quantity > 0);

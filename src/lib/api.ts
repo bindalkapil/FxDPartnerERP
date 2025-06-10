@@ -315,7 +315,7 @@ export async function createSalesOrder(
   const isOutstation = order.delivery_date || order.delivery_address;
   const orderWithStatus = {
     ...order,
-    status: 'processing'
+    status: isOutstation ? 'processing' : 'completed' // Set completed for counter sales, processing for outstation
   };
 
   // Start a transaction
@@ -514,7 +514,7 @@ export async function updateSalesOrderDispatchDetails(
   const { data, error } = await supabase
     .from('sales_orders')
     .update({
-      status: 'dispatched',
+      status: 'completed',
       vehicle_number: dispatchDetails.vehicle_number,
       driver_name: dispatchDetails.driver_name,
       driver_contact: dispatchDetails.driver_contact,
