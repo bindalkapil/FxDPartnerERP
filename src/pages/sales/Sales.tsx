@@ -95,10 +95,6 @@ const Sales: React.FC = () => {
     switch (status) {
       case 'processing':
         return 'bg-yellow-100 text-yellow-800';
-      case 'dispatched':
-        return 'bg-blue-100 text-blue-800';
-      case 'delivered':
-        return 'bg-green-100 text-green-800';
       case 'completed':
         return 'bg-green-100 text-green-800';
       case 'cancelled':
@@ -113,11 +109,7 @@ const Sales: React.FC = () => {
   const getStatusDisplayText = (status: string) => {
     switch (status) {
       case 'processing':
-        return 'Processing';
-      case 'dispatched':
-        return 'Dispatched';
-      case 'delivered':
-        return 'Delivered';
+        return 'Dispatch Pending';
       case 'completed':
         return 'Completed';
       case 'cancelled':
