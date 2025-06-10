@@ -250,7 +250,9 @@ const NewVehicleArrival: React.FC = () => {
             unit_type: sku.unitType,
             unit_weight: sku.unitType === 'box' ? 1 : null, // Use the same unit_weight as SKU
             quantity: sku.quantity,
-            total_weight: sku.totalWeight
+            total_weight: sku.totalWeight,
+            final_quantity: sku.quantity, // Add final_quantity field
+            final_total_weight: sku.totalWeight // Add final_total_weight field
           });
         }
       }
@@ -568,7 +570,7 @@ const NewVehicleArrival: React.FC = () => {
                 <div className="text-center py-8 text-gray-500">
                   No products added yet. Click "Add Product" to get started.
                 </div>
-              )}
+                )}
             </div>
           </div>
 

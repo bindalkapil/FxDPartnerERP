@@ -311,11 +311,10 @@ export async function createSalesOrder(
   order: Tables['sales_orders']['Insert'],
   items: Tables['sales_order_items']['Insert'][]
 ) {
-  // Determine status based on sale type
-  const isOutstation = order.delivery_date || order.delivery_address;
+  // All new sales orders start with 'draft' status
   const orderWithStatus = {
     ...order,
-    status: isOutstation ? 'processing' : 'completed' // Set completed for counter sales, processing for outstation
+    status: 'draft'
   };
 
   // Start a transaction
@@ -514,7 +513,7 @@ export async function updateSalesOrderDispatchDetails(
   const { data, error } = await supabase
     .from('sales_orders')
     .update({
-      status: 'completed',
+      status: 'delivered',
       vehicle_number: dispatchDetails.vehicle_number,
       driver_name: dispatchDetails.driver_name,
       driver_contact: dispatchDetails.driver_contact,
@@ -577,7 +576,7 @@ export async function getOutstationSalesOrders() {
       )
     `)
     .not('delivery_date', 'is', null)
-    .in('status', ['processing', 'dispatched'])
+    .in('status', ['confirmed', 'processing', 'dispatched'])
     .order('created_at', { ascending: false });
   
   if (error) throw error;
