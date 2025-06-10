@@ -181,10 +181,15 @@ const VehicleArrival: React.FC = () => {
   };
 
   const confirmStatusUpdate = async () => {
-    if (!selectedVehicle || !statusAction || !statusUpdateData.unloadedItems) return;
+    if (!selectedVehicle || !statusAction) return;
 
     try {
-      if (statusAction === 'complete') {
+      if (statusAction === 'create-record') {
+        navigate(`/record-purchase/new?vehicleId=${selectedVehicle.id}`);
+        setShowStatusModal(false);
+        return;
+      }
+      else if (statusAction === 'complete' && statusUpdateData.unloadedItems) {
         console.log('Starting completion process for vehicle:', selectedVehicle);
         console.log('Unloaded items data:', statusUpdateData.unloadedItems);
 
@@ -267,7 +272,7 @@ const VehicleArrival: React.FC = () => {
         navigate(`/record-purchase/new?vehicleId=${selectedVehicle.id}`);
         setShowStatusModal(false);
         return;
-      } else if (statusAction === 'cancel') {
+      } else if (statusAction === 'cancel' && statusUpdateData.unloadedItems) {
         await updateVehicleArrivalStatus(selectedVehicle.id, 'cancelled', {
           notes: statusUpdateData.cancellationReason || selectedVehicle.notes
         });
