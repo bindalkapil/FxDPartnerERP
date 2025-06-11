@@ -172,19 +172,19 @@ const EditRecordPurchase: React.FC = () => {
         }
 
         return {
-          id: item.id,
-          productId: item.product_id,
-          productName: item.product_name,
-          skuId: item.sku_id,
-          skuCode: item.sku_code,
-          category: item.category,
+        id: item.id,
+        productId: item.product_id,
+        productName: item.product_name,
+        skuId: item.sku_id,
+        skuCode: item.sku_code,
+        category: item.category,
           quantity,
-          unitType: item.unit_type,
+        unitType: item.unit_type,
           totalWeight,
-          marketPrice: item.market_price || 0,
-          commission: item.commission || 0,
-          unitPrice: item.unit_price,
-          total: item.total
+        marketPrice: item.market_price || 0,
+        commission: item.commission || 0,
+        unitPrice: item.unit_price,
+        total: item.total
         };
       });
       setItems(recordItems);
@@ -243,7 +243,7 @@ const EditRecordPurchase: React.FC = () => {
         
         // Recalculate unit price and total based on pricing model
         if (formData.pricingModel === 'commission') {
-          if (field === 'marketPrice' || field === 'commission') {
+        if (field === 'marketPrice' || field === 'commission') {
             updatedItem.unitPrice = updatedItem.marketPrice * (1 - updatedItem.commission / 100);
           }
         }
@@ -569,9 +569,9 @@ const EditRecordPurchase: React.FC = () => {
                     </th>
                     {formData.pricingModel === 'commission' ? (
                       <>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Market Price (₹)
-                        </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Market Price (₹)
+                    </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Commission (%)
                         </th>
@@ -611,27 +611,27 @@ const EditRecordPurchase: React.FC = () => {
                       </td>
                       {formData.pricingModel === 'commission' ? (
                         <>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <input
-                              type="number"
-                              value={item.marketPrice}
-                              onChange={(e) => handleItemChange(item.id, 'marketPrice', Number(e.target.value))}
-                              min="0"
-                              step="0.01"
-                              className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            />
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <input
-                              type="number"
-                              value={item.commission}
-                              onChange={(e) => handleItemChange(item.id, 'commission', Number(e.target.value))}
-                              min="0"
-                              max="100"
-                              step="0.1"
-                              className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            />
-                          </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <input
+                          type="number"
+                          value={item.marketPrice}
+                          onChange={(e) => handleItemChange(item.id, 'marketPrice', Number(e.target.value))}
+                          min="0"
+                          step="0.01"
+                          className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        />
+                      </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input
+                            type="number"
+                            value={item.commission}
+                            onChange={(e) => handleItemChange(item.id, 'commission', Number(e.target.value))}
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                          />
+                        </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <input
                               type="number"
@@ -645,17 +645,17 @@ const EditRecordPurchase: React.FC = () => {
                           </td>
                         </>
                       ) : (
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <input
-                            type="number"
-                            value={item.unitPrice}
-                            onChange={(e) => handleItemChange(item.id, 'unitPrice', Number(e.target.value))}
-                            min="0"
-                            step="0.01"
-                            className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <input
+                          type="number"
+                          value={item.unitPrice}
+                          onChange={(e) => handleItemChange(item.id, 'unitPrice', Number(e.target.value))}
+                          min="0"
+                          step="0.01"
+                          className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                             placeholder="Enter unit price"
-                          />
-                        </td>
+                        />
+                      </td>
                       )}
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         ₹{item.total.toFixed(2)}

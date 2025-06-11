@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Search, Filter, RefreshCw, ChevronDown, ChevronUp, Truck, Calendar, AlertCircle } from 'lucide-react';
+import { Package, Search, Filter, RefreshCw, ChevronDown, ChevronUp, Truck, Calendar, AlertCircle, ShoppingCart, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getVehicleArrivals } from '../../lib/api';
+import { getVehicleArrivals, getSalesOrders } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 
 interface InventoryItem {
@@ -28,6 +28,14 @@ interface InventoryItem {
     weight: number;
     status: string;
   }>;
+  salesOrders: Array<{
+    id: string;
+    orderNumber: string;
+    orderDate: string;
+    customerName: string;
+    quantity: number;
+    status: string;
+  }>;
 }
 
 const Inventory: React.FC = () => {
@@ -38,6 +46,8 @@ const Inventory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   useEffect(() => {
     loadInventoryData();
@@ -60,6 +70,9 @@ const Inventory: React.FC = () => {
       const arrivals = (await getVehicleArrivals()).filter(
         (arrival: any) => arrival.status === 'completed' || arrival.status === 'po-created'
       );
+
+      // Get all sales orders
+      const salesOrders = await getSalesOrders();
       
       if (!arrivals || arrivals.length === 0) {
         // If no arrivals but we have current inventory, create inventory items from that
@@ -79,7 +92,8 @@ const Inventory: React.FC = () => {
             lastArrival: item.last_updated_at,
             arrivalCount: 0,
             supplier: 'N/A',
-            vehicleArrivals: []
+            vehicleArrivals: [],
+            salesOrders: []
           }));
           setInventoryItems(inventoryArray);
           return;
@@ -105,12 +119,13 @@ const Inventory: React.FC = () => {
             unitType: item.unit_type as 'box' | 'loose',
             currentQuantity: item.available_quantity,
             currentWeight: item.total_weight,
-            totalQuantity: 0, // Will be updated with arrival data
-            totalWeight: 0,   // Will be updated with arrival data
+            totalQuantity: 0,
+            totalWeight: 0,
             lastArrival: item.last_updated_at,
-            arrivalCount: 0,  // Will be updated with arrival data
-            supplier: 'N/A',  // Will be updated with arrival data
-            vehicleArrivals: []
+            arrivalCount: 0,
+            supplier: 'N/A',
+            vehicleArrivals: [],
+            salesOrders: []
           });
         });
       }
@@ -147,8 +162,8 @@ const Inventory: React.FC = () => {
               skuId: item.sku.id,
               skuCode: item.sku.code,
               unitType: item.unit_type as 'box' | 'loose',
-              currentQuantity: 0, // No current inventory data
-              currentWeight: 0,   // No current inventory data
+              currentQuantity: 0,
+              currentWeight: 0,
               totalQuantity: item.final_quantity || item.quantity,
               totalWeight: item.final_total_weight || item.total_weight,
               lastArrival: arrival.arrival_time,
@@ -162,16 +177,41 @@ const Inventory: React.FC = () => {
                 quantity: item.final_quantity || item.quantity,
                 weight: item.final_total_weight || item.total_weight,
                 status: arrival.status
-              }]
+              }],
+              salesOrders: []
             });
           }
         });
       });
 
-      // Sort vehicle arrivals by date (most recent first) for each item
+      // Add sales order data
+      salesOrders.forEach(order => {
+        if (!order.sales_order_items) return;
+
+        order.sales_order_items.forEach((item: any) => {
+          const key = `${item.product_id}_${item.sku_id}`;
+          const existingItem = inventoryMap.get(key);
+
+          if (existingItem) {
+            existingItem.salesOrders.push({
+              id: order.id,
+              orderNumber: order.order_number,
+              orderDate: order.order_date,
+              customerName: order.customer.name,
+              quantity: item.quantity,
+              status: order.status
+            });
+          }
+        });
+      });
+
+      // Sort vehicle arrivals and sales orders by date (most recent first) for each item
       inventoryMap.forEach(item => {
         item.vehicleArrivals.sort((a, b) => 
           new Date(b.arrivalTime).getTime() - new Date(a.arrivalTime).getTime()
+        );
+        item.salesOrders.sort((a, b) => 
+          new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()
         );
         // Update lastArrival if there are vehicle arrivals
         if (item.vehicleArrivals.length > 0) {
@@ -188,8 +228,7 @@ const Inventory: React.FC = () => {
       setInventoryItems(inventoryArray);
     } catch (error) {
       console.error('Error loading inventory data:', error);
-      setError('Failed to load inventory data. Please check your connection and try again.');
-      toast.error('Failed to load inventory data');
+      setError('Failed to load inventory data');
     } finally {
       setLoading(false);
     }
@@ -241,7 +280,27 @@ const Inventory: React.FC = () => {
     }
   };
 
+  const getStatusDisplayText = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'Completed';
+      case 'pending':
+        return 'Pending';
+      case 'po-created':
+        return 'PO Created';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return status;
+    }
+  };
+
   const inventoryStats = getTotalInventoryValue();
+
+  const handleViewHistory = (item: InventoryItem) => {
+    setSelectedItem(item);
+    setShowHistoryModal(true);
+  };
 
   if (loading) {
     return (
@@ -475,7 +534,7 @@ const Inventory: React.FC = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setExpandedItem(expandedItem === item.id ? null : item.id);
+                          handleViewHistory(item);
                         }}
                         className="text-green-600 hover:text-green-900"
                       >
@@ -549,6 +608,115 @@ const Inventory: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* History Modal */}
+      {showHistoryModal && selectedItem && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">
+                  History for {selectedItem.productName} ({selectedItem.skuCode})
+                </h3>
+                <button
+                  onClick={() => setShowHistoryModal(false)}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <span className="sr-only">Close</span>
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-6 py-4">
+              {/* Arrival History */}
+              <div className="mb-8">
+                <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                  <Truck className="h-4 w-4 mr-2" />
+                  Arrival History
+                </h4>
+                <div className="space-y-3">
+                  {selectedItem.vehicleArrivals.map((arrival, index) => (
+                    <div key={index} className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+                        <div>
+                          <span className="font-medium text-gray-700">Arrival Date:</span>
+                          <div className="text-gray-900">{formatDateTime(arrival.arrivalTime)}</div>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Supplier:</span>
+                          <div className="text-gray-900">{arrival.supplier}</div>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Vehicle:</span>
+                          <div className="text-gray-900">{arrival.vehicleNumber || 'Not specified'}</div>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Quantity:</span>
+                          <div className="text-gray-900">
+                            {arrival.quantity} {selectedItem.unitType === 'box' ? 'boxes' : 'kg'} 
+                            ({arrival.weight} kg total)
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Status:</span>
+                          <div>
+                            <span className={`inline-flex px-2 py-1 text-xs leading-4 font-semibold rounded-full ${getStatusColor(arrival.status)}`}>
+                              {arrival.status.charAt(0).toUpperCase() + arrival.status.slice(1)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sales History */}
+              <div>
+                <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                  <ShoppingCart className="h-4 w-4 mr-2" />
+                  Sales History
+                </h4>
+                <div className="space-y-3">
+                  {selectedItem.salesOrders.map((order, index) => (
+                    <div key={index} className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+                        <div>
+                          <span className="font-medium text-gray-700">Order Date:</span>
+                          <div className="text-gray-900">{formatDateTime(order.orderDate)}</div>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Order Number:</span>
+                          <div className="text-gray-900">{order.orderNumber}</div>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Customer:</span>
+                          <div className="text-gray-900">{order.customerName}</div>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Quantity:</span>
+                          <div className="text-gray-900">
+                            {order.quantity} {selectedItem.unitType === 'box' ? 'boxes' : 'kg'}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Status:</span>
+                          <div>
+                            <span className={`inline-flex px-2 py-1 text-xs leading-4 font-semibold rounded-full ${getStatusColor(order.status)}`}>
+                              {getStatusDisplayText(order.status)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Information Note */}
       <div className="bg-blue-50 border border-blue-200 rounded-md p-4">

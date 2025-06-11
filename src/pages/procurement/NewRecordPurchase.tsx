@@ -175,7 +175,7 @@ const NewRecordPurchase: React.FC = () => {
         
         // Recalculate unit price and total based on pricing model
         if (formData.pricingModel === 'commission') {
-          if (field === 'marketPrice' || field === 'commission') {
+        if (field === 'marketPrice' || field === 'commission') {
             updatedItem.unitPrice = updatedItem.marketPrice * (1 - updatedItem.commission / 100);
           }
         }
@@ -517,9 +517,9 @@ const NewRecordPurchase: React.FC = () => {
                     </th>
                     {formData.pricingModel === 'commission' ? (
                       <>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Market Price (₹)
-                        </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Market Price (₹)
+                    </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Commission (%)
                         </th>
@@ -559,27 +559,27 @@ const NewRecordPurchase: React.FC = () => {
                       </td>
                       {formData.pricingModel === 'commission' ? (
                         <>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <input
-                              type="number"
-                              value={item.marketPrice}
-                              onChange={(e) => handleItemChange(item.id, 'marketPrice', Number(e.target.value))}
-                              min="0"
-                              step="0.01"
-                              className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            />
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <input
-                              type="number"
-                              value={item.commission}
-                              onChange={(e) => handleItemChange(item.id, 'commission', Number(e.target.value))}
-                              min="0"
-                              max="100"
-                              step="0.1"
-                              className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                            />
-                          </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <input
+                          type="number"
+                          value={item.marketPrice}
+                          onChange={(e) => handleItemChange(item.id, 'marketPrice', Number(e.target.value))}
+                          min="0"
+                          step="0.01"
+                          className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        />
+                      </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input
+                            type="number"
+                            value={item.commission}
+                            onChange={(e) => handleItemChange(item.id, 'commission', Number(e.target.value))}
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                          />
+                        </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <input
                               type="number"
@@ -593,17 +593,17 @@ const NewRecordPurchase: React.FC = () => {
                           </td>
                         </>
                       ) : (
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <input
-                            type="number"
-                            value={item.unitPrice}
-                            onChange={(e) => handleItemChange(item.id, 'unitPrice', Number(e.target.value))}
-                            min="0"
-                            step="0.01"
-                            className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <input
+                          type="number"
+                          value={item.unitPrice}
+                          onChange={(e) => handleItemChange(item.id, 'unitPrice', Number(e.target.value))}
+                          min="0"
+                          step="0.01"
+                          className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                             placeholder="Enter unit price"
-                          />
-                        </td>
+                        />
+                      </td>
                       )}
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         ₹{item.total.toFixed(2)}
