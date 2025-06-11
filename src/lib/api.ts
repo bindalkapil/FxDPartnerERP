@@ -335,7 +335,7 @@ async function updateInventoryAfterSale(productId: string, skuId: string, quanti
   if (updateError) throw updateError;
 }
 
-// Updated createSalesOrder function with new status logic
+// Updated createSalesOrder function with CORRECTED status logic
 export async function createSalesOrder(orderData: any) {
   const { items, ...orderDetails } = orderData;
   
@@ -369,10 +369,10 @@ export async function createSalesOrder(orderData: any) {
     return sum + (quantity * unitPrice);
   }, 0);
 
-  // Determine status based on delivery date
+  // CORRECTED STATUS LOGIC:
+  // If delivery_date is NULL or empty, it's a counter order (completed)
   // If delivery_date is provided, it's an outstation order (dispatch_pending)
-  // Otherwise, it's a counter order (completed)
-  const status = orderDetails.delivery_date ? 'dispatch_pending' : 'completed';
+  const status = (!orderDetails.delivery_date) ? 'completed' : 'dispatch_pending';
 
   const { data: order, error: orderError } = await supabase
     .from('sales_orders')
