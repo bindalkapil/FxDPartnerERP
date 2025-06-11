@@ -566,29 +566,7 @@ const NewSale: React.FC = () => {
               )}
             </div>
 
-            {/* Customer Credit Information */}
-            {selectedCustomer && (
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Customer Credit Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-500">Credit Limit:</span>
-                    <span className="ml-2 font-medium">₹{selectedCustomer.credit_limit.toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Outstanding:</span>
-                    <span className="ml-2 font-medium">₹{selectedCustomer.current_balance.toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Available Credit:</span>
-                    <span className="ml-2 font-medium">₹{(selectedCustomer.credit_limit - selectedCustomer.current_balance).toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Payment Information */}
+            {/* Payment Information */}
           <div className="border-t pt-6">
             <h2 className="text-lg font-medium text-gray-900 mb-4">Payment Information</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-1">
@@ -615,6 +593,28 @@ const NewSale: React.FC = () => {
                 <div className="flex items-center">
                   <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
                   <span className="text-sm font-medium text-red-800">{creditCheck.message}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+            {/* Customer Credit Information */}
+            {selectedCustomer && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Customer Credit Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500">Credit Limit:</span>
+                    <span className="ml-2 font-medium">₹{selectedCustomer.credit_limit.toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Outstanding:</span>
+                    <span className="ml-2 font-medium">₹{selectedCustomer.current_balance.toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Available Credit:</span>
+                    <span className="ml-2 font-medium">₹{(selectedCustomer.credit_limit - selectedCustomer.current_balance).toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
             )}
