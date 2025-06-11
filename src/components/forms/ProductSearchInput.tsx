@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, ChevronDown, Package } from 'lucide-react';
 
@@ -21,116 +21,79 @@ interface ProductSearchInputProps {
   className?: string;
 }
 
-interface DropdownPosition {
-  top: number;
-  left: number;
-  width: number;
-}
-
 const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   inventory,
   value,
   onChange,
-  placeholder = "Type to search products...",
+  placeholder = "Search products...",
   className = ""
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
-  const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
+  const [inputValue, setInputValue] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [dropdownPosition, setDropdownPosition] = useState<DropdownPosition>({ top: 0, left: 0, width: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Find the selected item to display its name
+  // Get the currently selected item
   const selectedItem = inventory.find(item => item.sku_id === value);
 
-  // Update search term when value changes or when dropdown closes
+  // Update input value when selection changes
   useEffect(() => {
-    if (selectedItem && !isOpen) {
-      setSearchTerm(`${selectedItem.product_name} - ${selectedItem.sku_code}`);
-    }
-  }, [selectedItem, isOpen]);
-
-  // Filter items based on search term
-  useEffect(() => {
-    if (searchTerm.trim() === '') {
-      setFilteredItems(inventory); // Show all items when empty
+    if (selectedItem) {
+      setInputValue(`${selectedItem.product_name} - ${selectedItem.sku_code}`);
     } else {
-      const filtered = inventory.filter(item => {
-        const searchLower = searchTerm.toLowerCase();
-        return (
-          (item.product_name || '').toLowerCase().includes(searchLower) ||
-          (item.sku_code || '').toLowerCase().includes(searchLower) ||
-          (item.product_category || '').toLowerCase().includes(searchLower)
-        );
-      });
-      
-      setFilteredItems(filtered);
+      setInputValue('');
     }
-    setSelectedIndex(-1);
-  }, [searchTerm, inventory]);
+  }, [selectedItem]);
 
-  // Calculate dropdown position when it opens
-  useLayoutEffect(() => {
-    if (isOpen && inputRef.current) {
-      const rect = inputRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + window.scrollY,
-        left: rect.left + window.scrollX,
-        width: rect.width
-      });
+  // Filter items based on input value
+  const filteredItems = React.useMemo(() => {
+    if (!inputValue.trim()) {
+      return inventory;
     }
-  }, [isOpen]);
 
-  // Update position on scroll or resize
-  useEffect(() => {
-    if (!isOpen) return;
+    const searchTerms = inputValue.toLowerCase().split(/\s+/);
+    return inventory.filter(item => {
+      const searchableText = [
+        item.product_name,
+        item.sku_code,
+        item.product_category
+      ].map(text => (text || '').toLowerCase()).join(' ');
 
-    const updatePosition = () => {
-      if (inputRef.current) {
-        const rect = inputRef.current.getBoundingClientRect();
-        setDropdownPosition({
-          top: rect.bottom + window.scrollY,
-          left: rect.left + window.scrollX,
-          width: rect.width
-        });
-      }
-    };
+      return searchTerms.every(term => searchableText.includes(term));
+    });
+  }, [inputValue, inventory]);
 
-    window.addEventListener('scroll', updatePosition, true);
-    window.addEventListener('resize', updatePosition);
-
-    return () => {
-      window.removeEventListener('scroll', updatePosition, true);
-      window.removeEventListener('resize', updatePosition);
-    };
-  }, [isOpen]);
-
+  // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
-    setSearchTerm(newValue);
+    setInputValue(newValue);
     setIsOpen(true);
-    
-    // Clear selection if user is typing something different
-    if (newValue !== `${selectedItem?.product_name} - ${selectedItem?.sku_code}`) {
+    setSelectedIndex(-1);
+
+    // Clear selection if input doesn't match current selection
+    if (selectedItem && newValue !== `${selectedItem.product_name} - ${selectedItem.sku_code}`) {
       onChange('');
     }
   };
 
-  const handleItemSelect = (item: InventoryItem) => {
-    setSearchTerm(`${item.product_name} - ${item.sku_code}`);
+  // Handle item selection
+  const handleSelectItem = (item: InventoryItem) => {
     onChange(item.sku_id);
+    setInputValue(`${item.product_name} - ${item.sku_code}`);
     setIsOpen(false);
     setSelectedIndex(-1);
+    inputRef.current?.blur();
   };
 
+  // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isOpen) {
       if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        e.preventDefault();
         setIsOpen(true);
-        return;
       }
+      return;
     }
 
     switch (e.key) {
@@ -142,15 +105,16 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
+        setSelectedIndex(prev => prev > 0 ? prev - 1 : 0);
         break;
       case 'Enter':
         e.preventDefault();
         if (selectedIndex >= 0 && filteredItems[selectedIndex]) {
-          handleItemSelect(filteredItems[selectedIndex]);
+          handleSelectItem(filteredItems[selectedIndex]);
         }
         break;
       case 'Escape':
+        e.preventDefault();
         setIsOpen(false);
         setSelectedIndex(-1);
         inputRef.current?.blur();
@@ -158,84 +122,98 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     }
   };
 
+  // Handle focus/blur
   const handleFocus = () => {
     setIsOpen(true);
-    // Clear the input to allow fresh search
-    if (selectedItem) {
-      setSearchTerm('');
-    }
   };
 
   const handleBlur = (e: React.FocusEvent) => {
-    // Don't close if clicking on dropdown
+    // Don't close if clicking inside dropdown
     if (dropdownRef.current?.contains(e.relatedTarget as Node)) {
       return;
     }
-    
+
+    // Use timeout to allow click events to process
     setTimeout(() => {
       setIsOpen(false);
-      // Restore the selected item name if we have a selection
+      // Restore selected item text if we have a selection
       if (selectedItem) {
-        setSearchTerm(`${selectedItem.product_name} - ${selectedItem.sku_code}`);
-      } else {
-        setSearchTerm('');
+        setInputValue(`${selectedItem.product_name} - ${selectedItem.sku_code}`);
       }
-    }, 150);
+    }, 200);
   };
 
-  // Get portal root element
+  // Get portal root
   const portalRoot = document.getElementById('portal-root');
 
-  const dropdownContent = isOpen && portalRoot ? (
-    <div
-      ref={dropdownRef}
-      style={{
-        position: 'fixed',
-        top: dropdownPosition.top,
-        left: dropdownPosition.left,
-        width: dropdownPosition.width,
-        zIndex: 9999
-      }}
-      className="bg-white border border-gray-300 rounded-md shadow-lg max-h-96 overflow-auto"
-    >
-      {filteredItems.length > 0 ? (
-        <ul className="py-1">
-          {filteredItems.map((item, index) => (
-            <li
-              key={item.sku_id}
-              onClick={() => handleItemSelect(item)}
-              className={`px-3 py-2 cursor-pointer transition-colors duration-150 ${
-                index === selectedIndex
-                  ? 'bg-green-50 text-green-900'
-                  : 'hover:bg-gray-50'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Package className="h-4 w-4 text-gray-400 mr-2" />
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">
-                      {item.product_name}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {item.sku_code} • {item.product_category || 'Uncategorized'} • {item.unit_type}
+  // Calculate dropdown position
+  const dropdownPosition = React.useMemo(() => {
+    if (!isOpen || !inputRef.current) return null;
+
+    const rect = inputRef.current.getBoundingClientRect();
+    return {
+      top: rect.bottom + window.scrollY,
+      left: rect.left + window.scrollX,
+      width: rect.width
+    };
+  }, [isOpen]);
+
+  // Render dropdown
+  const renderDropdown = () => {
+    if (!isOpen || !portalRoot || !dropdownPosition) return null;
+
+    return createPortal(
+      <div
+        ref={dropdownRef}
+        style={{
+          position: 'fixed',
+          top: dropdownPosition.top,
+          left: dropdownPosition.left,
+          width: dropdownPosition.width,
+          zIndex: 9999
+        }}
+        className="bg-white border border-gray-300 rounded-md shadow-lg max-h-96 overflow-auto"
+      >
+        {filteredItems.length > 0 ? (
+          <ul className="py-1">
+            {filteredItems.map((item, index) => (
+              <li
+                key={`${item.product_id}_${item.sku_id}`}
+                onClick={() => handleSelectItem(item)}
+                className={`px-3 py-2 cursor-pointer transition-colors duration-150 ${
+                  index === selectedIndex
+                    ? 'bg-green-50 text-green-900'
+                    : 'hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Package className="h-4 w-4 text-gray-400 mr-2" />
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {item.product_name}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {item.sku_code} • {item.product_category || 'Uncategorized'} • {item.unit_type}
+                      </div>
                     </div>
                   </div>
+                  <div className="text-xs text-gray-500">
+                    {item.available_quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
+                  </div>
                 </div>
-                <div className="text-xs text-gray-500">
-                  {item.available_quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className="px-3 py-2 text-sm text-gray-500 text-center">
-          {searchTerm.trim() === '' ? 'Start typing to search products...' : 'No products found'}
-        </div>
-      )}
-    </div>
-  ) : null;
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="px-3 py-2 text-sm text-gray-500 text-center">
+            {inputValue.trim() === '' ? 'Start typing to search products...' : 'No products found'}
+          </div>
+        )}
+      </div>,
+      portalRoot
+    );
+  };
 
   return (
     <div className="relative">
@@ -246,7 +224,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
         <input
           ref={inputRef}
           type="text"
-          value={searchTerm}
+          value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onFocus={handleFocus}
@@ -259,8 +237,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
           <ChevronDown className="h-4 w-4 text-gray-400" />
         </div>
       </div>
-
-      {portalRoot && dropdownContent && createPortal(dropdownContent, portalRoot)}
+      {renderDropdown()}
     </div>
   );
 };
