@@ -581,7 +581,7 @@ const VehicleArrival: React.FC = () => {
                     <div className="text-sm text-gray-900">
                       {vehicle.vehicle_arrival_items.map((item, index) => (
                         <div key={index} className="text-sm text-gray-500">
-                          {item.product.name} ({item.quantity}/{item.final_quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'} - {item.total_weight}/{item.final_total_weight}kg)
+                          {item.product.name} ({item.unit_type === 'box' ? `${item.quantity}/${item.final_quantity} boxes` : `${item.total_weight}/${item.final_total_weight}kg`})
                         </div>
                       ))}
                     </div>

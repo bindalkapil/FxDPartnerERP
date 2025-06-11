@@ -288,16 +288,16 @@ const ViewVehicleArrival: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
+                      {item.unit_type === 'box' ? `${item.quantity} boxes` : `-`}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.final_quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
+                      {item.unit_type === 'box' ? `${item.final_quantity} boxes` : `-`}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.total_weight} kg
+                      {item.unit_type === 'loose' ? `${item.total_weight} kg` : `-`}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.final_total_weight} kg
+                      {item.unit_type === 'loose' ? `${item.final_total_weight} kg` : `-`}
                       </td>
                     </tr>
                   ))}
