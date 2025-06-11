@@ -304,7 +304,19 @@ const NewSale: React.FC = () => {
       const subtotal = calculateSubtotal();
       const totalAmount = calculateTotal();
 
-      // Create sales order
+      // Prepare items data
+      const itemsData = items.map(item => ({
+        product_id: item.productId,
+        sku_id: item.skuId,
+        product_name: item.productName,
+        sku_code: item.skuCode,
+        quantity: item.quantity,
+        unit_type: item.unitType,
+        unit_price: item.unitPrice,
+        total_price: item.totalPrice
+      }));
+
+      // Create sales order with items included in the order data
       const orderData = {
         order_number: generateOrderNumber(),
         customer_id: formData.customerId,
@@ -319,20 +331,9 @@ const NewSale: React.FC = () => {
         discount_amount: discountAmount,
         total_amount: totalAmount,
         status: saleType === 'counter' ? 'completed' : 'processing', // Set status based on sale type
-        notes: formData.notes || null
+        notes: formData.notes || null,
+        items: itemsData // Include items in the order data
       };
-
-      // Prepare items data
-      const itemsData = items.map(item => ({
-        product_id: item.productId,
-        sku_id: item.skuId,
-        product_name: item.productName,
-        sku_code: item.skuCode,
-        quantity: item.quantity,
-        unit_type: item.unitType,
-        unit_price: item.unitPrice,
-        total_price: item.totalPrice
-      }));
 
       await createSalesOrder(orderData, itemsData);
       
