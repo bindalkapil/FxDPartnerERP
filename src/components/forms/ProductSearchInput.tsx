@@ -60,9 +60,9 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
       const filtered = inventory.filter(item => {
         const searchLower = searchTerm.toLowerCase();
         return (
-          item.product_name.toLowerCase().includes(searchLower) ||
-          item.sku_code.toLowerCase().includes(searchLower) ||
-          item.product_category.toLowerCase().includes(searchLower)
+          (item.product_name || '').toLowerCase().includes(searchLower) ||
+          (item.sku_code || '').toLowerCase().includes(searchLower) ||
+          (item.product_category || '').toLowerCase().includes(searchLower)
         );
       });
       
@@ -218,7 +218,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
                       {item.product_name}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {item.sku_code} • {item.product_category} • {item.unit_type}
+                      {item.sku_code} • {item.product_category || 'Uncategorized'} • {item.unit_type}
                     </div>
                   </div>
                 </div>
