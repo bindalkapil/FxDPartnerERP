@@ -335,7 +335,7 @@ async function updateInventoryAfterSale(productId: string, skuId: string, quanti
   if (updateError) throw updateError;
 }
 
-// Updated createSalesOrder function with better validation
+// Updated createSalesOrder function with new status logic
 export async function createSalesOrder(orderData: any) {
   const { items, ...orderDetails } = orderData;
   
@@ -369,11 +369,16 @@ export async function createSalesOrder(orderData: any) {
     return sum + (quantity * unitPrice);
   }, 0);
 
+  // Determine status based on delivery date
+  // If delivery_date is provided, it's an outstation order (dispatch_pending)
+  // Otherwise, it's a counter order (completed)
+  const status = orderDetails.delivery_date ? 'dispatch_pending' : 'completed';
+
   const { data: order, error: orderError } = await supabase
     .from('sales_orders')
     .insert({
       ...orderDetails,
-      status: 'draft',
+      status: status,
       total_amount: totalAmount
     })
     .select()
@@ -522,6 +527,7 @@ export async function updateSalesOrder(orderId: string, orderData: any) {
   return order;
 }
 
+// Updated dispatch function to set status to 'dispatched'
 export async function updateSalesOrderDispatchDetails(
   id: string,
   dispatchDetails: {
@@ -580,10 +586,11 @@ export async function updateSalesOrderDispatchDetails(
   }
 
   // Update the sales order with dispatch details and new totals
+  // Status changes from 'dispatch_pending' to 'dispatched'
   const { data, error } = await supabase
     .from('sales_orders')
     .update({
-      status: 'delivered',
+      status: 'dispatched',
       vehicle_number: dispatchDetails.vehicle_number,
       driver_name: dispatchDetails.driver_name,
       driver_contact: dispatchDetails.driver_contact,
@@ -632,7 +639,7 @@ export async function deleteSalesOrder(id: string) {
   if (error) throw error;
 }
 
-// Get outstation sales orders for dispatch management
+// Updated function to get outstation sales orders with new statuses
 export async function getOutstationSalesOrders() {
   const { data, error } = await supabase
     .from('sales_orders')
@@ -646,7 +653,7 @@ export async function getOutstationSalesOrders() {
       )
     `)
     .not('delivery_date', 'is', null)
-    .in('status', ['confirmed', 'processing', 'dispatched'])
+    .in('status', ['dispatch_pending', 'dispatched'])
     .order('created_at', { ascending: false });
   
   if (error) throw error;
