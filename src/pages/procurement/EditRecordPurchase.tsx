@@ -37,8 +37,8 @@ interface PurchaseRecordData {
   record_date: string;
   arrival_timestamp: string;
   pricing_model: string;
-  default_commission: number;
-  payment_terms: number;
+  default_commission: number | null;
+  payment_terms: number | null;
   items_subtotal: number;
   additional_costs_total: number;
   total_amount: number;
@@ -46,6 +46,7 @@ interface PurchaseRecordData {
   notes: string | null;
   purchase_record_items: Array<{
     id: string;
+    purchase_record_id: string;
     product_id: string;
     sku_id: string;
     product_name: string;
@@ -54,17 +55,22 @@ interface PurchaseRecordData {
     quantity: number;
     unit_type: string;
     total_weight: number;
-    market_price: number;
-    commission: number;
+    market_price: number | null;
+    commission: number | null;
     unit_price: number;
     total: number;
+    created_at: string | null;
+    updated_at: string | null;
   }>;
   purchase_record_costs: Array<{
     id: string;
+    purchase_record_id: string;
     name: string;
     amount: number;
     type: string;
-    calculated_amount: number;
+    calculated_amount: number | null;
+    created_at: string | null;
+    updated_at: string | null;
   }>;
 }
 
@@ -112,24 +118,34 @@ const EditRecordPurchase: React.FC = () => {
         getSuppliers()
       ]);
 
-      setRecordData(recordInfo);
+      // Transform the API response to match the expected type
+      const transformedRecordInfo: PurchaseRecordData = {
+        ...recordInfo,
+        purchase_record_costs: recordInfo.purchase_record_costs.map((cost: any) => ({
+          ...cost,
+          calculated_amount: cost.calculated_amount || null,
+          updated_at: cost.updated_at || null
+        }))
+      };
+
+      setRecordData(transformedRecordInfo);
       setSuppliers(suppliersData || []);
 
-      // Set form data
+      // Set form data with null checks
       setFormData({
-        supplierId: recordInfo.supplier_id || '',
-        recordNumber: recordInfo.record_number,
-        supplier: recordInfo.supplier,
-        recordDate: new Date(recordInfo.record_date).toISOString().slice(0, 16),
-        arrivalTimestamp: new Date(recordInfo.arrival_timestamp).toISOString().slice(0, 16),
-        pricingModel: recordInfo.pricing_model,
-        defaultCommission: recordInfo.default_commission,
-        paymentTerms: recordInfo.payment_terms,
-        notes: recordInfo.notes || ''
+        supplierId: transformedRecordInfo.supplier_id || '',
+        recordNumber: transformedRecordInfo.record_number,
+        supplier: transformedRecordInfo.supplier,
+        recordDate: new Date(transformedRecordInfo.record_date).toISOString().slice(0, 16),
+        arrivalTimestamp: new Date(transformedRecordInfo.arrival_timestamp).toISOString().slice(0, 16),
+        pricingModel: transformedRecordInfo.pricing_model,
+        defaultCommission: transformedRecordInfo.default_commission || 8,
+        paymentTerms: transformedRecordInfo.payment_terms || 30,
+        notes: transformedRecordInfo.notes || ''
       });
 
       // Set items
-      const recordItems = recordInfo.purchase_record_items.map((item: any) => ({
+      const recordItems = transformedRecordInfo.purchase_record_items.map((item: any) => ({
         id: item.id,
         productId: item.product_id,
         productName: item.product_name,
@@ -147,7 +163,7 @@ const EditRecordPurchase: React.FC = () => {
       setItems(recordItems);
 
       // Set additional costs
-      const recordCosts = recordInfo.purchase_record_costs.map((cost: any) => ({
+      const recordCosts = transformedRecordInfo.purchase_record_costs.map((cost: any) => ({
         id: cost.id,
         name: cost.name,
         amount: cost.amount,
@@ -177,22 +193,35 @@ const EditRecordPurchase: React.FC = () => {
     }
   };
 
+  const handleDefaultCommissionChange = (value: number) => {
+    // Update the form data
+    setFormData(prev => ({ ...prev, defaultCommission: value }));
+    
+    // Update commission for all items
+    setItems(prev => prev.map(item => {
+      const updatedItem = { ...item, commission: value };
+      // Recalculate unit price based on new commission
+      if (formData.pricingModel === 'commission') {
+        updatedItem.unitPrice = updatedItem.marketPrice * (1 - value / 100);
+        updatedItem.total = updatedItem.quantity * updatedItem.unitPrice;
+      }
+      return updatedItem;
+    }));
+  };
+
   const handleItemChange = (id: string, field: keyof PurchaseRecordItem, value: any) => {
     setItems(prev => prev.map(item => {
       if (item.id === id) {
         const updatedItem = { ...item, [field]: value };
         
         // Recalculate unit price and total based on pricing model
-        if (field === 'marketPrice' || field === 'commission') {
-          if (formData.pricingModel === 'commission') {
+        if (formData.pricingModel === 'commission') {
+          if (field === 'marketPrice' || field === 'commission') {
             updatedItem.unitPrice = updatedItem.marketPrice * (1 - updatedItem.commission / 100);
           }
-          updatedItem.total = updatedItem.quantity * updatedItem.unitPrice;
-        } else if (field === 'unitPrice') {
-          updatedItem.total = updatedItem.quantity * updatedItem.unitPrice;
-        } else if (field === 'quantity') {
-          updatedItem.total = updatedItem.quantity * updatedItem.unitPrice;
         }
+        // For fixed price model, unit price is directly entered
+        updatedItem.total = updatedItem.quantity * updatedItem.unitPrice;
         
         return updatedItem;
       }
@@ -300,6 +329,8 @@ const EditRecordPurchase: React.FC = () => {
 
       // Prepare items data
       const itemsData = items.map(item => ({
+        id: item.id,
+        purchase_record_id: id!,
         product_id: item.productId,
         sku_id: item.skuId,
         product_name: item.productName,
@@ -316,6 +347,8 @@ const EditRecordPurchase: React.FC = () => {
 
       // Prepare costs data
       const costsData = additionalCosts.map(cost => ({
+        id: cost.id,
+        purchase_record_id: id!,
         name: cost.name,
         amount: cost.amount,
         type: cost.type,
@@ -467,7 +500,7 @@ const EditRecordPurchase: React.FC = () => {
                   <input
                     type="number"
                     value={formData.defaultCommission}
-                    onChange={(e) => setFormData(prev => ({ ...prev, defaultCommission: Number(e.target.value) }))}
+                    onChange={(e) => handleDefaultCommissionChange(Number(e.target.value))}
                     min="0"
                     max="100"
                     step="0.1"
@@ -507,17 +540,23 @@ const EditRecordPurchase: React.FC = () => {
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Quantity
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Market Price (₹)
-                    </th>
-                    {formData.pricingModel === 'commission' && (
+                    {formData.pricingModel === 'commission' ? (
+                      <>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Market Price (₹)
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Commission (%)
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Unit Price (₹)
+                        </th>
+                      </>
+                    ) : (
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Commission (%)
+                        Unit Price (₹)
                       </th>
                     )}
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Unit Price (₹)
-                    </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total (₹)
                     </th>
@@ -543,39 +582,54 @@ const EditRecordPurchase: React.FC = () => {
                           {item.totalWeight} kg total
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <input
-                          type="number"
-                          value={item.marketPrice}
-                          onChange={(e) => handleItemChange(item.id, 'marketPrice', Number(e.target.value))}
-                          min="0"
-                          step="0.01"
-                          className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                        />
-                      </td>
-                      {formData.pricingModel === 'commission' && (
+                      {formData.pricingModel === 'commission' ? (
+                        <>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <input
+                              type="number"
+                              value={item.marketPrice}
+                              onChange={(e) => handleItemChange(item.id, 'marketPrice', Number(e.target.value))}
+                              min="0"
+                              step="0.01"
+                              className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <input
+                              type="number"
+                              value={item.commission}
+                              onChange={(e) => handleItemChange(item.id, 'commission', Number(e.target.value))}
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <input
+                              type="number"
+                              value={item.unitPrice}
+                              onChange={(e) => handleItemChange(item.id, 'unitPrice', Number(e.target.value))}
+                              min="0"
+                              step="0.01"
+                              className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                              disabled
+                            />
+                          </td>
+                        </>
+                      ) : (
                         <td className="px-6 py-4 whitespace-nowrap">
                           <input
                             type="number"
-                            value={item.commission}
-                            onChange={(e) => handleItemChange(item.id, 'commission', Number(e.target.value))}
+                            value={item.unitPrice}
+                            onChange={(e) => handleItemChange(item.id, 'unitPrice', Number(e.target.value))}
                             min="0"
-                            max="100"
-                            step="0.1"
-                            className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            step="0.01"
+                            className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                            placeholder="Enter unit price"
                           />
                         </td>
                       )}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <input
-                          type="number"
-                          value={item.unitPrice}
-                          onChange={(e) => handleItemChange(item.id, 'unitPrice', Number(e.target.value))}
-                          min="0"
-                          step="0.01"
-                          className="block w-24 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
-                        />
-                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         ₹{item.total.toFixed(2)}
                       </td>
@@ -661,7 +715,7 @@ const EditRecordPurchase: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ₹{cost.calculatedAmount.toFixed(2)}
+                          ₹{cost.calculatedAmount?.toFixed(2) || ''}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <button
