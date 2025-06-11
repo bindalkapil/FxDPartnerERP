@@ -284,8 +284,8 @@ const NewSale: React.FC = () => {
 
     // Validate items
     for (const item of items) {
-      if (!item.skuId || item.quantity <= 0 || item.unitPrice <= 0) {
-        toast.error('Please complete all item details');
+      if (!item.skuId || !item.productId || item.quantity <= 0 || item.unitPrice <= 0) {
+        toast.error('Please complete all item details and ensure a product is selected');
         return;
       }
 
@@ -304,16 +304,16 @@ const NewSale: React.FC = () => {
       const subtotal = calculateSubtotal();
       const totalAmount = calculateTotal();
 
-      // Prepare items data
+      // Prepare items data with proper field mapping
       const itemsData = items.map(item => ({
-        product_id: item.productId,
-        sku_id: item.skuId,
-        product_name: item.productName,
-        sku_code: item.skuCode,
+        productId: item.productId,
+        skuId: item.skuId,
+        productName: item.productName,
+        skuCode: item.skuCode,
         quantity: item.quantity,
-        unit_type: item.unitType,
-        unit_price: item.unitPrice,
-        total_price: item.totalPrice
+        unitType: item.unitType,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice
       }));
 
       // Create sales order with items included in the order data
@@ -335,7 +335,7 @@ const NewSale: React.FC = () => {
         items: itemsData // Include items in the order data
       };
 
-      await createSalesOrder(orderData, itemsData);
+      await createSalesOrder(orderData);
       
       toast.success('Sales order created successfully!');
       navigate('/sales');
