@@ -1,351 +1,336 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, Search, Filter, Eye, Edit, Package, Calendar, User, Phone, MapPin } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-hot-toast';
-import { getOutstationSalesOrders } from '../../lib/api';
-import MarkAsShippedModal from '../../components/modals/MarkAsShippedModal';
+import { Link } from 'react-router-dom';
+import { ArrowLeft, Truck, Calendar, MapPin, User, Phone, Package, Eye, CheckCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { getOutstationSalesOrders, updateSalesOrderDispatchDetails } from '../../lib/api';
+import DispatchOrderModal from '../../components/modals/DispatchOrderModal';
 
-interface DispatchOrder {
-  id: string;
-  order_number: string;
-  customer: {
-    id: string;
-    name: string;
-    customer_type: string;
-  };
-  order_date: string;
-  delivery_date: string | null;
-  delivery_address: string | null;
-  payment_mode: string;
-  total_amount: number;
-  status: string;
-  vehicle_number: string | null;
-  driver_name: string | null;
-  driver_contact: string | null;
-  delivery_location_confirmed: boolean | null;
-  sales_order_items: Array<{
-    product_name: string;
-    sku_code: string;
-    quantity: number;
-    unit_type: string;
-    unit_price: number;
-    total_price: number;
-  }>;
-}
-
-const Dispatch: React.FC = () => {
-  const navigate = useNavigate();
-  const [orders, setOrders] = useState<DispatchOrder[]>([]);
+const Dispatch = () => {
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [showMarkAsShippedModal, setShowMarkAsShippedModal] = useState(false);
-  const [selectedOrderId, setSelectedOrderId] = useState<string>('');
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
 
   useEffect(() => {
-    loadDispatchOrders();
+    loadOrders();
   }, []);
 
-  const loadDispatchOrders = async () => {
+  const loadOrders = async () => {
     try {
+      setLoading(true);
       const data = await getOutstationSalesOrders();
       setOrders(data || []);
     } catch (error) {
-      console.error('Error loading dispatch orders:', error);
+      console.error('Error loading orders:', error);
       toast.error('Failed to load dispatch orders');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleMarkAsShipped = (orderId: string) => {
-    setSelectedOrderId(orderId);
-    setShowMarkAsShippedModal(true);
-  };
+  const handleDispatchOrder = async (dispatchData: any) => {
+    if (!selectedOrder) return;
 
-  const handleModalClose = () => {
-    setShowMarkAsShippedModal(false);
-    setSelectedOrderId('');
-  };
-
-  const handleModalConfirm = () => {
-    // Reload the orders to reflect the updated status
-    loadDispatchOrders();
-  };
-
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = 
-      order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (order.driver_name && order.driver_name.toLowerCase().includes(searchTerm.toLowerCase()));
-      
-    const matchesStatus = selectedStatus === 'all' || order.status === selectedStatus;
-    
-    return matchesSearch && matchesStatus;
-  });
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'dispatched':
-        return 'bg-blue-100 text-blue-800';
-      case 'processing':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'delivered':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+    try {
+      await updateSalesOrderDispatchDetails(selectedOrder.id, dispatchData);
+      await loadOrders(); // Reload orders to reflect changes
+      setIsDispatchModalOpen(false);
+      setSelectedOrder(null);
+    } catch (error) {
+      console.error('Error dispatching order:', error);
+      throw error; // Re-throw to let modal handle the error
     }
   };
 
-  const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      dispatch_pending: { color: 'bg-yellow-100 text-yellow-800', label: 'Dispatch Pending' },
+      dispatched: { color: 'bg-green-100 text-green-800', label: 'Dispatched' },
+      completed: { color: 'bg-blue-100 text-blue-800', label: 'Completed' },
+      cancelled: { color: 'bg-red-100 text-red-800', label: 'Cancelled' }
+    };
+
+    const config = statusConfig[status as keyof typeof statusConfig] || 
+                  { color: 'bg-gray-100 text-gray-800', label: status };
+
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+        {config.label}
+      </span>
+    );
   };
 
-  const getPaymentModeDisplay = (mode: string) => {
-    switch (mode) {
-      case 'bank_transfer':
-        return 'Bank Transfer';
-      case 'upi':
-        return 'UPI';
-      case 'cash':
-        return 'Cash';
-      case 'credit':
-        return 'Credit';
-      default:
-        return mode.charAt(0).toUpperCase() + mode.slice(1);
-    }
+  const getPaymentStatusBadge = (status: string) => {
+    const statusConfig = {
+      paid: { color: 'bg-green-100 text-green-800', label: 'Paid' },
+      partial: { color: 'bg-yellow-100 text-yellow-800', label: 'Partial' },
+      unpaid: { color: 'bg-red-100 text-red-800', label: 'Unpaid' }
+    };
+
+    const config = statusConfig[status as keyof typeof statusConfig] || 
+                  { color: 'bg-gray-100 text-gray-800', label: status };
+
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+        {config.label}
+      </span>
+    );
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getTotalItems = (order: any) => {
+    return order.sales_order_items?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0;
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading dispatch orders...</div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center">
-          <Truck className="h-6 w-6 text-green-600 mr-2" />
-          <h1 className="text-2xl font-bold text-gray-800">Dispatch Management</h1>
+        <div className="flex items-center space-x-4">
+          <Link
+            to="/sales"
+            className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5 mr-1" />
+            Back to Sales
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Dispatch Management</h1>
+            <p className="text-gray-600">Manage outstation order dispatches</p>
+          </div>
         </div>
       </div>
 
-      {/* Dispatch Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="flex justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Total Dispatches</p>
-              <p className="text-2xl font-bold text-gray-800">{orders.length}</p>
-            </div>
-            <div className="h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
-              <Package className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="flex justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Processing</p>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center">
+            <Package className="h-8 w-8 text-yellow-600" />
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Pending Dispatch</p>
               <p className="text-2xl font-bold text-gray-800">
-                {orders.filter(order => order.status === 'processing').length}
+                {orders.filter(order => order.status === 'dispatch_pending').length}
               </p>
             </div>
-            <div className="h-10 w-10 flex items-center justify-center rounded-full bg-yellow-100 text-yellow-600">
-              <Package className="h-5 w-5" />
-            </div>
           </div>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="flex justify-between">
-            <div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center">
+            <Truck className="h-8 w-8 text-blue-600" />
+            <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Dispatched</p>
               <p className="text-2xl font-bold text-gray-800">
                 {orders.filter(order => order.status === 'dispatched').length}
               </p>
             </div>
-            <div className="h-10 w-10 flex items-center justify-center rounded-full bg-blue-100 text-blue-600">
-              <Truck className="h-5 w-5" />
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center">
+            <CheckCircle className="h-8 w-8 text-green-600" />
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Completed</p>
+              <p className="text-2xl font-bold text-gray-800">
+                {orders.filter(order => order.status === 'completed').length}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center">
+            <Calendar className="h-8 w-8 text-purple-600" />
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Total Orders</p>
+              <p className="text-2xl font-bold text-gray-800">{orders.length}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filters and Search */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-3 md:space-y-0">
-        <div className="relative flex-1 max-w-xs">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-gray-400" />
-          </div>
-          <input
-            type="text"
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500"
-            placeholder="Search orders..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      {/* Orders Table */}
+      <div className="bg-white shadow-sm rounded-lg border border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-medium text-gray-900">Outstation Orders</h2>
         </div>
-        
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center">
-            <Filter className="h-4 w-4 text-gray-500 mr-2" />
-            <span className="text-sm text-gray-500">Status:</span>
-          </div>
-          <select
-            className="border border-gray-300 rounded-md text-sm py-2 px-3 bg-white focus:outline-none focus:ring-green-500 focus:border-green-500"
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-          >
-            <option value="all">All</option>
-            <option value="processing">Processing</option>
-            <option value="dispatched">Dispatched</option>
-            <option value="delivered">Delivered</option>
-          </select>
-        </div>
-      </div>
 
-      {/* Dispatch Orders Table */}
-      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Order Details
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer & Delivery
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Vehicle & Driver
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Amount
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
-                        <Package className="h-5 w-5" />
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{order.order_number}</div>
-                        <div className="text-sm text-gray-500">
-                          Order: {formatDateTime(order.order_date)}
+        {orders.length === 0 ? (
+          <div className="text-center py-12">
+            <Truck className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No outstation orders</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              No outstation orders found for dispatch management.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Order Details
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Customer
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Delivery Info
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Items & Amount
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Vehicle Details
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {orders.map((order) => (
+                  <tr key={order.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          #{order.order_number}
                         </div>
-                        {order.delivery_date && (
-                          <div className="text-sm text-gray-500">
-                            Delivery: {formatDateTime(order.delivery_date)}
+                        <div className="text-sm text-gray-500">
+                          {formatDate(order.order_date)}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {order.customer?.name}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {order.customer?.customer_type}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">
+                        <div className="flex items-center mb-1">
+                          <Calendar className="h-4 w-4 mr-1 text-gray-400" />
+                          {order.delivery_date ? formatDate(order.delivery_date) : 'Not set'}
+                        </div>
+                        {order.delivery_address && (
+                          <div className="flex items-start">
+                            <MapPin className="h-4 w-4 mr-1 text-gray-400 mt-0.5 flex-shrink-0" />
+                            <span className="text-xs text-gray-600 max-w-xs truncate">
+                              {order.delivery_address}
+                            </span>
                           </div>
                         )}
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900">{order.customer.name}</div>
-                    <div className="text-sm text-gray-500 capitalize">{order.customer.customer_type}</div>
-                    {order.delivery_address && (
-                      <div className="text-sm text-gray-500 mt-1 flex items-start">
-                        <MapPin className="h-3 w-3 text-gray-400 mr-1 mt-0.5 flex-shrink-0" />
-                        <span className="line-clamp-2">{order.delivery_address}</span>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {order.vehicle_number ? (
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="text-sm text-gray-900 flex items-center">
-                          <Truck className="h-4 w-4 text-gray-400 mr-1" />
-                          {order.vehicle_number}
+                        <div className="text-sm text-gray-900">
+                          {getTotalItems(order)} items
                         </div>
-                        <div className="text-sm text-gray-500 flex items-center mt-1">
-                          <User className="h-3 w-3 text-gray-400 mr-1" />
-                          {order.driver_name}
+                        <div className="text-sm font-medium text-gray-900">
+                          ₹{(order.total_amount ?? 0).toLocaleString()}
                         </div>
-                        <div className="text-sm text-gray-500 flex items-center">
-                          <Phone className="h-3 w-3 text-gray-400 mr-1" />
-                          {order.driver_contact}
+                        <div className="mt-1">
+                          {getPaymentStatusBadge(order.payment_status)}
                         </div>
                       </div>
-                    ) : (
-                      <div className="text-sm text-gray-500">Not assigned</div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">₹{order.total_amount.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">{getPaymentModeDisplay(order.payment_mode)}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(order.status)}`}>
-                      {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <button 
-                        onClick={() => navigate(`/sales/view/${order.id}`)}
-                        className="text-indigo-600 hover:text-indigo-900"
-                        title="View Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button 
-                        onClick={() => navigate(`/sales/edit/${order.id}`)}
-                        className="text-gray-600 hover:text-gray-900"
-                        title="Edit Order"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      {order.status === 'processing' && (
-                        <button 
-                          onClick={() => handleMarkAsShipped(order.id)}
-                          className="text-green-600 hover:text-green-900"
-                          title="Mark as Shipped"
-                        >
-                          <Truck className="h-4 w-4" />
-                        </button>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {getStatusBadge(order.status)}
+                    </td>
+                    <td className="px-6 py-4">
+                      {order.vehicle_number || order.driver_name ? (
+                        <div className="text-sm text-gray-900">
+                          {order.vehicle_number && (
+                            <div className="flex items-center mb-1">
+                              <Truck className="h-4 w-4 mr-1 text-gray-400" />
+                              {order.vehicle_number}
+                            </div>
+                          )}
+                          {order.driver_name && (
+                            <div className="flex items-center mb-1">
+                              <User className="h-4 w-4 mr-1 text-gray-400" />
+                              {order.driver_name}
+                            </div>
+                          )}
+                          {order.driver_contact && (
+                            <div className="flex items-center">
+                              <Phone className="h-4 w-4 mr-1 text-gray-400" />
+                              {order.driver_contact}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500">Not assigned</span>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        {filteredOrders.length === 0 && !loading && (
-          <div className="py-12 text-center text-gray-500">
-            <Truck className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Dispatch Orders Found</h3>
-            <p className="text-sm text-gray-500">
-              {orders.length === 0 
-                ? "No outstation sales orders found. Dispatch orders are automatically created for outstation sales."
-                : "No orders match your current search and filter criteria."
-              }
-            </p>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center space-x-2">
+                        <Link
+                          to={`/sales/view/${order.id}`}
+                          className="text-blue-600 hover:text-blue-900 flex items-center"
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
+                        </Link>
+                        
+                        {order.status === 'dispatch_pending' && (
+                          <button
+                            onClick={() => {
+                              setSelectedOrder(order);
+                              setIsDispatchModalOpen(true);
+                            }}
+                            className="text-green-600 hover:text-green-900 flex items-center"
+                          >
+                            <Truck className="h-4 w-4 mr-1" />
+                            Dispatch
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
 
-      {/* Mark as Shipped Modal */}
-      <MarkAsShippedModal
-        isOpen={showMarkAsShippedModal}
-        onClose={handleModalClose}
-        salesOrderId={selectedOrderId}
-        onConfirm={handleModalConfirm}
+      {/* Dispatch Modal */}
+      <DispatchOrderModal
+        isOpen={isDispatchModalOpen}
+        onClose={() => {
+          setIsDispatchModalOpen(false);
+          setSelectedOrder(null);
+        }}
+        order={selectedOrder}
+        onDispatch={handleDispatchOrder}
       />
     </div>
   );
