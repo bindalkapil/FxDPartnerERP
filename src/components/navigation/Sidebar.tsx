@@ -103,7 +103,6 @@ const Sidebar: React.FC = () => {
           
           {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Inventory</div>}
           <NavItem to="/inventory" icon={<Package size={20} />} label="Inventory" closeSidebar={closeSidebar} />
-          <NavItem to="/inventory/current" icon={<Package size={20} />} label="Current Inventory" closeSidebar={closeSidebar} />
           
           {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Sales</div>}
           <NavItem to="/sales" icon={<ShoppingCart size={20} />} label="Sales" closeSidebar={closeSidebar} />

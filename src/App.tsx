@@ -19,7 +19,6 @@ import NewRecordPurchase from './pages/procurement/NewRecordPurchase';
 import ViewRecordPurchase from './pages/procurement/ViewRecordPurchase';
 import EditRecordPurchase from './pages/procurement/EditRecordPurchase';
 import Inventory from './pages/inventory/Inventory';
-import CurrentInventory from './pages/inventory/CurrentInventory';
 import Sales from './pages/sales/Sales';
 import NewSale from './pages/sales/NewSale';
 import ViewSale from './pages/sales/ViewSale';
@@ -78,7 +77,6 @@ function App() {
               <Route path="record-purchase/view/:id" element={<ViewRecordPurchase />} />
               <Route path="record-purchase/edit/:id" element={<EditRecordPurchase />} />
               <Route path="inventory" element={<Inventory />} />
-              <Route path="inventory/current" element={<CurrentInventory />} />
               <Route path="sales" element={<Sales />} />
               <Route path="sales/new" element={<NewSale />} />
               <Route path="sales/view/:id" element={<ViewSale />} />
