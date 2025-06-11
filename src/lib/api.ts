@@ -335,14 +335,33 @@ async function updateInventoryAfterSale(productId: string, skuId: string, quanti
   if (updateError) throw updateError;
 }
 
-// Update the functions that use numeric values
+// Updated createSalesOrder function with better validation
 export async function createSalesOrder(orderData: any) {
   const { items, ...orderDetails } = orderData;
+  
+  // Validate that items exist and have required fields
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    throw new Error('Sales order must have at least one item');
+  }
+
+  // Validate each item has required fields
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (!item.product_id || !item.sku_id) {
+      throw new Error(`Item ${i + 1} is missing product_id or sku_id`);
+    }
+    if (!item.quantity || item.quantity <= 0) {
+      throw new Error(`Item ${i + 1} must have a valid quantity`);
+    }
+    if (!item.unit_price || item.unit_price < 0) {
+      throw new Error(`Item ${i + 1} must have a valid unit price`);
+    }
+  }
   
   // Calculate total amount with null safety
   const totalAmount = items.reduce((sum: number, item: any) => {
     const quantity = safeNumericValue(item.quantity);
-    const unitPrice = safeNumericValue(item.unitPrice);
+    const unitPrice = safeNumericValue(item.unit_price);
     return sum + (quantity * unitPrice);
   }, 0);
 
@@ -358,15 +377,25 @@ export async function createSalesOrder(orderData: any) {
 
   if (orderError) throw orderError;
 
-  // Insert items with null safety
-  const orderItems = items.map((item: any) => ({
-    sales_order_id: order.id,
-    product_id: item.productId,
-    sku_id: item.skuId,
-    quantity: safeNumericValue(item.quantity),
-    unit_price: safeNumericValue(item.unitPrice),
-    total_price: safeNumericValue(item.quantity) * safeNumericValue(item.unitPrice)
-  }));
+  // Insert items with null safety and validation
+  const orderItems = items.map((item: any) => {
+    // Ensure all required fields are present
+    if (!item.product_id || !item.sku_id) {
+      throw new Error(`Invalid item data: missing product_id or sku_id`);
+    }
+
+    return {
+      sales_order_id: order.id,
+      product_id: item.product_id,
+      sku_id: item.sku_id,
+      product_name: item.product_name || '',
+      sku_code: item.sku_code || '',
+      quantity: safeNumericValue(item.quantity),
+      unit_type: item.unit_type || 'box',
+      unit_price: safeNumericValue(item.unit_price),
+      total_price: safeNumericValue(item.quantity) * safeNumericValue(item.unit_price)
+    };
+  });
 
   const { error: itemsError } = await supabase
     .from('sales_order_items')
@@ -377,8 +406,8 @@ export async function createSalesOrder(orderData: any) {
   // Update inventory for each item
   for (const item of items) {
     await updateInventoryAfterSale(
-      item.productId,
-      item.skuId,
+      item.product_id,
+      item.sku_id,
       safeNumericValue(item.quantity)
     );
   }
