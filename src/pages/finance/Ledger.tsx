@@ -49,9 +49,9 @@ const Ledger: React.FC = () => {
           ledgerEntries.push({
             id: `SO-${order.id}`,
             date: order.order_date,
-            description: `Sales to ${order.customer.name} - ${order.order_number}`,
+            description: `Sales to ${order.customer?.name || 'Unknown Customer'} - ${order.order_number}`,
             type: 'credit',
-            amount: order.total_amount,
+            amount: order.total_amount ?? 0,
             balance: 0, // Will be calculated later
             reference: order.order_number,
             category: 'Sales'
@@ -67,7 +67,7 @@ const Ledger: React.FC = () => {
             date: record.record_date,
             description: `Purchase from ${record.supplier} - ${record.record_number}`,
             type: 'debit',
-            amount: record.total_amount,
+            amount: record.total_amount ?? 0,
             balance: 0, // Will be calculated later
             reference: record.record_number,
             category: 'Purchase'
@@ -125,11 +125,11 @@ const Ledger: React.FC = () => {
   
   const totalCredits = filteredEntries
     .filter(entry => entry.type === 'credit')
-    .reduce((sum, entry) => sum + entry.amount, 0);
+    .reduce((sum, entry) => sum + (entry.amount ?? 0), 0);
     
   const totalDebits = filteredEntries
     .filter(entry => entry.type === 'debit')
-    .reduce((sum, entry) => sum + entry.amount, 0);
+    .reduce((sum, entry) => sum + (entry.amount ?? 0), 0);
     
   const netBalance = totalCredits - totalDebits;
 
@@ -210,7 +210,7 @@ const Ledger: React.FC = () => {
           <div className="flex justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">Total Credits (Sales)</p>
-              <p className="text-2xl font-bold text-green-600">₹{totalCredits.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-green-600">₹{(totalCredits ?? 0).toLocaleString()}</p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
               <BookOpen className="h-5 w-5" />
@@ -221,7 +221,7 @@ const Ledger: React.FC = () => {
           <div className="flex justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">Total Debits (Purchases)</p>
-              <p className="text-2xl font-bold text-red-600">₹{totalDebits.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-red-600">₹{(totalDebits ?? 0).toLocaleString()}</p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-red-100 text-red-600">
               <BookOpen className="h-5 w-5" />
@@ -233,7 +233,7 @@ const Ledger: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-500">Net Balance</p>
               <p className={`text-2xl font-bold ${netBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                ₹{Math.abs(netBalance).toLocaleString()}
+                ₹{Math.abs(netBalance ?? 0).toLocaleString()}
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 {netBalance >= 0 ? 'Profit' : 'Loss'}
@@ -360,14 +360,14 @@ const Ledger: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                    {entry.type === 'debit' ? `₹${entry.amount.toLocaleString()}` : '-'}
+                    {entry.type === 'debit' ? `₹${(entry.amount ?? 0).toLocaleString()}` : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
-                    {entry.type === 'credit' ? `₹${entry.amount.toLocaleString()}` : '-'}
+                    {entry.type === 'credit' ? `₹${(entry.amount ?? 0).toLocaleString()}` : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <span className={entry.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                      ₹{Math.abs(entry.balance).toLocaleString()}
+                      ₹{Math.abs(entry.balance ?? 0).toLocaleString()}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
