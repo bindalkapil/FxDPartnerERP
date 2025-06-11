@@ -171,7 +171,7 @@ const Sales: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-500">Total Sales</p>
               <p className="text-2xl font-bold text-gray-800">
-                ₹{sales.reduce((sum, sale) => sum + sale.total_amount, 0).toLocaleString()}
+                ₹{sales.reduce((sum, sale) => sum + (sale.total_amount ?? 0), 0).toLocaleString()}
               </p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
@@ -318,7 +318,7 @@ const Sales: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">₹{sale.total_amount.toLocaleString()}</div>
+                    <div className="text-sm text-gray-900">₹{(sale.total_amount ?? 0).toLocaleString()}</div>
                     <div className="text-sm text-gray-500">{getPaymentModeDisplay(sale.payment_mode)}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
