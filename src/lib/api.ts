@@ -344,16 +344,20 @@ export async function createSalesOrder(orderData: any) {
     throw new Error('Sales order must have at least one item');
   }
 
-  // Validate each item has required fields
+  // Validate each item has required fields (handle both camelCase and snake_case)
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    if (!item.product_id || !item.sku_id) {
+    const productId = item.product_id || item.productId;
+    const skuId = item.sku_id || item.skuId;
+    
+    if (!productId || !skuId) {
       throw new Error(`Item ${i + 1} is missing product_id or sku_id`);
     }
     if (!item.quantity || item.quantity <= 0) {
       throw new Error(`Item ${i + 1} must have a valid quantity`);
     }
-    if (!item.unit_price || item.unit_price < 0) {
+    const unitPrice = item.unit_price || item.unitPrice;
+    if (!unitPrice || unitPrice < 0) {
       throw new Error(`Item ${i + 1} must have a valid unit price`);
     }
   }
@@ -361,7 +365,7 @@ export async function createSalesOrder(orderData: any) {
   // Calculate total amount with null safety
   const totalAmount = items.reduce((sum: number, item: any) => {
     const quantity = safeNumericValue(item.quantity);
-    const unitPrice = safeNumericValue(item.unit_price);
+    const unitPrice = safeNumericValue(item.unit_price || item.unitPrice);
     return sum + (quantity * unitPrice);
   }, 0);
 
@@ -377,23 +381,30 @@ export async function createSalesOrder(orderData: any) {
 
   if (orderError) throw orderError;
 
-  // Insert items with null safety and validation
+  // Insert items with null safety and validation (handle both camelCase and snake_case)
   const orderItems = items.map((item: any) => {
+    const productId = item.product_id || item.productId;
+    const skuId = item.sku_id || item.skuId;
+    const unitPrice = item.unit_price || item.unitPrice;
+    const productName = item.product_name || item.productName;
+    const skuCode = item.sku_code || item.skuCode;
+    const unitType = item.unit_type || item.unitType;
+
     // Ensure all required fields are present
-    if (!item.product_id || !item.sku_id) {
+    if (!productId || !skuId) {
       throw new Error(`Invalid item data: missing product_id or sku_id`);
     }
 
     return {
       sales_order_id: order.id,
-      product_id: item.product_id,
-      sku_id: item.sku_id,
-      product_name: item.product_name || '',
-      sku_code: item.sku_code || '',
+      product_id: productId,
+      sku_id: skuId,
+      product_name: productName || '',
+      sku_code: skuCode || '',
       quantity: safeNumericValue(item.quantity),
-      unit_type: item.unit_type || 'box',
-      unit_price: safeNumericValue(item.unit_price),
-      total_price: safeNumericValue(item.quantity) * safeNumericValue(item.unit_price)
+      unit_type: unitType || 'box',
+      unit_price: safeNumericValue(unitPrice),
+      total_price: safeNumericValue(item.quantity) * safeNumericValue(unitPrice)
     };
   });
 
@@ -405,9 +416,11 @@ export async function createSalesOrder(orderData: any) {
 
   // Update inventory for each item
   for (const item of items) {
+    const productId = item.product_id || item.productId;
+    const skuId = item.sku_id || item.skuId;
     await updateInventoryAfterSale(
-      item.product_id,
-      item.sku_id,
+      productId,
+      skuId,
       safeNumericValue(item.quantity)
     );
   }
