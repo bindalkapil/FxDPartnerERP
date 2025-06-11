@@ -47,6 +47,8 @@ interface VehicleArrival {
     quantity: number;
     unit_type: string;
     total_weight: number;
+    final_quantity?: number;
+    final_total_weight?: number;
   }>;
 }
 
@@ -133,7 +135,7 @@ const NewRecordPurchase: React.FC = () => {
         paymentTerms: supplier?.payment_terms || 30
       }));
 
-      // Populate items from vehicle arrival
+      // Populate items from vehicle arrival using final_quantity
       const arrivalItems = arrival.vehicle_arrival_items.map(item => ({
         id: `item_${Date.now()}_${Math.random()}`,
         productId: item.product.id,
@@ -141,9 +143,9 @@ const NewRecordPurchase: React.FC = () => {
         skuId: item.sku.id,
         skuCode: item.sku.code,
         category: item.product.category,
-        quantity: item.quantity,
+        quantity: item.final_quantity || item.quantity, // Use final_quantity if available, fallback to quantity
         unitType: item.unit_type,
-        totalWeight: item.total_weight,
+        totalWeight: item.final_total_weight || item.total_weight, // Use final_total_weight if available
         marketPrice: 0,
         commission: formData.defaultCommission,
         unitPrice: 0,

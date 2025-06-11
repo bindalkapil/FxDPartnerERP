@@ -44,6 +44,16 @@ interface PurchaseRecordData {
   total_amount: number;
   status: string;
   notes: string | null;
+  vehicle_arrival_items?: Array<{
+    id: string;
+    product_id: string;
+    sku_id: string;
+    quantity: number;
+    final_quantity?: number;
+    total_weight: number;
+    final_total_weight?: number;
+    unit_type: string;
+  }>;
   purchase_record_items: Array<{
     id: string;
     purchase_record_id: string;
@@ -144,22 +154,39 @@ const EditRecordPurchase: React.FC = () => {
         notes: transformedRecordInfo.notes || ''
       });
 
-      // Set items
-      const recordItems = transformedRecordInfo.purchase_record_items.map((item: any) => ({
-        id: item.id,
-        productId: item.product_id,
-        productName: item.product_name,
-        skuId: item.sku_id,
-        skuCode: item.sku_code,
-        category: item.category,
-        quantity: item.quantity,
-        unitType: item.unit_type,
-        totalWeight: item.total_weight,
-        marketPrice: item.market_price || 0,
-        commission: item.commission || 0,
-        unitPrice: item.unit_price,
-        total: item.total
-      }));
+      // Set items, using final_quantity if available from vehicle arrival
+      const recordItems = transformedRecordInfo.purchase_record_items.map((item: any) => {
+        // If this is from a vehicle arrival, try to get the final quantities
+        let quantity = item.quantity;
+        let totalWeight = item.total_weight;
+
+        if (transformedRecordInfo.vehicle_arrival_id) {
+          // Find the corresponding vehicle arrival item to get final quantities
+          const vehicleArrivalItem = transformedRecordInfo.vehicle_arrival_items?.find(
+            (vai: any) => vai.product_id === item.product_id && vai.sku_id === item.sku_id
+          );
+          if (vehicleArrivalItem) {
+            quantity = vehicleArrivalItem.final_quantity || quantity;
+            totalWeight = vehicleArrivalItem.final_total_weight || totalWeight;
+          }
+        }
+
+        return {
+          id: item.id,
+          productId: item.product_id,
+          productName: item.product_name,
+          skuId: item.sku_id,
+          skuCode: item.sku_code,
+          category: item.category,
+          quantity,
+          unitType: item.unit_type,
+          totalWeight,
+          marketPrice: item.market_price || 0,
+          commission: item.commission || 0,
+          unitPrice: item.unit_price,
+          total: item.total
+        };
+      });
       setItems(recordItems);
 
       // Set additional costs

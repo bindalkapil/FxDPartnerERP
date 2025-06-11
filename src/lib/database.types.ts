@@ -737,6 +737,64 @@ export type Database = {
         }
         Relationships: []
       }
+      current_inventory: {
+        Row: {
+          id: string
+          product_id: string
+          sku_id: string
+          product_name: string
+          sku_code: string
+          category: string
+          unit_type: 'box' | 'loose'
+          available_quantity: number
+          total_weight: number
+          created_at: string
+          updated_at: string
+          last_updated_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          sku_id: string
+          product_name: string
+          sku_code: string
+          category: string
+          unit_type: 'box' | 'loose'
+          available_quantity?: number
+          total_weight?: number
+          created_at?: string
+          updated_at?: string
+          last_updated_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          sku_id?: string
+          product_name?: string
+          sku_code?: string
+          category?: string
+          unit_type?: 'box' | 'loose'
+          available_quantity?: number
+          total_weight?: number
+          created_at?: string
+          updated_at?: string
+          last_updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "current_inventory_product_id_fkey"
+            columns: ["product_id"]
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "current_inventory_sku_id_fkey"
+            columns: ["sku_id"]
+            referencedRelation: "skus"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

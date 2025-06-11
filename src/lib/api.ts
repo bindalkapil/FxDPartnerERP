@@ -307,149 +307,177 @@ export async function getSalesOrder(id: string) {
   return data;
 }
 
-export async function createSalesOrder(
-  order: Tables['sales_orders']['Insert'],
-  items: Tables['sales_order_items']['Insert'][]
-) {
-  // All new sales orders start with 'draft' status
-  const orderWithStatus = {
-    ...order,
-    status: 'draft'
-  };
+// Helper function to handle null values in numeric calculations
+function safeNumericValue(value: number | null, defaultValue: number = 0): number {
+  return value === null ? defaultValue : value;
+}
 
-  // Start a transaction
-  const { data: orderData, error: orderError } = await supabase
+// Update inventory after sale
+async function updateInventoryAfterSale(productId: string, skuId: string, quantity: number) {
+  // First get the current quantity
+  const { data: currentInventory, error: fetchError } = await supabase
+    .from('current_inventory')
+    .select('available_quantity')
+    .match({ product_id: productId, sku_id: skuId })
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  // Then update with the new quantity
+  const { error: updateError } = await supabase
+    .from('current_inventory')
+    .update({
+      available_quantity: Math.max(0, (currentInventory?.available_quantity || 0) - quantity),
+      updated_at: new Date().toISOString()
+    })
+    .match({ product_id: productId, sku_id: skuId });
+
+  if (updateError) throw updateError;
+}
+
+// Update the functions that use numeric values
+export async function createSalesOrder(orderData: any) {
+  const { items, ...orderDetails } = orderData;
+  
+  // Calculate total amount with null safety
+  const totalAmount = items.reduce((sum: number, item: any) => {
+    const quantity = safeNumericValue(item.quantity);
+    const unitPrice = safeNumericValue(item.unitPrice);
+    return sum + (quantity * unitPrice);
+  }, 0);
+
+  const { data: order, error: orderError } = await supabase
     .from('sales_orders')
-    .insert(orderWithStatus)
+    .insert({
+      ...orderDetails,
+      status: 'draft',
+      total_amount: totalAmount
+    })
     .select()
     .single();
 
   if (orderError) throw orderError;
 
-  // Insert items with the order ID
-  const itemsWithOrderId = items.map(item => ({
-    ...item,
-    sales_order_id: orderData.id
+  // Insert items with null safety
+  const orderItems = items.map((item: any) => ({
+    sales_order_id: order.id,
+    product_id: item.productId,
+    sku_id: item.skuId,
+    quantity: safeNumericValue(item.quantity),
+    unit_price: safeNumericValue(item.unitPrice),
+    total_price: safeNumericValue(item.quantity) * safeNumericValue(item.unitPrice)
   }));
 
   const { error: itemsError } = await supabase
     .from('sales_order_items')
-    .insert(itemsWithOrderId);
+    .insert(orderItems);
 
   if (itemsError) throw itemsError;
 
-  // Update inventory - reduce available quantities
+  // Update inventory for each item
   for (const item of items) {
-    await updateInventoryAfterSale(item.product_id, item.sku_id, item.quantity);
+    await updateInventoryAfterSale(
+      item.productId,
+      item.skuId,
+      safeNumericValue(item.quantity)
+    );
   }
 
   // Update customer balance if payment mode is credit
-  if (order.payment_mode === 'credit' && order.customer_id) {
-    await updateCustomerBalance(order.customer_id, order.total_amount || 0, 'add');
+  if (orderDetails.payment_mode === 'credit' && orderDetails.customer_id) {
+    await updateCustomerBalance(
+      orderDetails.customer_id,
+      safeNumericValue(totalAmount),
+      'add'
+    );
   }
 
-  return orderData;
+  return order;
 }
 
-export async function updateSalesOrder(
-  id: string,
-  order: Partial<Tables['sales_orders']['Update']>,
-  items?: Tables['sales_order_items']['Insert'][]
-) {
-  // Get current order to check for payment mode changes
-  const { data: currentOrder } = await supabase
+// Update sales order
+export async function updateSalesOrder(orderId: string, orderData: any) {
+  const { items, ...orderDetails } = orderData;
+
+  // Get current order to calculate balance changes
+  const { data: currentOrder, error: fetchError } = await supabase
     .from('sales_orders')
-    .select(`
-      *,
-      sales_order_items(product_id, sku_id, quantity)
-    `)
-    .eq('id', id)
+    .select('*')
+    .eq('id', orderId)
     .single();
 
+  if (fetchError) throw fetchError;
   if (!currentOrder) throw new Error('Sales order not found');
 
-  // Update the order
-  const { data: orderData, error: orderError } = await supabase
+  // Calculate total amount with null safety
+  const totalAmount = items.reduce((sum: number, item: any) => {
+    const quantity = safeNumericValue(item.quantity);
+    const unitPrice = safeNumericValue(item.unitPrice);
+    return sum + (quantity * unitPrice);
+  }, 0);
+
+  // Update order
+  const { data: order, error: orderError } = await supabase
     .from('sales_orders')
-    .update(order)
-    .eq('id', id)
+    .update({
+      ...orderDetails,
+      total_amount: totalAmount
+    })
+    .eq('id', orderId)
     .select()
     .single();
 
   if (orderError) throw orderError;
 
-  // Handle customer balance updates for payment mode changes
-  if (order.payment_mode !== undefined && order.customer_id) {
-    const oldPaymentMode = currentOrder.payment_mode;
-    const newPaymentMode = order.payment_mode;
-    const orderAmount = order.total_amount || currentOrder.total_amount;
+  // Delete existing items
+  const { error: deleteError } = await supabase
+    .from('sales_order_items')
+    .delete()
+    .eq('sales_order_id', orderId);
 
-    // If changing from credit to non-credit, reduce customer balance
-    if (oldPaymentMode === 'credit' && newPaymentMode !== 'credit') {
-      await updateCustomerBalance(order.customer_id, orderAmount, 'subtract');
-    }
-    // If changing from non-credit to credit, increase customer balance
-    else if (oldPaymentMode !== 'credit' && newPaymentMode === 'credit') {
-      await updateCustomerBalance(order.customer_id, orderAmount, 'add');
-    }
-    // If both are credit but amount changed, adjust the difference
-    else if (oldPaymentMode === 'credit' && newPaymentMode === 'credit') {
-      const amountDifference = orderAmount - currentOrder.total_amount;
-      if (amountDifference !== 0) {
-        await updateCustomerBalance(order.customer_id, Math.abs(amountDifference), amountDifference > 0 ? 'add' : 'subtract');
-      }
+  if (deleteError) throw deleteError;
+
+  // Insert new items with null safety
+  const orderItems = items.map((item: any) => ({
+    sales_order_id: orderId,
+    product_id: item.productId,
+    sku_id: item.skuId,
+    quantity: safeNumericValue(item.quantity),
+    unit_price: safeNumericValue(item.unitPrice),
+    total_price: safeNumericValue(item.quantity) * safeNumericValue(item.unitPrice)
+  }));
+
+  const { error: itemsError } = await supabase
+    .from('sales_order_items')
+    .insert(orderItems);
+
+  if (itemsError) throw itemsError;
+
+  // Update inventory for each item
+  for (const item of items) {
+    await updateInventoryAfterSale(
+      item.productId,
+      item.skuId,
+      safeNumericValue(item.quantity)
+    );
+  }
+
+  // Update customer balance if payment mode is credit
+  if (orderDetails.payment_mode === 'credit' && orderDetails.customer_id) {
+    const oldAmount = safeNumericValue(currentOrder.total_amount);
+    const newAmount = safeNumericValue(totalAmount);
+    const balanceChange = newAmount - oldAmount;
+
+    if (balanceChange !== 0) {
+      await updateCustomerBalance(
+        orderDetails.customer_id,
+        Math.abs(balanceChange),
+        balanceChange > 0 ? 'add' : 'subtract'
+      );
     }
   }
 
-  // If items are provided, replace them
-  if (items) {
-    // Restore inventory from current items
-    if (currentOrder?.sales_order_items) {
-      for (const item of currentOrder.sales_order_items) {
-        await restoreInventoryAfterSaleUpdate(item.product_id, item.sku_id, item.quantity);
-      }
-    }
-
-    // Delete existing items
-    const { error: deleteItemsError } = await supabase
-      .from('sales_order_items')
-      .delete()
-      .eq('sales_order_id', id);
-
-    if (deleteItemsError) throw deleteItemsError;
-
-    // Insert new items
-    const itemsWithOrderId = items.map(item => ({
-      ...item,
-      sales_order_id: id
-    }));
-
-    const { error: itemsError } = await supabase
-      .from('sales_order_items')
-      .insert(itemsWithOrderId);
-
-    if (itemsError) throw itemsError;
-
-    // Update inventory with new items
-    for (const item of items) {
-      await updateInventoryAfterSale(item.product_id, item.sku_id, item.quantity);
-    }
-
-    // Recalculate order totals
-    const subtotal = items.reduce((sum, item) => sum + item.total_price, 0);
-    const totalAmount = subtotal - (order.discount_amount || 0);
-
-    // Update the order with new totals
-    await supabase
-      .from('sales_orders')
-      .update({
-        subtotal,
-        total_amount: totalAmount
-      })
-      .eq('id', id);
-  }
-
-  return orderData;
+  return order;
 }
 
 export async function updateSalesOrderDispatchDetails(
@@ -544,7 +572,7 @@ export async function deleteSalesOrder(id: string) {
     // Restore inventory
     if (orderData.sales_order_items) {
       for (const item of orderData.sales_order_items) {
-        await restoreInventoryAfterSaleUpdate(item.product_id, item.sku_id, item.quantity);
+        await updateInventoryAfterSale(item.product_id, item.sku_id, item.quantity);
       }
     }
 
@@ -583,85 +611,15 @@ export async function getOutstationSalesOrders() {
   return data;
 }
 
-// Inventory management functions
-async function updateInventoryAfterSale(productId: string, skuId: string, quantity: number) {
-  // This is a conceptual update - in a real system, you'd have a proper inventory table
-  // For now, we'll track this in the vehicle_arrival_items by reducing available quantities
-  // This is a simplified approach for the demo
-  console.log(`Inventory updated: Product ${productId}, SKU ${skuId}, Quantity reduced by ${quantity}`);
-}
-
-async function restoreInventoryAfterSaleUpdate(productId: string, skuId: string, quantity: number) {
-  // Restore inventory when sales order is updated or deleted
-  console.log(`Inventory restored: Product ${productId}, SKU ${skuId}, Quantity restored by ${quantity}`);
-}
-
-// Get available inventory (from completed vehicle arrivals)
+// Get available inventory (from current_inventory table)
 export async function getAvailableInventory() {
   const { data, error } = await supabase
-    .from('vehicle_arrivals')
-    .select(`
-      id,
-      status,
-      vehicle_arrival_items(
-        *,
-        product:products(*),
-        sku:skus(*)
-      )
-    `)
-    .in('status', ['completed', 'po-created']);
+    .from('current_inventory')
+    .select('*')
+    .order('product_name');
   
   if (error) throw error;
-
-  // Group items by product and SKU to create inventory
-  const inventoryMap = new Map();
-  
-  data.forEach(arrival => {
-    arrival.vehicle_arrival_items.forEach((item: any) => {
-      const key = `${item.product.id}-${item.sku.id}`;
-      
-      if (inventoryMap.has(key)) {
-        const existingItem = inventoryMap.get(key);
-        existingItem.available_quantity += item.quantity;
-        existingItem.total_weight += item.total_weight;
-      } else {
-        inventoryMap.set(key, {
-          product_id: item.product.id,
-          product_name: item.product.name,
-          product_category: item.product.category,
-          sku_id: item.sku.id,
-          sku_code: item.sku.code,
-          unit_type: item.unit_type,
-          available_quantity: item.quantity,
-          total_weight: item.total_weight
-        });
-      }
-    });
-  });
-
-  // Get sold quantities and subtract from available inventory
-  const { data: salesData } = await supabase
-    .from('sales_order_items')
-    .select(`
-      product_id,
-      sku_id,
-      quantity,
-      sales_order:sales_orders!inner(status)
-    `)
-    .neq('sales_order.status', 'cancelled');
-
-  if (salesData) {
-    salesData.forEach((saleItem: any) => {
-      const key = `${saleItem.product_id}-${saleItem.sku_id}`;
-      const inventoryItem = inventoryMap.get(key);
-      
-      if (inventoryItem) {
-        inventoryItem.available_quantity = Math.max(0, inventoryItem.available_quantity - saleItem.quantity);
-      }
-    });
-  }
-
-  return Array.from(inventoryMap.values());
+  return data;
 }
 
 // Vehicle Arrivals
@@ -1247,4 +1205,50 @@ export async function uploadAttachment(file: File) {
     fileSize: file.size,
     fileUrl: publicUrl
   };
+}
+
+// Cancel sales order
+export async function cancelSalesOrder(orderId: string) {
+  // Get order data
+  const { data: orderData, error: fetchError } = await supabase
+    .from('sales_orders')
+    .select(`
+      *,
+      sales_order_items(product_id, sku_id, quantity)
+    `)
+    .eq('id', orderId)
+    .single();
+
+  if (fetchError) throw fetchError;
+  if (!orderData) throw new Error('Sales order not found');
+
+  // Update order status
+  const { error: updateError } = await supabase
+    .from('sales_orders')
+    .update({ status: 'cancelled' })
+    .eq('id', orderId);
+
+  if (updateError) throw updateError;
+
+  // Restore inventory for each item
+  if (orderData.sales_order_items) {
+    for (const item of orderData.sales_order_items) {
+      await updateInventoryAfterSale(
+        item.product_id,
+        item.sku_id,
+        safeNumericValue(item.quantity)
+      );
+    }
+  }
+
+  // Update customer balance if payment mode was credit
+  if (orderData.payment_mode === 'credit' && orderData.customer_id) {
+    await updateCustomerBalance(
+      orderData.customer_id,
+      safeNumericValue(orderData.total_amount),
+      'subtract'
+    );
+  }
+
+  return orderData;
 }

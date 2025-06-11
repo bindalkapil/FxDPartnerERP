@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Package, Search, Filter, RefreshCw, ChevronDown, ChevronUp, Truck, Calendar, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getVehicleArrivals } from '../../lib/api';
+import { supabase } from '../../lib/supabase';
 
 interface InventoryItem {
   id: string;
@@ -11,8 +12,10 @@ interface InventoryItem {
   skuId: string;
   skuCode: string;
   unitType: 'box' | 'loose';
-  totalQuantity: number;
-  totalWeight: number;
+  currentQuantity: number;  // From current_inventory table
+  currentWeight: number;    // From current_inventory table
+  totalQuantity: number;    // From vehicle arrivals (historical)
+  totalWeight: number;      // From vehicle arrivals (historical)
   lastArrival: string;
   arrivalCount: number;
   supplier: string;
@@ -45,12 +48,42 @@ const Inventory: React.FC = () => {
       setError(null);
       setLoading(true);
       
+      // Get current inventory data
+      const { data: currentInventory, error: currentInventoryError } = await supabase
+        .from('current_inventory')
+        .select('*')
+        .order('product_name');
+
+      if (currentInventoryError) throw currentInventoryError;
+
       // Get all vehicle arrivals and filter for only completed ones
       const arrivals = (await getVehicleArrivals()).filter(
         (arrival: any) => arrival.status === 'completed' || arrival.status === 'po-created'
       );
       
       if (!arrivals || arrivals.length === 0) {
+        // If no arrivals but we have current inventory, create inventory items from that
+        if (currentInventory && currentInventory.length > 0) {
+          const inventoryArray = currentInventory.map(item => ({
+            id: `${item.product_id}_${item.sku_id}`,
+            productId: item.product_id,
+            productName: item.product_name,
+            category: item.category,
+            skuId: item.sku_id,
+            skuCode: item.sku_code,
+            unitType: item.unit_type as 'box' | 'loose',
+            currentQuantity: item.available_quantity,
+            currentWeight: item.total_weight,
+            totalQuantity: item.available_quantity,
+            totalWeight: item.total_weight,
+            lastArrival: item.last_updated_at,
+            arrivalCount: 0,
+            supplier: 'N/A',
+            vehicleArrivals: []
+          }));
+          setInventoryItems(inventoryArray);
+          return;
+        }
         setInventoryItems([]);
         return;
       }
@@ -58,34 +91,43 @@ const Inventory: React.FC = () => {
       // Group items by product and SKU to create inventory
       const inventoryMap = new Map<string, InventoryItem>();
 
+      // First, populate with current inventory data
+      if (currentInventory) {
+        currentInventory.forEach(item => {
+          const key = `${item.product_id}_${item.sku_id}`;
+          inventoryMap.set(key, {
+            id: key,
+            productId: item.product_id,
+            productName: item.product_name,
+            category: item.category,
+            skuId: item.sku_id,
+            skuCode: item.sku_code,
+            unitType: item.unit_type as 'box' | 'loose',
+            currentQuantity: item.available_quantity,
+            currentWeight: item.total_weight,
+            totalQuantity: 0, // Will be updated with arrival data
+            totalWeight: 0,   // Will be updated with arrival data
+            lastArrival: item.last_updated_at,
+            arrivalCount: 0,  // Will be updated with arrival data
+            supplier: 'N/A',  // Will be updated with arrival data
+            vehicleArrivals: []
+          });
+        });
+      }
+
+      // Then, add historical data from vehicle arrivals
       arrivals.forEach(arrival => {
-        // Only process arrivals that have items
-        if (!arrival.vehicle_arrival_items || arrival.vehicle_arrival_items.length === 0) {
-          return;
-        }
+        if (!arrival.vehicle_arrival_items) return;
 
         arrival.vehicle_arrival_items.forEach((item: any) => {
-          // Skip items without proper product/sku data
-          if (!item.product || !item.sku) {
-            return;
-          }
+          const key = `${item.product.id}_${item.sku.id}`;
+          const existingItem = inventoryMap.get(key);
 
-          const key = `${item.product.id}-${item.sku.id}`;
-          
-          if (inventoryMap.has(key)) {
-            // Update existing inventory item
-            const existingItem = inventoryMap.get(key)!;
+          if (existingItem) {
+            // Update existing item with arrival data
             existingItem.totalQuantity += item.final_quantity || item.quantity;
             existingItem.totalWeight += item.final_total_weight || item.total_weight;
             existingItem.arrivalCount += 1;
-            
-            // Update last arrival if this one is more recent
-            if (new Date(arrival.arrival_time) > new Date(existingItem.lastArrival)) {
-              existingItem.lastArrival = arrival.arrival_time;
-              existingItem.supplier = arrival.supplier;
-            }
-            
-            // Add to vehicle arrivals list
             existingItem.vehicleArrivals.push({
               id: arrival.id,
               arrivalTime: arrival.arrival_time,
@@ -105,7 +147,9 @@ const Inventory: React.FC = () => {
               skuId: item.sku.id,
               skuCode: item.sku.code,
               unitType: item.unit_type as 'box' | 'loose',
-              totalQuantity: item.final_quantity || item.quantity, 
+              currentQuantity: 0, // No current inventory data
+              currentWeight: 0,   // No current inventory data
+              totalQuantity: item.final_quantity || item.quantity,
               totalWeight: item.final_total_weight || item.total_weight,
               lastArrival: arrival.arrival_time,
               arrivalCount: 1,
@@ -129,6 +173,11 @@ const Inventory: React.FC = () => {
         item.vehicleArrivals.sort((a, b) => 
           new Date(b.arrivalTime).getTime() - new Date(a.arrivalTime).getTime()
         );
+        // Update lastArrival if there are vehicle arrivals
+        if (item.vehicleArrivals.length > 0) {
+          item.lastArrival = item.vehicleArrivals[0].arrivalTime;
+          item.supplier = item.vehicleArrivals[0].supplier;
+        }
       });
 
       const inventoryArray = Array.from(inventoryMap.values());
@@ -169,6 +218,8 @@ const Inventory: React.FC = () => {
   const getTotalInventoryValue = () => {
     return {
       totalItems: inventoryItems.length,
+      currentQuantity: inventoryItems.reduce((sum, item) => sum + item.currentQuantity, 0),
+      currentWeight: inventoryItems.reduce((sum, item) => sum + item.currentWeight, 0),
       totalQuantity: inventoryItems.reduce((sum, item) => sum + item.totalQuantity, 0),
       totalWeight: inventoryItems.reduce((sum, item) => sum + item.totalWeight, 0),
       totalArrivals: inventoryItems.reduce((sum, item) => sum + item.arrivalCount, 0)
@@ -244,7 +295,7 @@ const Inventory: React.FC = () => {
       </div>
       
       {/* Inventory Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
@@ -259,8 +310,8 @@ const Inventory: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Total Quantity</p>
-              <p className="text-2xl font-bold text-gray-800">{inventoryStats.totalQuantity}</p>
+              <p className="text-sm font-medium text-gray-500">Current Stock</p>
+              <p className="text-2xl font-bold text-gray-800">{inventoryStats.currentQuantity}</p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-blue-100 text-blue-600">
               <Package className="h-5 w-5" />
@@ -270,8 +321,8 @@ const Inventory: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Total Weight</p>
-              <p className="text-2xl font-bold text-gray-800">{inventoryStats.totalWeight} kg</p>
+              <p className="text-sm font-medium text-gray-500">Current Weight</p>
+              <p className="text-2xl font-bold text-gray-800">{inventoryStats.currentWeight} kg</p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-purple-100 text-purple-600">
               <Package className="h-5 w-5" />
@@ -286,6 +337,17 @@ const Inventory: React.FC = () => {
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-yellow-100 text-yellow-600">
               <Truck className="h-5 w-5" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow-sm">
+          <div className="flex justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Total Historical</p>
+              <p className="text-2xl font-bold text-gray-800">{inventoryStats.totalQuantity}</p>
+            </div>
+            <div className="h-10 w-10 flex items-center justify-center rounded-full bg-gray-100 text-gray-600">
+              <Calendar className="h-5 w-5" />
             </div>
           </div>
         </div>
@@ -349,10 +411,10 @@ const Inventory: React.FC = () => {
                   Current Stock
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Last Arrival
+                  Historical Stock
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Arrivals Count
+                  Last Arrival
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
@@ -388,20 +450,26 @@ const Inventory: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
+                        {item.currentQuantity} {item.unitType === 'box' ? 'boxes' : 'kg'}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        Weight: {item.currentWeight} kg
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
                         {item.totalQuantity} {item.unitType === 'box' ? 'boxes' : 'kg'}
                       </div>
                       <div className="text-sm text-gray-500">
-                        Total Weight: {item.totalWeight} kg
+                        Weight: {item.totalWeight} kg
                       </div>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 mt-1">
+                        {item.arrivalCount} arrivals
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{formatDateTime(item.lastArrival)}</div>
                       <div className="text-sm text-gray-500">From: {item.supplier}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        {item.arrivalCount} arrivals
-                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
@@ -494,11 +562,11 @@ const Inventory: React.FC = () => {
             </h3>
             <div className="mt-2 text-sm text-blue-700">
               <ul className="list-disc list-inside space-y-1">
-                <li>Inventory is automatically populated from all vehicle arrivals (regardless of status)</li>
-                <li>Stock quantities are aggregated from all arrivals for each product/SKU combination</li>
+                <li>Current Stock shows the actual available inventory after sales</li>
+                <li>Historical Stock shows the total quantity received from all vehicle arrivals</li>
+                <li>Inventory is automatically updated when vehicle arrivals are completed or sales are made</li>
                 <li>Click on any row to view detailed arrival history for that item</li>
-                <li>Use the refresh button to update inventory with the latest arrival data</li>
-                <li>Status indicators show the current state of each vehicle arrival</li>
+                <li>Use the refresh button to update inventory with the latest data</li>
               </ul>
             </div>
           </div>
