@@ -7,6 +7,13 @@ export default defineConfig({
   base: '/FxDPartnerERP/',
   build: {
     outDir: 'build',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+        },
+      },
+    },
   },
   optimizeDeps: {
     exclude: ['lucide-react'],
