@@ -2,7 +2,7 @@
   "name": "FxDPartnerERP",
   "private": true,
   "version": "0.1.0",
-  "homepage": "https://in.fruitx.com/FxDPartnerERP",
+  "homepage": "https://Vegrow-Tech.github.io/FxDPartnerERP"
   "scripts": {
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build",
