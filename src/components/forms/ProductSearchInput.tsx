@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, ChevronDown, Package } from 'lucide-react';
+import { Search, ChevronDown, Package, AlertTriangle } from 'lucide-react';
 
 interface InventoryItem {
   product_id: string;
@@ -19,6 +19,7 @@ interface ProductSearchInputProps {
   onChange: (skuId: string) => void;
   placeholder?: string;
   className?: string;
+  onAdjustInventory?: (item: InventoryItem) => void;
 }
 
 const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
@@ -26,7 +27,8 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   value,
   onChange,
   placeholder = "Search products...",
-  className = ""
+  className = "",
+  onAdjustInventory
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -158,6 +160,14 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     };
   }, [isOpen]);
 
+  // Handle adjust inventory click
+  const handleAdjustInventory = (e: React.MouseEvent, item: InventoryItem) => {
+    e.stopPropagation();
+    if (onAdjustInventory) {
+      onAdjustInventory(item);
+    }
+  };
+
   // Render dropdown
   const renderDropdown = () => {
     if (!isOpen || !portalRoot || !dropdownPosition) return null;
@@ -198,8 +208,21 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
                       </div>
                     </div>
                   </div>
-                  <div className="text-xs text-gray-500">
-                    {item.available_quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
+                  <div className="flex items-center space-x-2">
+                    <div className={`text-xs ${
+                      item.available_quantity < 0 ? 'text-red-600 font-medium' : 'text-gray-500'
+                    }`}>
+                      {item.available_quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
+                    </div>
+                    {item.available_quantity < 0 && onAdjustInventory && (
+                      <button
+                        onClick={(e) => handleAdjustInventory(e, item)}
+                        className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 transition-colors"
+                        title="Adjust Inventory"
+                      >
+                        <AlertTriangle className="h-3 w-3" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </li>

@@ -511,15 +511,12 @@ export async function updateSalesOrder(orderId: string, orderData: any) {
 
   // Update customer balance if payment mode is credit
   if (orderDetails.payment_mode === 'credit' && orderDetails.customer_id) {
-    const oldAmount = safeNumericValue(currentOrder.total_amount);
-    const newAmount = safeNumericValue(totalAmount);
-    const balanceChange = newAmount - oldAmount;
-
-    if (balanceChange !== 0) {
+    const amountDifference = totalAmount - (currentOrder.total_amount || 0);
+    if (amountDifference !== 0) {
       await updateCustomerBalance(
         orderDetails.customer_id,
-        Math.abs(balanceChange),
-        balanceChange > 0 ? 'add' : 'subtract'
+        Math.abs(amountDifference),
+        amountDifference > 0 ? 'add' : 'subtract'
       );
     }
   }
@@ -579,7 +576,7 @@ export async function updateSalesOrderDispatchDetails(
 
   // Update customer balance if payment mode is credit and amount changed
   if (currentOrder.payment_mode === 'credit' && currentOrder.customer_id) {
-    const amountDifference = newTotalAmount - currentOrder.total_amount;
+    const amountDifference = newTotalAmount - safeNumericValue(currentOrder.total_amount);
     if (amountDifference !== 0) {
       await updateCustomerBalance(currentOrder.customer_id, Math.abs(amountDifference), amountDifference > 0 ? 'add' : 'subtract');
     }
@@ -660,7 +657,18 @@ export async function getOutstationSalesOrders() {
   return data;
 }
 
-// Get available inventory (from current_inventory table)
+// Get all inventory (including negative inventory)
+export async function getAllInventory() {
+  const { data, error } = await supabase
+    .from('current_inventory')
+    .select('*')
+    .order('product_name');
+  
+  if (error) throw error;
+  return data;
+}
+
+// Get available inventory (from current_inventory table) - now shows all SKUs
 export async function getAvailableInventory() {
   const { data, error } = await supabase
     .from('current_inventory')
@@ -1313,4 +1321,130 @@ export async function cancelSalesOrder(orderId: string) {
   }
 
   return orderData;
+}
+
+// Adjust inventory - mark as another SKU
+export async function adjustInventoryAsAnotherSKU(
+  currentProductId: string,
+  currentSkuId: string,
+  newProductId: string,
+  newSkuId: string,
+  reason: string
+) {
+  // Get current inventory item
+  const { data: currentItem, error: fetchError } = await supabase
+    .from('current_inventory')
+    .select('*')
+    .match({ product_id: currentProductId, sku_id: currentSkuId })
+    .single();
+
+  if (fetchError) throw fetchError;
+  if (!currentItem) throw new Error('Current inventory item not found');
+
+  // Get new SKU details
+  const { data: newSku, error: skuError } = await supabase
+    .from('skus')
+    .select('*, product:products(*)')
+    .eq('id', newSkuId)
+    .single();
+
+  if (skuError) throw skuError;
+  if (!newSku) throw new Error('New SKU not found');
+
+  // Check if new SKU already exists in inventory
+  const { data: existingNewItem, error: checkError } = await supabase
+    .from('current_inventory')
+    .select('*')
+    .match({ product_id: newProductId, sku_id: newSkuId })
+    .single();
+
+  if (checkError && checkError.code !== 'PGRST116') throw checkError;
+
+  if (existingNewItem) {
+    // Update existing item with additional quantity
+    const { error: updateError } = await supabase
+      .from('current_inventory')
+      .update({
+        available_quantity: existingNewItem.available_quantity + currentItem.available_quantity,
+        total_weight: existingNewItem.total_weight + currentItem.total_weight,
+        updated_at: new Date().toISOString()
+      })
+      .match({ product_id: newProductId, sku_id: newSkuId });
+
+    if (updateError) throw updateError;
+  } else {
+    // Create new inventory item
+    const { error: insertError } = await supabase
+      .from('current_inventory')
+      .insert({
+        product_id: newProductId,
+        sku_id: newSkuId,
+        product_name: newSku.product.name,
+        sku_code: newSku.code,
+        category: newSku.product.category,
+        unit_type: currentItem.unit_type,
+        available_quantity: currentItem.available_quantity,
+        total_weight: currentItem.total_weight,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        last_updated_at: new Date().toISOString()
+      });
+
+    if (insertError) throw insertError;
+  }
+
+  // Delete the original inventory item
+  const { error: deleteError } = await supabase
+    .from('current_inventory')
+    .delete()
+    .match({ product_id: currentProductId, sku_id: currentSkuId });
+
+  if (deleteError) throw deleteError;
+
+  return { success: true };
+}
+
+// Adjust inventory - mark from another source
+export async function adjustInventoryFromAnotherSource(
+  productId: string,
+  skuId: string,
+  source: string,
+  reason: string
+) {
+  // Get current inventory item
+  const { data: currentItem, error: fetchError } = await supabase
+    .from('current_inventory')
+    .select('*')
+    .match({ product_id: productId, sku_id: skuId })
+    .single();
+
+  if (fetchError) throw fetchError;
+  if (!currentItem) throw new Error('Inventory item not found');
+
+  // Update the inventory item with source information
+  const { error: updateError } = await supabase
+    .from('current_inventory')
+    .update({
+      updated_at: new Date().toISOString(),
+      last_updated_at: new Date().toISOString()
+    })
+    .match({ product_id: productId, sku_id: skuId });
+
+  if (updateError) throw updateError;
+
+  return { success: true };
+}
+
+// Get all products and SKUs for dropdown selection
+export async function getAllProductsAndSKUs() {
+  const { data, error } = await supabase
+    .from('products')
+    .select(`
+      *,
+      skus(*)
+    `)
+    .order('name');
+  
+  if (error) throw error;
+  return data;
 }

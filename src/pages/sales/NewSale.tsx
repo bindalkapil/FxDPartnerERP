@@ -4,6 +4,7 @@ import { ShoppingCart, ArrowLeft, Plus, Trash2, User, Calendar, MapPin, CreditCa
 import { toast } from 'react-hot-toast';
 import { getCustomers, getAvailableInventory, createSalesOrder } from '../../lib/api';
 import ProductSearchInput from '../../components/forms/ProductSearchInput';
+import AdjustInventoryModal from '../../components/modals/AdjustInventoryModal';
 
 interface SalesOrderItem {
   id: string;
@@ -37,9 +38,10 @@ interface Customer {
 }
 
 interface InventoryItem {
+  id: string;
   product_id: string;
   product_name: string;
-  product_category: string;
+  category: string;
   sku_id: string;
   sku_code: string;
   unit_type: string;
@@ -53,6 +55,8 @@ const NewSale: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryItem | null>(null);
 
   const [saleType, setSaleType] = useState<'counter' | 'outstation'>('counter');
   const [selectedAddressIndex, setSelectedAddressIndex] = useState<number>(-1);
@@ -288,14 +292,6 @@ const NewSale: React.FC = () => {
         toast.error('Please complete all item details and ensure a product is selected');
         return;
       }
-
-      // Check inventory availability
-      const inventoryItem = inventory.find(inv => inv.sku_id === item.skuId);
-      
-      if (!inventoryItem || inventoryItem.available_quantity < item.quantity) {
-        toast.error(`Insufficient inventory for ${item.productName}. Available: ${inventoryItem?.available_quantity || 0}`);
-        return;
-      }
     }
 
     setIsSubmitting(true);
@@ -350,6 +346,15 @@ const NewSale: React.FC = () => {
   const getAvailableQuantity = (skuId: string) => {
     const inventoryItem = inventory.find(inv => inv.sku_id === skuId);
     return inventoryItem?.available_quantity || 0;
+  };
+
+  const handleAdjustInventory = (item: InventoryItem) => {
+    setSelectedInventoryItem(item);
+    setShowAdjustModal(true);
+  };
+
+  const handleAdjustmentSuccess = () => {
+    loadInitialData(); // Reload inventory data
   };
 
   if (loading) {
@@ -669,6 +674,7 @@ const NewSale: React.FC = () => {
                           onChange={(skuId) => handleItemChange(item.id, 'skuId', skuId)}
                           placeholder="Type to search products..."
                           className="text-sm"
+                          onAdjustInventory={handleAdjustInventory}
                         />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -680,7 +686,6 @@ const NewSale: React.FC = () => {
                           value={item.quantity}
                           onChange={(e) => handleItemChange(item.id, 'quantity', Number(e.target.value))}
                           min="1"
-                          max={getAvailableQuantity(item.skuId)}
                           className="block w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                         />
                       </td>
@@ -792,6 +797,21 @@ const NewSale: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {showAdjustModal && selectedInventoryItem && (
+        <AdjustInventoryModal
+          isOpen={showAdjustModal}
+          onClose={() => setShowAdjustModal(false)}
+          onSuccess={handleAdjustmentSuccess}
+          inventoryItem={{
+            productId: selectedInventoryItem.product_id,
+            skuId: selectedInventoryItem.sku_id,
+            productName: selectedInventoryItem.product_name,
+            skuCode: selectedInventoryItem.sku_code,
+            availableQuantity: selectedInventoryItem.available_quantity
+          }}
+        />
+      )}
     </div>
   );
 };

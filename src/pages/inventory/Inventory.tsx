@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Search, Filter, RefreshCw, ChevronDown, ChevronUp, Truck, Calendar, AlertCircle, ShoppingCart, X } from 'lucide-react';
+import { Package, Search, Filter, RefreshCw, Truck, Calendar, AlertCircle, ShoppingCart, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getVehicleArrivals, getSalesOrders } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
@@ -44,7 +44,6 @@ const Inventory: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedUnitType, setSelectedUnitType] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -457,7 +456,7 @@ const Inventory: React.FC = () => {
                   Current Stock
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Last Arrival
+                  Last Activity
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
@@ -466,95 +465,96 @@ const Inventory: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredItems.map((item) => (
-                <React.Fragment key={item.id}>
-                  <tr 
-                    className="hover:bg-gray-50 cursor-pointer" 
-                    onClick={() => setExpandedItem(expandedItem === item.id ? null : item.id)}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
-                          <Package className="h-5 w-5" />
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{item.productName}</div>
-                          <div className="text-sm text-gray-500">{item.category}</div>
-                        </div>
-                        {expandedItem === item.id ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
+                <tr key={item.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
+                        <Package className="h-5 w-5" />
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{item.skuCode}</div>
-                      <span className={`inline-flex px-2 text-xs leading-5 font-semibold rounded-full ${
-                        item.unitType === 'box' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                      }`}>
-                        {item.unitType === 'box' ? 'Box/Crate' : 'Loose'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {item.currentQuantity} {item.unitType === 'box' ? 'boxes' : 'kg'}
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900">{item.productName}</div>
+                        <div className="text-sm text-gray-500">{item.category}</div>
                       </div>
-                      <div className="text-sm text-gray-500">
-                        Weight: {item.currentWeight} kg
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{formatDateTime(item.lastArrival)}</div>
-                      <div className="text-sm text-gray-500">From: {item.supplier}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleViewHistory(item);
-                        }}
-                        className="text-green-600 hover:text-green-900"
-                      >
-                        View History
-                      </button>
-                    </td>
-                  </tr>
-                  {expandedItem === item.id && (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-4 bg-gray-50">
-                        <div className="text-sm">
-                          <h4 className="font-medium text-gray-900 mb-3 flex items-center">
-                            <Truck className="h-4 w-4 mr-2" />
-                            Arrival History for {item.productName} ({item.skuCode})
-                          </h4>
-                          <div className="space-y-3">
-                            {item.vehicleArrivals.map((arrival, index) => (
-                              <div key={index} className="bg-white p-3 rounded-md border border-gray-200">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-                                  <div>
-                                    <span className="font-medium text-gray-700">Arrival Date:</span>
-                                    <div className="text-gray-900">{formatDateTime(arrival.arrivalTime)}</div>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-700">Supplier:</span>
-                                    <div className="text-gray-900">{arrival.supplier}</div>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-700">Vehicle:</span>
-                                    <div className="text-gray-900">{arrival.vehicleNumber || 'Not specified'}</div>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-700">Quantity:</span>
-                                    <div className="text-gray-900">
-                                      {arrival.quantity} {item.unitType === 'box' ? 'boxes' : 'kg'} 
-                                      ({arrival.weight} kg total)
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{item.skuCode}</div>
+                    <span className={`inline-flex px-2 text-xs leading-5 font-semibold rounded-full ${
+                      item.unitType === 'box' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                    }`}>
+                      {item.unitType === 'box' ? 'Box/Crate' : 'Loose'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {item.currentQuantity} {item.unitType === 'box' ? 'boxes' : 'kg'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {(() => {
+                        const lastArrival = item.vehicleArrivals.length > 0 ? item.vehicleArrivals[0] : null;
+                        const lastSale = item.salesOrders.length > 0 ? item.salesOrders[0] : null;
+                        
+                        if (!lastArrival && !lastSale) {
+                          return 'No activity';
+                        }
+                        
+                        if (!lastArrival) {
+                          return `Sale: ${formatDateTime(lastSale!.orderDate)}`;
+                        }
+                        
+                        if (!lastSale) {
+                          return `Arrival: ${formatDateTime(lastArrival.arrivalTime)}`;
+                        }
+                        
+                        const arrivalDate = new Date(lastArrival.arrivalTime);
+                        const saleDate = new Date(lastSale.orderDate);
+                        
+                        if (arrivalDate > saleDate) {
+                          return `Arrival: ${formatDateTime(lastArrival.arrivalTime)}`;
+                        } else {
+                          return `Sale: ${formatDateTime(lastSale.orderDate)}`;
+                        }
+                      })()}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {(() => {
+                        const lastArrival = item.vehicleArrivals.length > 0 ? item.vehicleArrivals[0] : null;
+                        const lastSale = item.salesOrders.length > 0 ? item.salesOrders[0] : null;
+                        
+                        if (!lastArrival && !lastSale) {
+                          return '';
+                        }
+                        
+                        if (!lastArrival) {
+                          return `To: ${lastSale!.customerName}`;
+                        }
+                        
+                        if (!lastSale) {
+                          return `From: ${lastArrival.supplier}`;
+                        }
+                        
+                        const arrivalDate = new Date(lastArrival.arrivalTime);
+                        const saleDate = new Date(lastSale.orderDate);
+                        
+                        if (arrivalDate > saleDate) {
+                          return `From: ${lastArrival.supplier}`;
+                        } else {
+                          return `To: ${lastSale.customerName}`;
+                        }
+                      })()}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => handleViewHistory(item)}
+                      className="text-green-600 hover:text-green-900"
+                    >
+                      View History
+                    </button>
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>
