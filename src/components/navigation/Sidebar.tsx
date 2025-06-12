@@ -14,7 +14,7 @@ import {
   Settings,
   X
 } from 'lucide-react';
-import { useSidebar } from '../contexts/SidebarContext';
+import { useSidebar } from '../../contexts/SidebarContext';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
