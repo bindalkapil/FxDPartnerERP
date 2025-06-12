@@ -984,9 +984,10 @@ export async function createPurchaseRecord(
   costs: Tables['purchase_record_costs']['Insert'][]
 ) {
   // Ensure the status is valid - only 'completed' or 'cancelled' are allowed
+  // Default to 'completed' for new purchase records
   const validRecord = {
     ...record,
-    status: 'completed' // Force to a valid status
+    status: 'completed'
   };
 
   // Create the purchase record
