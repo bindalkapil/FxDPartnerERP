@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { SidebarProvider } from './contexts/SidebarContext';
+import { HashRouter as Router } from 'react-router-dom'
 
 // Layouts
 import DashboardLayout from './layouts/DashboardLayout';
