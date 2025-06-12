@@ -323,11 +323,11 @@ async function updateInventoryAfterSale(productId: string, skuId: string, quanti
 
   if (fetchError) throw fetchError;
 
-  // Then update with the new quantity
+  // Then update with the new quantity (allow negative values)
   const { error: updateError } = await supabase
     .from('current_inventory')
     .update({
-      available_quantity: Math.max(0, (currentInventory?.available_quantity || 0) - quantity),
+      available_quantity: (currentInventory?.available_quantity || 0) - quantity,
       updated_at: new Date().toISOString()
     })
     .match({ product_id: productId, sku_id: skuId });
@@ -670,12 +670,19 @@ export async function getAllInventory() {
 
 // Get available inventory (from current_inventory table) - now shows all SKUs
 export async function getAvailableInventory() {
+  console.log('Fetching inventory from current_inventory table...');
+  
   const { data, error } = await supabase
     .from('current_inventory')
     .select('*')
     .order('product_name');
   
-  if (error) throw error;
+  if (error) {
+    console.error('Error fetching inventory:', error);
+    throw error;
+  }
+  
+  console.log('Raw inventory data from database:', data);
   return data;
 }
 
@@ -921,6 +928,90 @@ export async function updateVehicleArrivalStatus(
         }
 
         console.log('Successfully updated item:', itemData);
+
+        // Update current_inventory table with the new quantities
+        if (itemData) {
+          // Get product and SKU details
+          const { data: productData, error: productError } = await supabase
+            .from('products')
+            .select('name, category')
+            .eq('id', itemData.product_id)
+            .single();
+
+          if (productError) {
+            console.error('Error fetching product details:', productError);
+            throw productError;
+          }
+
+          const { data: skuData, error: skuError } = await supabase
+            .from('skus')
+            .select('code')
+            .eq('id', itemData.sku_id)
+            .single();
+
+          if (skuError) {
+            console.error('Error fetching SKU details:', skuError);
+            throw skuError;
+          }
+
+          // Get current inventory for this product/SKU
+          const { data: currentInventory, error: inventoryError } = await supabase
+            .from('current_inventory')
+            .select('*')
+            .match({ 
+              product_id: itemData.product_id, 
+              sku_id: itemData.sku_id 
+            })
+            .single();
+
+          if (inventoryError && inventoryError.code !== 'PGRST116') {
+            console.error('Error fetching current inventory:', inventoryError);
+            throw inventoryError;
+          }
+
+          if (currentInventory) {
+            // Update existing inventory record
+            const { error: updateInventoryError } = await supabase
+              .from('current_inventory')
+              .update({
+                available_quantity: currentInventory.available_quantity + Number(item.final_quantity),
+                total_weight: currentInventory.total_weight + Number(item.final_total_weight),
+                updated_at: new Date().toISOString(),
+                last_updated_at: new Date().toISOString()
+              })
+              .match({ 
+                product_id: itemData.product_id, 
+                sku_id: itemData.sku_id 
+              });
+
+            if (updateInventoryError) {
+              console.error('Error updating current inventory:', updateInventoryError);
+              throw updateInventoryError;
+            }
+          } else {
+            // Create new inventory record
+            const { error: insertInventoryError } = await supabase
+              .from('current_inventory')
+              .insert({
+                product_id: itemData.product_id,
+                sku_id: itemData.sku_id,
+                product_name: productData.name,
+                sku_code: skuData.code,
+                category: productData.category,
+                unit_type: itemData.unit_type as 'box' | 'loose',
+                available_quantity: Number(item.final_quantity),
+                total_weight: Number(item.final_total_weight),
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                last_updated_at: new Date().toISOString()
+              });
+
+            if (insertInventoryError) {
+              console.error('Error creating new inventory record:', insertInventoryError);
+              throw insertInventoryError;
+            }
+          }
+        }
       }
     }
 

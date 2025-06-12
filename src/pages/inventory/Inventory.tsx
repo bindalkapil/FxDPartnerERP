@@ -60,6 +60,9 @@ const Inventory: React.FC = () => {
       // Get current inventory data using the API function
       const currentInventory = await getAvailableInventory();
       
+      // Debug: Log the current inventory data
+      console.log('Current Inventory Data:', currentInventory);
+      
       // Get all vehicle arrivals and filter for only completed ones
       const arrivals = (await getVehicleArrivals()).filter(
         (arrival: any) => arrival.status === 'completed' || arrival.status === 'po-created'
@@ -70,6 +73,13 @@ const Inventory: React.FC = () => {
       
       // Create inventory items from current inventory data
       const inventoryArray = currentInventory.map(item => {
+        // Debug: Log each inventory item being processed
+        console.log(`Processing SKU ${item.sku_code}:`, {
+          productName: item.product_name,
+          available_quantity: item.available_quantity,
+          total_weight: item.total_weight
+        });
+        
         const inventoryItem: InventoryItem = {
           id: `${item.product_id}_${item.sku_id}`,
           productId: item.product_id,
@@ -145,6 +155,9 @@ const Inventory: React.FC = () => {
 
         return inventoryItem;
       });
+      
+      // Debug: Log the final inventory array
+      console.log('Final Inventory Array:', inventoryArray);
       
       // Sort inventory items by product name
       inventoryArray.sort((a, b) => a.productName.localeCompare(b.productName));
