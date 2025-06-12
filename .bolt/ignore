@@ -2,6 +2,7 @@ src/pages/auth/
 src/contexts/
 src/layouts/
 src/components/
+src/pages/
 src/pages/dashboard/
 src/pages/procurement/
 src/pages/finance/
