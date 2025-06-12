@@ -307,7 +307,7 @@ const EditRecordPurchase: React.FC = () => {
   };
 
   const calculateTotal = () => {
-    return calculateItemsSubtotal() + calculateAdditionalCostsTotal();
+    return calculateItemsSubtotal() - calculateAdditionalCostsTotal();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
