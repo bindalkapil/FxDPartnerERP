@@ -105,6 +105,13 @@ const ViewCustomer: React.FC = () => {
     return new Date(dateString).toLocaleDateString();
   };
 
+  const formatCurrency = (amount: number | null | undefined): string => {
+    if (amount === null || amount === undefined) {
+      return '0';
+    }
+    return amount.toLocaleString();
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
@@ -163,7 +170,7 @@ const ViewCustomer: React.FC = () => {
 
   const calculateOrderStats = () => {
     const totalOrders = salesOrders.length;
-    const totalValue = salesOrders.reduce((sum, order) => sum + order.total_amount, 0);
+    const totalValue = salesOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
     const pendingOrders = salesOrders.filter(order => 
       order.status === 'draft' || order.status === 'processing'
     ).length;
@@ -178,7 +185,7 @@ const ViewCustomer: React.FC = () => {
     const totalPayments = payments.length;
     const totalReceived = payments
       .filter(p => p.type === 'received' && p.status === 'completed')
-      .reduce((sum, p) => sum + p.amount, 0);
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
     const pendingPayments = payments.filter(p => p.status === 'pending').length;
 
     return { totalPayments, totalReceived, pendingPayments };
@@ -186,12 +193,12 @@ const ViewCustomer: React.FC = () => {
 
   const getAvailableCredit = () => {
     if (!customer) return 0;
-    return customer.credit_limit - customer.current_balance;
+    return (customer.credit_limit || 0) - (customer.current_balance || 0);
   };
 
   const getCreditUtilization = () => {
-    if (!customer || customer.credit_limit === 0) return 0;
-    return (customer.current_balance / customer.credit_limit) * 100;
+    if (!customer || (customer.credit_limit || 0) === 0) return 0;
+    return ((customer.current_balance || 0) / (customer.credit_limit || 1)) * 100;
   };
 
   if (loading) {
@@ -258,7 +265,7 @@ const ViewCustomer: React.FC = () => {
             
             <div className="text-right">
               <p className="text-sm text-gray-500">Total Business Value</p>
-              <p className="text-2xl font-bold text-green-600">₹{orderStats.totalValue.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-green-600">₹{formatCurrency(orderStats.totalValue)}</p>
               <p className="text-sm text-gray-500">{orderStats.totalOrders} orders</p>
             </div>
           </div>
@@ -269,15 +276,15 @@ const ViewCustomer: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <span className="text-sm text-gray-500">Credit Limit:</span>
-                <p className="text-lg font-semibold text-gray-900">₹{customer.credit_limit.toLocaleString()}</p>
+                <p className="text-lg font-semibold text-gray-900">₹{formatCurrency(customer.credit_limit)}</p>
               </div>
               <div>
                 <span className="text-sm text-gray-500">Outstanding Balance:</span>
-                <p className="text-lg font-semibold text-red-600">₹{customer.current_balance.toLocaleString()}</p>
+                <p className="text-lg font-semibold text-red-600">₹{formatCurrency(customer.current_balance)}</p>
               </div>
               <div>
                 <span className="text-sm text-gray-500">Available Credit:</span>
-                <p className="text-lg font-semibold text-green-600">₹{availableCredit.toLocaleString()}</p>
+                <p className="text-lg font-semibold text-green-600">₹{formatCurrency(availableCredit)}</p>
               </div>
               <div>
                 <span className="text-sm text-gray-500">Credit Utilization:</span>
@@ -456,7 +463,7 @@ const ViewCustomer: React.FC = () => {
                     <div className="flex items-center">
                       <DollarSign className="h-8 w-8 text-green-600 mr-3" />
                       <div>
-                        <p className="text-2xl font-bold text-gray-900">₹{orderStats.totalValue.toLocaleString()}</p>
+                        <p className="text-2xl font-bold text-gray-900">₹{formatCurrency(orderStats.totalValue)}</p>
                         <p className="text-sm text-gray-500">Total Value</p>
                       </div>
                     </div>
@@ -573,7 +580,7 @@ const ViewCustomer: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">₹{order.total_amount.toLocaleString()}</div>
+                            <div className="text-sm text-gray-900">₹{formatCurrency(order.total_amount)}</div>
                             <div className="text-sm text-gray-500">{getPaymentModeDisplay(order.payment_mode)}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -617,7 +624,7 @@ const ViewCustomer: React.FC = () => {
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-medium text-gray-900">Payment Records</h3>
                 <div className="text-sm text-gray-500">
-                  Total Received: ₹{paymentStats.totalReceived.toLocaleString()}
+                  Total Received: ₹{formatCurrency(paymentStats.totalReceived)}
                 </div>
               </div>
 
@@ -663,7 +670,7 @@ const ViewCustomer: React.FC = () => {
                             <div className={`text-sm font-medium ${
                               payment.type === 'received' ? 'text-green-600' : 'text-red-600'
                             }`}>
-                              {payment.type === 'received' ? '+' : '-'}₹{payment.amount.toLocaleString()}
+                              {payment.type === 'received' ? '+' : '-'}₹{formatCurrency(payment.amount)}
                             </div>
                             <div className="text-sm text-gray-500 capitalize">{payment.type}</div>
                           </td>
