@@ -259,8 +259,6 @@ const Inventory: React.FC = () => {
       totalItems: inventoryItems.length,
       currentQuantity: inventoryItems.reduce((sum, item) => sum + item.currentQuantity, 0),
       currentWeight: inventoryItems.reduce((sum, item) => sum + item.currentWeight, 0),
-      totalQuantity: inventoryItems.reduce((sum, item) => sum + item.totalQuantity, 0),
-      totalWeight: inventoryItems.reduce((sum, item) => sum + item.totalWeight, 0),
       totalArrivals: inventoryItems.reduce((sum, item) => sum + item.arrivalCount, 0)
     };
   };
@@ -354,7 +352,7 @@ const Inventory: React.FC = () => {
       </div>
       
       {/* Inventory Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
@@ -396,17 +394,6 @@ const Inventory: React.FC = () => {
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-yellow-100 text-yellow-600">
               <Truck className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="flex justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Total Historical</p>
-              <p className="text-2xl font-bold text-gray-800">{inventoryStats.totalQuantity}</p>
-            </div>
-            <div className="h-10 w-10 flex items-center justify-center rounded-full bg-gray-100 text-gray-600">
-              <Calendar className="h-5 w-5" />
             </div>
           </div>
         </div>
@@ -470,9 +457,6 @@ const Inventory: React.FC = () => {
                   Current Stock
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Historical Stock
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Last Arrival
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -516,17 +500,6 @@ const Inventory: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {item.totalQuantity} {item.unitType === 'box' ? 'boxes' : 'kg'}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        Weight: {item.totalWeight} kg
-                      </div>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 mt-1">
-                        {item.arrivalCount} arrivals
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{formatDateTime(item.lastArrival)}</div>
                       <div className="text-sm text-gray-500">From: {item.supplier}</div>
                     </td>
@@ -544,7 +517,7 @@ const Inventory: React.FC = () => {
                   </tr>
                   {expandedItem === item.id && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-4 bg-gray-50">
+                      <td colSpan={5} className="px-6 py-4 bg-gray-50">
                         <div className="text-sm">
                           <h4 className="font-medium text-gray-900 mb-3 flex items-center">
                             <Truck className="h-4 w-4 mr-2" />
@@ -553,7 +526,7 @@ const Inventory: React.FC = () => {
                           <div className="space-y-3">
                             {item.vehicleArrivals.map((arrival, index) => (
                               <div key={index} className="bg-white p-3 rounded-md border border-gray-200">
-                                <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
                                   <div>
                                     <span className="font-medium text-gray-700">Arrival Date:</span>
                                     <div className="text-gray-900">{formatDateTime(arrival.arrivalTime)}</div>
@@ -571,14 +544,6 @@ const Inventory: React.FC = () => {
                                     <div className="text-gray-900">
                                       {arrival.quantity} {item.unitType === 'box' ? 'boxes' : 'kg'} 
                                       ({arrival.weight} kg total)
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-gray-700">Status:</span>
-                                    <div>
-                                      <span className={`inline-flex px-2 py-1 text-xs leading-4 font-semibold rounded-full ${getStatusColor(arrival.status)}`}>
-                                        {arrival.status.charAt(0).toUpperCase() + arrival.status.slice(1)}
-                                      </span>
                                     </div>
                                   </div>
                                 </div>
@@ -638,7 +603,7 @@ const Inventory: React.FC = () => {
                 <div className="space-y-3">
                   {selectedItem.vehicleArrivals.map((arrival, index) => (
                     <div key={index} className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
                         <div>
                           <span className="font-medium text-gray-700">Arrival Date:</span>
                           <div className="text-gray-900">{formatDateTime(arrival.arrivalTime)}</div>
@@ -658,14 +623,6 @@ const Inventory: React.FC = () => {
                             ({arrival.weight} kg total)
                           </div>
                         </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Status:</span>
-                          <div>
-                            <span className={`inline-flex px-2 py-1 text-xs leading-4 font-semibold rounded-full ${getStatusColor(arrival.status)}`}>
-                              {arrival.status.charAt(0).toUpperCase() + arrival.status.slice(1)}
-                            </span>
-                          </div>
-                        </div>
                       </div>
                     </div>
                   ))}
@@ -681,7 +638,7 @@ const Inventory: React.FC = () => {
                 <div className="space-y-3">
                   {selectedItem.salesOrders.map((order, index) => (
                     <div key={index} className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
                         <div>
                           <span className="font-medium text-gray-700">Order Date:</span>
                           <div className="text-gray-900">{formatDateTime(order.orderDate)}</div>
@@ -698,14 +655,6 @@ const Inventory: React.FC = () => {
                           <span className="font-medium text-gray-700">Quantity:</span>
                           <div className="text-gray-900">
                             {order.quantity} {selectedItem.unitType === 'box' ? 'boxes' : 'kg'}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Status:</span>
-                          <div>
-                            <span className={`inline-flex px-2 py-1 text-xs leading-4 font-semibold rounded-full ${getStatusColor(order.status)}`}>
-                              {getStatusDisplayText(order.status)}
-                            </span>
                           </div>
                         </div>
                       </div>
@@ -731,7 +680,6 @@ const Inventory: React.FC = () => {
             <div className="mt-2 text-sm text-blue-700">
               <ul className="list-disc list-inside space-y-1">
                 <li>Current Stock shows the actual available inventory after sales</li>
-                <li>Historical Stock shows the total quantity received from all vehicle arrivals</li>
                 <li>Inventory is automatically updated when vehicle arrivals are completed or sales are made</li>
                 <li>Click on any row to view detailed arrival history for that item</li>
                 <li>Use the refresh button to update inventory with the latest data</li>
