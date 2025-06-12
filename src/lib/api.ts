@@ -983,10 +983,17 @@ export async function createPurchaseRecord(
   items: Tables['purchase_record_items']['Insert'][],
   costs: Tables['purchase_record_costs']['Insert'][]
 ) {
+  // Ensure the status is valid - only 'completed' or 'cancelled' are allowed
+  // Default to 'completed' for new purchase records
+  const validRecord = {
+    ...record,
+    status: 'completed'
+  };
+
   // Create the purchase record
   const { data: recordData, error: recordError } = await supabase
     .from('purchase_records')
-    .insert(record)
+    .insert(validRecord)
     .select()
     .single();
 
@@ -1017,8 +1024,8 @@ export async function createPurchaseRecord(
   if (costsError) throw costsError;
 
   // Update supplier balance if supplier_id is provided
-  if (record.supplier_id) {
-    await updateSupplierBalance(record.supplier_id, record.total_amount || 0, 'add');
+  if (validRecord.supplier_id) {
+    await updateSupplierBalance(validRecord.supplier_id, validRecord.total_amount || 0, 'add');
   }
 
   return recordData;
@@ -1039,10 +1046,16 @@ export async function updatePurchaseRecord(
 
   if (!currentRecord) throw new Error('Purchase record not found');
 
+  // Ensure the status is valid if being updated
+  const validRecord = record.status ? {
+    ...record,
+    status: record.status === 'cancelled' ? 'cancelled' : 'completed'
+  } : record;
+
   // Update the record
   const { data: recordData, error: recordError } = await supabase
     .from('purchase_records')
-    .update(record)
+    .update(validRecord)
     .eq('id', id)
     .select()
     .single();

@@ -239,7 +239,7 @@ const NewRecordPurchase: React.FC = () => {
   };
 
   const calculateTotal = () => {
-    return calculateItemsSubtotal() + calculateAdditionalCostsTotal();
+    return calculateItemsSubtotal() - calculateAdditionalCostsTotal();
   };
 
   const generateRecordNumber = () => {
