@@ -2,11 +2,7 @@
   "name": "FxDPartnerERP",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
-  "homepage": "https://Vegrow-Tech.github.io/FxDPartnerERP",
   "scripts": {
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d build",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

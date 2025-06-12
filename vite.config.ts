@@ -4,16 +4,8 @@ import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/FxDPartnerERP/',
   build: {
-    outDir: 'build',
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-        },
-      },
-    },
+    outDir: 'dist',
   },
   optimizeDeps: {
     exclude: ['lucide-react'],
