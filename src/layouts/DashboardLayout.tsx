@@ -1,33 +1,36 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { useSidebar } from '../contexts/SidebarContext';
 import Sidebar from '../components/navigation/Sidebar';
 import Navbar from '../components/navigation/Navbar';
+import { useSidebar } from '../contexts/SidebarContext';
 
-const DashboardLayout: React.FC = () => {
-  const { isSidebarOpen } = useSidebar();
+const DashboardLayout = () => {
+  const { isOpen } = useSidebar();
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
       <Sidebar />
       
-      {/* Main Content */}
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${
-        isSidebarOpen ? 'ml-64' : 'ml-20'
-      }`}>
-        {/* Top Navigation */}
+      {/* Mobile overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
+          onClick={() => {}} // Will be handled by sidebar close button
+        />
+      )}
+      
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col min-w-0 md:ml-64">
+        {/* Top navigation */}
         <Navbar />
         
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-auto p-4 md:p-6">
-          <Outlet />
+        {/* Page content */}
+        <main className="flex-1 overflow-auto">
+          <div className="p-4 sm:p-6 lg:p-8">
+            <Outlet />
+          </div>
         </main>
-        
-        {/* Footer */}
-        <footer className="p-4 text-center text-sm text-gray-500 border-t">
-          <p>© {new Date().getFullYear()} FxD Partner ERP - All rights reserved</p>
-        </footer>
       </div>
     </div>
   );

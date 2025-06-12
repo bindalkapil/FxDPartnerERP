@@ -1,125 +1,165 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { useSidebar } from '../../contexts/SidebarContext';
-import { Truck, ClipboardList, Package, ShoppingCart, Truck as TruckLoading, Users, User, BookOpen, CreditCard, Settings, Home } from 'lucide-react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { 
+  LayoutDashboard, 
+  Truck, 
+  FileText, 
+  Package, 
+  ShoppingCart, 
+  Send,
+  Users, 
+  UserCheck,
+  BookOpen, 
+  CreditCard, 
+  Settings,
+  X
+} from 'lucide-react';
+import { useSidebar } from '../contexts/SidebarContext';
 
-interface NavItemProps {
-  to: string;
-  icon: React.ReactNode;
-  label: string;
-  closeSidebar?: () => void;
-}
+const navigation = [
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { 
+    name: 'Procurement', 
+    icon: Truck,
+    children: [
+      { name: 'Vehicle Arrival', href: '/vehicle-arrival' },
+      { name: 'Record Purchase', href: '/record-purchase' },
+    ]
+  },
+  { name: 'Inventory', href: '/inventory', icon: Package },
+  { 
+    name: 'Sales', 
+    icon: ShoppingCart,
+    children: [
+      { name: 'Sales Orders', href: '/sales' },
+      { name: 'Dispatch', href: '/dispatch' },
+    ]
+  },
+  { 
+    name: 'Partners', 
+    icon: Users,
+    children: [
+      { name: 'Suppliers', href: '/suppliers' },
+      { name: 'Customers', href: '/customers' },
+    ]
+  },
+  { 
+    name: 'Finance', 
+    icon: BookOpen,
+    children: [
+      { name: 'Ledger', href: '/ledger' },
+      { name: 'Payments', href: '/payments' },
+    ]
+  },
+  { name: 'Settings', href: '/settings', icon: Settings },
+];
 
-const NavItem: React.FC<NavItemProps> = ({ to, icon, label, closeSidebar }) => {
-  const { isSidebarOpen } = useSidebar();
-  
-  const handleClick = () => {
-    if (window.innerWidth < 768 && closeSidebar) {
-      closeSidebar();
+const Sidebar = () => {
+  const location = useLocation();
+  const { isOpen, toggleSidebar } = useSidebar();
+
+  const isActiveLink = (href: string) => {
+    if (href === '/') {
+      return location.pathname === '/';
     }
+    return location.pathname.startsWith(href);
+  };
+
+  const isActiveParent = (children: any[]) => {
+    return children.some(child => isActiveLink(child.href));
   };
 
   return (
-    <NavLink 
-      to={to} 
-      onClick={handleClick}
-      className={({ isActive }) => `
-        flex items-center px-4 py-3 text-gray-700 transition-colors duration-200
-        ${isActive 
-          ? 'bg-green-50 text-green-600 border-r-4 border-green-600' 
-          : 'hover:bg-gray-100'
-        }
-        ${!isSidebarOpen && 'justify-center'}
-      `}
-    >
-      <span className={!isSidebarOpen ? 'mr-0' : 'mr-3'}>{icon}</span>
-      {isSidebarOpen && <span className="font-medium whitespace-nowrap">{label}</span>}
-    </NavLink>
-  );
-};
-
-const Sidebar: React.FC = () => {
-  const { user } = useAuth();
-  const { isSidebarOpen, toggleSidebar, closeSidebar } = useSidebar();
-
-  if (!user) return null;
-
-  return (
     <>
-      {/* Mobile Overlay */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden" 
-          onClick={closeSidebar}
-        />
-      )}
-
       {/* Sidebar */}
-      <aside 
-        className={`
-          fixed top-0 left-0 z-30 h-full bg-white border-r shadow-sm
-          transform transition-all duration-300 ease-in-out
-          ${isSidebarOpen ? 'w-64' : 'w-20'}
-        `}
-      >
-        {/* Sidebar Header */}
-        <div 
-          className="flex items-center h-16 px-4 border-b cursor-pointer"
-          onClick={toggleSidebar}
-        >
+      <div className={`
+        fixed inset-y-0 left-0 z-40 w-64 bg-gray-800 text-white transform transition-transform duration-300 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        md:translate-x-0 md:static md:inset-0
+      `}>
+        <div className="flex items-center justify-between h-16 px-4 bg-gray-900">
           <div className="flex items-center">
-            <span className="text-green-600">
-              <Package size={24} />
-            </span>
-            {isSidebarOpen && (
-              <h1 className="text-xl font-bold text-gray-800 ml-2">FxD Partner ERP</h1>
-            )}
+            <Package className="h-8 w-8 text-green-400" />
+            <span className="ml-2 text-xl font-bold">FxD Partner ERP</span>
           </div>
+          
+          {/* Close button - only visible on mobile */}
+          <button
+            onClick={toggleSidebar}
+            className="md:hidden p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-white"
+          >
+            <X className="h-6 w-6" />
+          </button>
         </div>
 
-        {/* User Info */}
-        {isSidebarOpen && (
-          <div className="p-4 border-b">
-            <div className="flex items-center">
-              <div className="flex items-center justify-center h-10 w-10 rounded-full bg-green-100 text-green-600">
-                {user.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="ml-3">
-                <p className="font-medium text-gray-800">{user.name}</p>
-                <p className="text-xs text-gray-500 capitalize">{user.role}</p>
-              </div>
-            </div>
-          </div>
-        )}
+        <nav className="mt-5 px-2 space-y-1 h-[calc(100vh-4rem)] overflow-y-auto">
+          {navigation.map((item) => {
+            if (item.children) {
+              const isParentActive = isActiveParent(item.children);
+              return (
+                <div key={item.name} className="space-y-1">
+                  <div className={`
+                    flex items-center px-2 py-2 text-sm font-medium rounded-md
+                    ${isParentActive 
+                      ? 'bg-gray-900 text-white' 
+                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }
+                  `}>
+                    <item.icon className="mr-3 h-5 w-5 flex-shrink-0" />
+                    {item.name}
+                  </div>
+                  <div className="ml-8 space-y-1">
+                    {item.children.map((child) => (
+                      <NavLink
+                        key={child.name}
+                        to={child.href}
+                        onClick={() => {
+                          // Close sidebar on mobile when navigating
+                          if (window.innerWidth < 768) {
+                            toggleSidebar();
+                          }
+                        }}
+                        className={({ isActive }) => `
+                          block px-2 py-2 text-sm rounded-md transition-colors duration-200
+                          ${isActive
+                            ? 'bg-green-600 text-white'
+                            : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                          }
+                        `}
+                      >
+                        {child.name}
+                      </NavLink>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
 
-        {/* Navigation */}
-        <nav className="mt-2 overflow-y-auto h-[calc(100vh-4rem)]">
-          <NavItem to="/" icon={<Home size={20} />} label="Dashboard" closeSidebar={closeSidebar} />
-          
-          {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Procurement</div>}
-          <NavItem to="/vehicle-arrival" icon={<Truck size={20} />} label="Vehicle Arrival" closeSidebar={closeSidebar} />
-          <NavItem to="/record-purchase" icon={<ClipboardList size={20} />} label="Record Purchase" closeSidebar={closeSidebar} />
-          
-          {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Inventory</div>}
-          <NavItem to="/inventory" icon={<Package size={20} />} label="Inventory" closeSidebar={closeSidebar} />
-          
-          {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Sales</div>}
-          <NavItem to="/sales" icon={<ShoppingCart size={20} />} label="Sales" closeSidebar={closeSidebar} />
-          <NavItem to="/dispatch" icon={<TruckLoading size={20} />} label="Dispatch" closeSidebar={closeSidebar} />
-          
-          {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Financials</div>}
-          <NavItem to="/ledger" icon={<BookOpen size={20} />} label="Ledger" closeSidebar={closeSidebar} />
-          <NavItem to="/payments" icon={<CreditCard size={20} />} label="Payments" closeSidebar={closeSidebar} />
-          
-          {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Partners</div>}
-          <NavItem to="/suppliers" icon={<Users size={20} />} label="Suppliers" closeSidebar={closeSidebar} />
-          <NavItem to="/customers" icon={<User size={20} />} label="Customers" closeSidebar={closeSidebar} />
-          
-          {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">System</div>}
-          <NavItem to="/settings" icon={<Settings size={20} />} label="Settings" closeSidebar={closeSidebar} />
+            return (
+              <NavLink
+                key={item.name}
+                to={item.href}
+                onClick={() => {
+                  // Close sidebar on mobile when navigating
+                  if (window.innerWidth < 768) {
+                    toggleSidebar();
+                  }
+                }}
+                className={({ isActive }) => `
+                  flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors duration-200
+                  ${isActive
+                    ? 'bg-green-600 text-white'
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                  }
+                `}
+              >
+                <item.icon className="mr-3 h-5 w-5 flex-shrink-0" />
+                {item.name}
+              </NavLink>
+            );
+          })}
         </nav>
-      </aside>
+      </div>
     </>
   );
 };

@@ -1,153 +1,73 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { useSidebar } from '../../contexts/SidebarContext';
-import { 
-  Menu, 
-  Bell, 
-  MessageSquare, 
-  LogOut,
-  User,
-  Settings
-} from 'lucide-react';
+import { Bell, Search, User, Menu } from 'lucide-react';
+import { useSidebar } from '../contexts/SidebarContext';
 
-const Navbar: React.FC = () => {
-  const { user, logout } = useAuth();
+const Navbar = () => {
   const { toggleSidebar } = useSidebar();
-  const navigate = useNavigate();
-  const [showProfileMenu, setShowProfileMenu] = React.useState(false);
-  const [showNotifications, setShowNotifications] = React.useState(false);
-  
-  const profileMenuRef = React.useRef<HTMLDivElement>(null);
-  const notificationsRef = React.useRef<HTMLDivElement>(null);
-  
-  React.useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
-        setShowProfileMenu(false);
-      }
-      
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
-      }
-    };
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-  
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-  
-  if (!user) return null;
-  
+
   return (
-    <header className="bg-white border-b h-16 flex items-center justify-between px-4 md:px-6">
-      {/* Left section */}
-      <div className="flex items-center">
-        <button 
-          onClick={toggleSidebar}
-          className="text-gray-500 hover:text-gray-700 focus:outline-none mr-4"
-        >
-          <Menu size={24} />
-        </button>
-        <h1 className="text-xl font-semibold text-gray-800 hidden md:block">
-          FxD Partner ERP
-        </h1>
+    <header className="bg-white shadow-sm border-b border-gray-200">
+      <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
+        {/* Left side - Mobile menu button */}
+        <div className="flex items-center">
+          <button
+            onClick={toggleSidebar}
+            className="md:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-500"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+          
+          {/* Search bar - hidden on mobile, visible on larger screens */}
+          <div className="hidden sm:block ml-4 md:ml-0">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search..."
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-green-500 focus:border-green-500 sm:text-sm"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Right side */}
+        <div className="flex items-center space-x-4">
+          {/* Mobile search button */}
+          <button className="sm:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
+            <Search className="h-6 w-6" />
+          </button>
+          
+          {/* Notifications */}
+          <button className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 relative">
+            <Bell className="h-6 w-6" />
+            <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-400"></span>
+          </button>
+
+          {/* User menu */}
+          <div className="relative">
+            <button className="flex items-center space-x-2 p-2 rounded-md text-gray-700 hover:bg-gray-100">
+              <div className="h-8 w-8 rounded-full bg-green-500 flex items-center justify-center">
+                <User className="h-5 w-5 text-white" />
+              </div>
+              <span className="hidden sm:block text-sm font-medium">Admin User</span>
+            </button>
+          </div>
+        </div>
       </div>
       
-      {/* Right section */}
-      <div className="flex items-center space-x-4">
-        {/* Notifications */}
-        <div className="relative" ref={notificationsRef}>
-          <button 
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="text-gray-500 hover:text-gray-700 focus:outline-none relative"
-          >
-            <Bell size={20} />
-            <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500"></span>
-          </button>
-          
-          {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg py-1 z-10">
-              <div className="px-4 py-2 border-b">
-                <h3 className="text-sm font-semibold text-gray-700">Notifications</h3>
-              </div>
-              <div className="max-h-64 overflow-y-auto">
-                <div className="px-4 py-3 border-b hover:bg-gray-50">
-                  <p className="text-sm font-medium text-gray-800">New vehicle arrived</p>
-                  <p className="text-xs text-gray-500">Vehicle KA-01-AB-1234 has arrived with apple delivery</p>
-                  <p className="text-xs text-gray-400 mt-1">10 minutes ago</p>
-                </div>
-                <div className="px-4 py-3 border-b hover:bg-gray-50">
-                  <p className="text-sm font-medium text-gray-800">Payment received</p>
-                  <p className="text-xs text-gray-500">Customer ABC Fruits paid ₹25,000</p>
-                  <p className="text-xs text-gray-400 mt-1">1 hour ago</p>
-                </div>
-                <div className="px-4 py-3 hover:bg-gray-50">
-                  <p className="text-sm font-medium text-gray-800">Low inventory alert</p>
-                  <p className="text-xs text-gray-500">Banana stock is below minimum threshold</p>
-                  <p className="text-xs text-gray-400 mt-1">3 hours ago</p>
-                </div>
-              </div>
-              <div className="px-4 py-2 border-t">
-                <a href="#" className="text-xs font-medium text-green-600 hover:text-green-700">
-                  View all notifications
-                </a>
-              </div>
-            </div>
-          )}
-        </div>
-        
-        {/* Messages */}
-        <button className="text-gray-500 hover:text-gray-700 focus:outline-none relative">
-          <MessageSquare size={20} />
-          <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-green-500"></span>
-        </button>
-        
-        {/* Profile */}
-        <div className="relative" ref={profileMenuRef}>
-          <button 
-            onClick={() => setShowProfileMenu(!showProfileMenu)}
-            className="flex items-center focus:outline-none"
-          >
-            <div className="flex items-center justify-center h-8 w-8 rounded-full bg-green-100 text-green-600">
-              {user.name.charAt(0).toUpperCase()}
-            </div>
-            <span className="ml-2 text-sm font-medium text-gray-700 hidden md:block">
-              {user.name}
-            </span>
-          </button>
-          
-          {showProfileMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-              <a 
-                href="#" 
-                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-              >
-                <User size={16} className="mr-2" />
-                Profile
-              </a>
-              <a 
-                href="#" 
-                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-              >
-                <Settings size={16} className="mr-2" />
-                Settings
-              </a>
-              <button 
-                onClick={handleLogout}
-                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-              >
-                <LogOut size={16} className="mr-2" />
-                Sign out
-              </button>
-            </div>
-          )}
+      {/* Mobile search bar - shown when search button is clicked */}
+      <div className="sm:hidden px-4 pb-4">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            placeholder="Search..."
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-green-500 focus:border-green-500 text-sm"
+          />
         </div>
       </div>
     </header>
