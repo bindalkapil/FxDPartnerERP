@@ -1,50 +1,37 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 interface SidebarContextType {
-  isOpen: boolean;
+  isSidebarOpen: boolean;
   toggleSidebar: () => void;
   closeSidebar: () => void;
-  openSidebar: () => void;
 }
 
-const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
+const SidebarContext = createContext<SidebarContextType>({
+  isSidebarOpen: false,
+  toggleSidebar: () => {},
+  closeSidebar: () => {},
+});
 
-export const useSidebar = () => {
-  const context = useContext(SidebarContext);
-  if (context === undefined) {
-    throw new Error('useSidebar must be used within a SidebarProvider');
-  }
-  return context;
-};
+export const useSidebar = () => useContext(SidebarContext);
 
-interface SidebarProviderProps {
-  children: ReactNode;
-}
+export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-export const SidebarProvider: React.FC<SidebarProviderProps> = ({ children }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  // Close sidebar by default on all screen sizes
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, []);
 
   const toggleSidebar = () => {
-    setIsOpen(prev => !prev);
+    setIsSidebarOpen(!isSidebarOpen);
   };
 
   const closeSidebar = () => {
-    setIsOpen(false);
-  };
-
-  const openSidebar = () => {
-    setIsOpen(true);
-  };
-
-  const value = {
-    isOpen,
-    toggleSidebar,
-    closeSidebar,
-    openSidebar,
+    setIsSidebarOpen(false);
   };
 
   return (
-    <SidebarContext.Provider value={value}>
+    <SidebarContext.Provider value={{ isSidebarOpen, toggleSidebar, closeSidebar }}>
       {children}
     </SidebarContext.Provider>
   );
