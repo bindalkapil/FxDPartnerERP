@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Package, Search, Filter, RefreshCw, Truck, Calendar, AlertCircle, ShoppingCart, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getVehicleArrivals, getSalesOrders } from '../../lib/api';
+import { getVehicleArrivals, getSalesOrders, getAvailableInventory } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 
 interface InventoryItem {
@@ -57,14 +57,9 @@ const Inventory: React.FC = () => {
       setError(null);
       setLoading(true);
       
-      // Get current inventory data
-      const { data: currentInventory, error: currentInventoryError } = await supabase
-        .from('current_inventory')
-        .select('*')
-        .order('product_name');
-
-      if (currentInventoryError) throw currentInventoryError;
-
+      // Get current inventory data using the API function
+      const currentInventory = await getAvailableInventory();
+      
       // Get all vehicle arrivals and filter for only completed ones
       const arrivals = (await getVehicleArrivals()).filter(
         (arrival: any) => arrival.status === 'completed' || arrival.status === 'po-created'
@@ -73,153 +68,83 @@ const Inventory: React.FC = () => {
       // Get all sales orders
       const salesOrders = await getSalesOrders();
       
-      if (!arrivals || arrivals.length === 0) {
-        // If no arrivals but we have current inventory, create inventory items from that
-        if (currentInventory && currentInventory.length > 0) {
-          const inventoryArray = currentInventory.map(item => ({
-            id: `${item.product_id}_${item.sku_id}`,
-            productId: item.product_id,
-            productName: item.product_name,
-            category: item.category,
-            skuId: item.sku_id,
-            skuCode: item.sku_code,
-            unitType: item.unit_type as 'box' | 'loose',
-            currentQuantity: item.available_quantity,
-            currentWeight: item.total_weight,
-            totalQuantity: item.available_quantity,
-            totalWeight: item.total_weight,
-            lastArrival: item.last_updated_at,
-            arrivalCount: 0,
-            supplier: 'N/A',
-            vehicleArrivals: [],
-            salesOrders: []
-          }));
-          setInventoryItems(inventoryArray);
-          return;
-        }
-        setInventoryItems([]);
-        return;
-      }
+      // Create inventory items from current inventory data
+      const inventoryArray = currentInventory.map(item => {
+        const inventoryItem: InventoryItem = {
+          id: `${item.product_id}_${item.sku_id}`,
+          productId: item.product_id,
+          productName: item.product_name,
+          category: item.category,
+          skuId: item.sku_id,
+          skuCode: item.sku_code,
+          unitType: item.unit_type as 'box' | 'loose',
+          currentQuantity: item.available_quantity,
+          currentWeight: item.total_weight,
+          totalQuantity: 0,
+          totalWeight: 0,
+          lastArrival: item.last_updated_at,
+          arrivalCount: 0,
+          supplier: 'N/A',
+          vehicleArrivals: [],
+          salesOrders: []
+        };
 
-      // Group items by product and SKU to create inventory
-      const inventoryMap = new Map<string, InventoryItem>();
+        // Add historical data from vehicle arrivals
+        arrivals.forEach(arrival => {
+          if (!arrival.vehicle_arrival_items) return;
 
-      // First, populate with current inventory data
-      if (currentInventory) {
-        currentInventory.forEach(item => {
-          const key = `${item.product_id}_${item.sku_id}`;
-          inventoryMap.set(key, {
-            id: key,
-            productId: item.product_id,
-            productName: item.product_name,
-            category: item.category,
-            skuId: item.sku_id,
-            skuCode: item.sku_code,
-            unitType: item.unit_type as 'box' | 'loose',
-            currentQuantity: item.available_quantity,
-            currentWeight: item.total_weight,
-            totalQuantity: 0,
-            totalWeight: 0,
-            lastArrival: item.last_updated_at,
-            arrivalCount: 0,
-            supplier: 'N/A',
-            vehicleArrivals: [],
-            salesOrders: []
-          });
-        });
-      }
-
-      // Then, add historical data from vehicle arrivals
-      arrivals.forEach(arrival => {
-        if (!arrival.vehicle_arrival_items) return;
-
-        arrival.vehicle_arrival_items.forEach((item: any) => {
-          const key = `${item.product.id}_${item.sku.id}`;
-          const existingItem = inventoryMap.get(key);
-
-          if (existingItem) {
-            // Update existing item with arrival data
-            existingItem.totalQuantity += item.final_quantity || item.quantity;
-            existingItem.totalWeight += item.final_total_weight || item.total_weight;
-            existingItem.arrivalCount += 1;
-            existingItem.vehicleArrivals.push({
-              id: arrival.id,
-              arrivalTime: arrival.arrival_time,
-              supplier: arrival.supplier,
-              vehicleNumber: arrival.vehicle_number,
-              quantity: item.final_quantity || item.quantity,
-              weight: item.final_total_weight || item.total_weight,
-              status: arrival.status
-            });
-          } else {
-            // Create new inventory item
-            inventoryMap.set(key, {
-              id: key,
-              productId: item.product.id,
-              productName: item.product.name,
-              category: item.product.category,
-              skuId: item.sku.id,
-              skuCode: item.sku.code,
-              unitType: item.unit_type as 'box' | 'loose',
-              currentQuantity: 0,
-              currentWeight: 0,
-              totalQuantity: item.final_quantity || item.quantity,
-              totalWeight: item.final_total_weight || item.total_weight,
-              lastArrival: arrival.arrival_time,
-              arrivalCount: 1,
-              supplier: arrival.supplier,
-              vehicleArrivals: [{
+          arrival.vehicle_arrival_items.forEach((arrivalItem: any) => {
+            if (arrivalItem.product_id === item.product_id && arrivalItem.sku_id === item.sku_id) {
+              inventoryItem.totalQuantity += arrivalItem.final_quantity || arrivalItem.quantity;
+              inventoryItem.totalWeight += arrivalItem.final_total_weight || arrivalItem.total_weight;
+              inventoryItem.arrivalCount += 1;
+              inventoryItem.vehicleArrivals.push({
                 id: arrival.id,
                 arrivalTime: arrival.arrival_time,
                 supplier: arrival.supplier,
                 vehicleNumber: arrival.vehicle_number,
-                quantity: item.final_quantity || item.quantity,
-                weight: item.final_total_weight || item.total_weight,
+                quantity: arrivalItem.final_quantity || arrivalItem.quantity,
+                weight: arrivalItem.final_total_weight || arrivalItem.total_weight,
                 status: arrival.status
-              }],
-              salesOrders: []
-            });
-          }
+              });
+            }
+          });
         });
-      });
 
-      // Add sales order data
-      salesOrders.forEach(order => {
-        if (!order.sales_order_items) return;
+        // Add sales order data
+        salesOrders.forEach(order => {
+          if (!order.sales_order_items) return;
 
-        order.sales_order_items.forEach((item: any) => {
-          const key = `${item.product_id}_${item.sku_id}`;
-          const existingItem = inventoryMap.get(key);
-
-          if (existingItem) {
-            existingItem.salesOrders.push({
-              id: order.id,
-              orderNumber: order.order_number,
-              orderDate: order.order_date,
-              customerName: order.customer.name,
-              quantity: item.quantity,
-              status: order.status
-            });
-          }
+          order.sales_order_items.forEach((orderItem: any) => {
+            if (orderItem.product_id === item.product_id && orderItem.sku_id === item.sku_id) {
+              inventoryItem.salesOrders.push({
+                id: order.id,
+                orderNumber: order.order_number,
+                orderDate: order.order_date,
+                customerName: order.customer.name,
+                quantity: orderItem.quantity,
+                status: order.status
+              });
+            }
+          });
         });
-      });
 
-      // Sort vehicle arrivals and sales orders by date (most recent first) for each item
-      inventoryMap.forEach(item => {
-        item.vehicleArrivals.sort((a, b) => 
+        // Sort vehicle arrivals and sales orders by date (most recent first)
+        inventoryItem.vehicleArrivals.sort((a, b) => 
           new Date(b.arrivalTime).getTime() - new Date(a.arrivalTime).getTime()
         );
-        item.salesOrders.sort((a, b) => 
+        inventoryItem.salesOrders.sort((a, b) => 
           new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()
         );
-        // Update lastArrival if there are vehicle arrivals
-        if (item.vehicleArrivals.length > 0) {
-          item.lastArrival = item.vehicleArrivals[0].arrivalTime;
-          item.supplier = item.vehicleArrivals[0].supplier;
-        }
-      });
 
-      const inventoryArray = Array.from(inventoryMap.values());
+        // Update lastArrival if there are vehicle arrivals
+        if (inventoryItem.vehicleArrivals.length > 0) {
+          inventoryItem.lastArrival = inventoryItem.vehicleArrivals[0].arrivalTime;
+          inventoryItem.supplier = inventoryItem.vehicleArrivals[0].supplier;
+        }
+
+        return inventoryItem;
+      });
       
       // Sort inventory items by product name
       inventoryArray.sort((a, b) => a.productName.localeCompare(b.productName));
