@@ -2,6 +2,8 @@
 
 A comprehensive Enterprise Resource Planning (ERP) solution designed specifically for FxD partners to manage their procurement, sales, inventory, and financial operations efficiently.
 
+🌐 **Live Demo**: [https://bindalkapil.github.io/FxDPartnerERP](https://bindalkapil.github.io/FxDPartnerERP)
+
 ## Table of Contents
 - [Key Features](#key-features)
 - [Tech Stack](#tech-stack)
@@ -121,6 +123,34 @@ npm run supabase:pull       # Pull remote schema
 ```
 
 For detailed migration setup and troubleshooting, see [SUPABASE_DEPLOYMENT.md](./SUPABASE_DEPLOYMENT.md).
+
+## Deployment
+
+This project is automatically deployed to GitHub Pages using GitHub Actions.
+
+### Automatic Deployment
+- **Trigger**: Push to `main` branch (excluding Supabase migration files)
+- **URL**: [https://bindalkapil.github.io/FxDPartnerERP](https://bindalkapil.github.io/FxDPartnerERP)
+- **Workflow**: `.github/workflows/deploy-pages.yml`
+
+### Manual Deployment
+You can also deploy manually using the gh-pages package:
+```bash
+npm run deploy
+```
+
+### Environment Variables for Deployment
+The following GitHub repository secrets must be configured:
+- `VITE_SUPABASE_URL`: Your Supabase project URL
+- `VITE_SUPABASE_ANON_KEY`: Your Supabase anonymous key
+
+### Setting up GitHub Pages
+1. Go to your repository settings
+2. Navigate to "Pages" section
+3. Set source to "GitHub Actions"
+4. Add the required environment variables to repository secrets
+
+For detailed GitHub Pages setup and troubleshooting, see [GITHUB_PAGES_DEPLOYMENT.md](./GITHUB_PAGES_DEPLOYMENT.md).
 
 ## Project Structure
 
