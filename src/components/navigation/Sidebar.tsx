@@ -81,21 +81,6 @@ const Sidebar: React.FC = () => {
           </div>
         </div>
 
-        {/* User Info */}
-        {isSidebarOpen && (
-          <div className="p-4 border-b">
-            <div className="flex items-center">
-              <div className="flex items-center justify-center h-10 w-10 rounded-full bg-green-100 text-green-600">
-                {user.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="ml-3">
-                <p className="font-medium text-gray-800">{user.name}</p>
-                <p className="text-xs text-gray-500 capitalize">{user.role}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Navigation */}
         <nav className="mt-2 overflow-y-auto h-[calc(100vh-4rem)]">
           <NavItem to="/" icon={<Home size={20} />} label="Dashboard" closeSidebar={closeSidebar} />
