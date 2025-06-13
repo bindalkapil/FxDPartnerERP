@@ -27,14 +27,14 @@ interface SalesOrder {
   customer: {
     name: string;
   };
-  total_amount: number;
+  total_amount: number | null;
 }
 
 interface PurchaseRecord {
   id: string;
   record_number: string;
   supplier: string;
-  total_amount: number;
+  total_amount: number | null;
 }
 
 const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
@@ -187,14 +187,14 @@ const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
       case 'received':
         return salesOrders.map(order => ({
           id: order.id,
-          label: `${order.order_number} - ${order.customer.name} (₹${order.total_amount.toLocaleString()})`,
-          amount: order.total_amount
+          label: `${order.order_number} - ${order.customer.name} (₹${(order.total_amount || 0).toLocaleString()})`,
+          amount: order.total_amount || 0
         }));
       case 'made':
         return purchaseRecords.map(record => ({
           id: record.id,
-          label: `${record.record_number} - ${record.supplier} (₹${record.total_amount.toLocaleString()})`,
-          amount: record.total_amount
+          label: `${record.record_number} - ${record.supplier} (₹${(record.total_amount || 0).toLocaleString()})`,
+          amount: record.total_amount || 0
         }));
       default:
         return [];
