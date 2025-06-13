@@ -17,7 +17,8 @@
     "supabase:diff": "supabase db diff",
     "supabase:push": "supabase db push",
     "supabase:pull": "supabase db pull",
-    "supabase:generate-types": "supabase gen types typescript --local > src/lib/database.types.ts"
+    "supabase:generate-types": "supabase gen types typescript --local > src/lib/database.types.ts",
+    "migrate:roles": "node scripts/run-migration.js"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.0.5",
@@ -29,6 +30,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.6.0",
+    "dotenv": "^16.5.0",
     "lucide-react": "^0.344.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
