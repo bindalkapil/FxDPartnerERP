@@ -42,7 +42,7 @@ Before you begin, ensure you have the following installed:
 - npm (v8 or higher) or yarn
 - Git
 - A modern web browser (Chrome, Firefox, Safari, or Edge)
-- Supabase CLI (for local development)
+- Supabase CLI (for local development and database migrations)
 
 ## Installation
 
@@ -60,21 +60,30 @@ Before you begin, ensure you have the following installed:
    ```
 
 3. **Environment Setup**:
-   - Create a `.env` file in the root directory
-   - Add your Supabase configuration:
+   - Copy the example environment file:
+     ```bash
+     cp .env.example .env
+     ```
+   - Update the `.env` file with your Supabase configuration:
      ```
      VITE_SUPABASE_URL=your_supabase_url
      VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
      ```
 
-4. **Start the development server**:
+4. **Database Setup** (First time only):
+   - Install Supabase CLI: `npm install -g supabase`
+   - Login to Supabase: `supabase login`
+   - Link to your project: `supabase link --project-ref your-project-id`
+   - For detailed setup instructions, see [SUPABASE_DEPLOYMENT.md](./SUPABASE_DEPLOYMENT.md)
+
+5. **Start the development server**:
    ```bash
    npm run dev
    # or
    yarn dev
    ```
 
-5. **Open your browser** and navigate to `http://localhost:5173`
+6. **Open your browser** and navigate to `http://localhost:5173`
 
 ## Usage
 
@@ -92,6 +101,27 @@ Before you begin, ensure you have the following installed:
    - View key metrics and recent activities
    - Access quick actions for common tasks
 
+## Database Migrations
+
+This project uses automated Supabase migrations deployed via GitHub Actions. 
+
+### For Developers:
+- **Creating migrations**: `supabase migration new migration_name`
+- **Local testing**: `npm run supabase:start` and `npm run supabase:reset`
+- **Deployment**: Automatic on push to main branch
+
+### Available Scripts:
+```bash
+npm run supabase:start      # Start local Supabase
+npm run supabase:stop       # Stop local Supabase
+npm run supabase:status     # Check status
+npm run supabase:diff       # Check differences
+npm run supabase:push       # Push migrations
+npm run supabase:pull       # Pull remote schema
+```
+
+For detailed migration setup and troubleshooting, see [SUPABASE_DEPLOYMENT.md](./SUPABASE_DEPLOYMENT.md).
+
 ## Project Structure
 
 ```
@@ -107,6 +137,13 @@ src/
 ├── services/        # API services
 ├── types/           # TypeScript type definitions
 └── utils/           # Helper functions
+
+supabase/
+├── config.toml      # Supabase configuration
+└── migrations/      # Database migration files
+
+.github/
+└── workflows/       # GitHub Actions for automated deployment
 ```
 
 
