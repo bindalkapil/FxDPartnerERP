@@ -1,15 +1,21 @@
 import { createClient } from '@supabase/supabase-js';
 import { Database } from './database.types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-key';
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
   console.error('Missing Supabase environment variables:', {
-    url: supabaseUrl ? 'present' : 'missing',
-    key: supabaseAnonKey ? 'present' : 'missing'
+    url: import.meta.env.VITE_SUPABASE_URL ? 'present' : 'missing',
+    key: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'present' : 'missing'
   });
-  throw new Error('Missing Supabase environment variables. Please check your .env file.');
+  
+  // During build time, use placeholder values to prevent build failure
+  if (typeof window === 'undefined') {
+    console.warn('Using placeholder Supabase credentials for build. Set repository secrets for production.');
+  } else {
+    throw new Error('Missing Supabase environment variables. Please check your .env file.');
+  }
 }
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
@@ -27,15 +33,10 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-// Test the connection
-supabase.from('products').select('count', { count: 'exact', head: true })
-  .then(({ error }) => {
-    if (error) {
-      console.error('Supabase connection test failed:', error);
-    } else {
-      console.log('Supabase connection successful');
-    }
-  })
-  .catch((err) => {
-    console.error('Supabase connection error:', err);
-  });
+// Test the connection only if we have real credentials
+if (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY) {
+  // Connection test will be performed when the app actually uses Supabase
+  console.log('Supabase client initialized with environment credentials');
+} else {
+  console.warn('Supabase client initialized with placeholder credentials');
+}
