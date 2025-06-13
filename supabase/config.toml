@@ -1,6 +1,6 @@
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
 # working directory name when running `supabase init`.
-project_id = "rsdblnraeopboalemjjo"
+project_id = rsdblnraeopboalemjjo
 
 [api]
 enabled = true
@@ -94,6 +94,9 @@ enable_signup = true
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
 enable_confirmations = false
+# Secure email change requires a code to be entered from both the old and new email addresses.
+# This is only applicable if double_confirm_changes is enabled.
+secure_email_change_enabled = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
 max_frequency = "1s"
 
@@ -287,11 +290,11 @@ enabled = true
 policy = "oneshot"
 inspector_port = 8083
 
-[functions.function_name]
+[functions]
 # Configure one of the supported request policies: `oneshot`, `per_worker`.
 # Use `oneshot` for hot reload, or `per_worker` for load testing.
-# policy = "oneshot"
-# inspector_port = 8082
+policy = "oneshot"
+inspector_port = 8082
 
 [analytics]
 enabled = false

@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { SidebarProvider } from './contexts/SidebarContext';
-import { RoleProvider } from './contexts/RoleContext';
 import { HashRouter as Router } from 'react-router-dom'
 
 // Layouts
@@ -55,21 +54,20 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
   return (
     <AuthProvider>
-      <RoleProvider>
-        <SidebarProvider>
-          <Router>
-            <Toaster position="top-right" />
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              
-              <Route 
-                path="/" 
-                element={
-                  <PrivateRoute>
-                    <DashboardLayout />
-                  </PrivateRoute>
-                }
-              >
+      <SidebarProvider>
+        <Router>
+          <Toaster position="top-right" />
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            
+            <Route 
+              path="/" 
+              element={
+                <PrivateRoute>
+                  <DashboardLayout />
+                </PrivateRoute>
+              }
+            >
               <Route index element={<Dashboard />} />
               <Route path="vehicle-arrival" element={<VehicleArrival />} />
               <Route path="vehicle-arrival/new" element={<NewVehicleArrival />} />
@@ -102,7 +100,6 @@ function App() {
           </Routes>
         </Router>
       </SidebarProvider>
-      </RoleProvider>
     </AuthProvider>
   );
 }

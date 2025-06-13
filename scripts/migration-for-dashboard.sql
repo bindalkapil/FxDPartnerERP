@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS public.roles (
 
 -- Create users table (extends Supabase auth.users)
 CREATE TABLE IF NOT EXISTS public.users (
-    id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+    id UUID PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
     full_name TEXT NOT NULL,
     role_id TEXT NOT NULL REFERENCES public.roles(id) DEFAULT 'viewer',
@@ -91,39 +91,21 @@ DROP POLICY IF EXISTS "Admins can view all users" ON public.users;
 DROP POLICY IF EXISTS "Admins can insert users" ON public.users;
 DROP POLICY IF EXISTS "Admins can update users" ON public.users;
 DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
+DROP POLICY IF EXISTS "Service role can access all users" ON public.users;
+DROP POLICY IF EXISTS "Allow demo user creation" ON public.users;
 DROP POLICY IF EXISTS "All authenticated users can view roles" ON public.roles;
 DROP POLICY IF EXISTS "Only admins can modify roles" ON public.roles;
+DROP POLICY IF EXISTS "Service role can modify roles" ON public.roles;
 
 -- Create RLS policies for users table
 CREATE POLICY "Users can view their own profile" ON public.users
     FOR SELECT USING (auth.uid() = id);
 
-CREATE POLICY "Admins can view all users" ON public.users
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.users u 
-            JOIN public.roles r ON u.role_id = r.id 
-            WHERE u.id = auth.uid() AND r.id = 'admin'
-        )
-    );
+CREATE POLICY "Service role can access all users" ON public.users
+    FOR ALL USING (auth.role() = 'service_role');
 
-CREATE POLICY "Admins can insert users" ON public.users
-    FOR INSERT WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM public.users u 
-            JOIN public.roles r ON u.role_id = r.id 
-            WHERE u.id = auth.uid() AND r.id = 'admin'
-        )
-    );
-
-CREATE POLICY "Admins can update users" ON public.users
-    FOR UPDATE USING (
-        EXISTS (
-            SELECT 1 FROM public.users u 
-            JOIN public.roles r ON u.role_id = r.id 
-            WHERE u.id = auth.uid() AND r.id = 'admin'
-        )
-    );
+CREATE POLICY "Allow demo user creation" ON public.users
+    FOR INSERT WITH CHECK (true);
 
 CREATE POLICY "Users can update their own profile" ON public.users
     FOR UPDATE USING (auth.uid() = id)
@@ -131,16 +113,10 @@ CREATE POLICY "Users can update their own profile" ON public.users
 
 -- Create RLS policies for roles table
 CREATE POLICY "All authenticated users can view roles" ON public.roles
-    FOR SELECT USING (auth.role() = 'authenticated');
+    FOR SELECT USING (true);
 
-CREATE POLICY "Only admins can modify roles" ON public.roles
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM public.users u 
-            JOIN public.roles r ON u.role_id = r.id 
-            WHERE u.id = auth.uid() AND r.id = 'admin'
-        )
-    );
+CREATE POLICY "Service role can modify roles" ON public.roles
+    FOR ALL USING (auth.role() = 'service_role');
 
 -- Create view for user details with role information
 CREATE OR REPLACE VIEW public.user_details AS
