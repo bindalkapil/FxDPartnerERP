@@ -51,74 +51,72 @@ const activities: ActivityItem[] = [
     title: 'New Customer Added',
     description: 'Fresh Fruits Ltd. was added as a new customer',
     time: '1 day ago'
-  },
-  {
-    id: 6,
-    type: 'supplier',
-    title: 'Supplier Payment',
-    description: 'Paid ₹35,000 to Green Farms',
-    time: '1 day ago'
   }
 ];
 
 const getActivityIcon = (type: string) => {
   switch(type) {
     case 'inventory':
-      return <Package className="h-5 w-5 text-blue-500" />;
+      return <Package className="h-4 w-4 text-blue-500" />;
     case 'vehicle':
-      return <Truck className="h-5 w-5 text-orange-500" />;
+      return <Truck className="h-4 w-4 text-orange-500" />;
     case 'sale':
-      return <ShoppingCart className="h-5 w-5 text-purple-500" />;
+      return <ShoppingCart className="h-4 w-4 text-purple-500" />;
     case 'payment':
-      return <CreditCard className="h-5 w-5 text-green-500" />;
+      return <CreditCard className="h-4 w-4 text-green-500" />;
     case 'customer':
-      return <User className="h-5 w-5 text-indigo-500" />;
+      return <User className="h-4 w-4 text-indigo-500" />;
     case 'supplier':
-      return <Users className="h-5 w-5 text-red-500" />;
+      return <Users className="h-4 w-4 text-red-500" />;
     default:
-      return <Package className="h-5 w-5 text-gray-500" />;
+      return <Package className="h-4 w-4 text-gray-500" />;
+  }
+};
+
+const getActivityBgColor = (type: string) => {
+  switch(type) {
+    case 'inventory':
+      return 'bg-blue-50';
+    case 'vehicle':
+      return 'bg-orange-50';
+    case 'sale':
+      return 'bg-purple-50';
+    case 'payment':
+      return 'bg-green-50';
+    case 'customer':
+      return 'bg-indigo-50';
+    case 'supplier':
+      return 'bg-red-50';
+    default:
+      return 'bg-gray-50';
   }
 };
 
 const RecentActivity: React.FC = () => {
   return (
-    <div className="flow-root">
-      <ul className="-mb-8">
-        {activities.map((activity, activityIdx) => (
-          <li key={activity.id}>
-            <div className="relative pb-8">
-              {activityIdx !== activities.length - 1 ? (
-                <span
-                  className="absolute top-5 left-5 -ml-px h-full w-0.5 bg-gray-200"
-                  aria-hidden="true"
-                />
-              ) : null}
-              <div className="relative flex items-start space-x-3">
-                <div className="relative">
-                  <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center ring-8 ring-white">
-                    {getActivityIcon(activity.type)}
-                  </div>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div>
-                    <div className="text-sm">
-                      <a href="#" className="font-medium text-gray-900">
-                        {activity.title}
-                      </a>
-                    </div>
-                    <p className="mt-0.5 text-sm text-gray-500">
-                      {activity.description}
-                    </p>
-                  </div>
-                  <div className="mt-2 text-sm text-gray-500">
-                    <p>{activity.time}</p>
-                  </div>
-                </div>
+    <div className="space-y-3">
+      {activities.map((activity) => (
+        <div key={activity.id} className={`p-3 rounded-lg border border-gray-100 ${getActivityBgColor(activity.type)} hover:shadow-sm transition-all duration-200`}>
+          <div className="flex items-start space-x-3">
+            <div className="flex-shrink-0 mt-1">
+              <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center shadow-sm">
+                {getActivityIcon(activity.type)}
               </div>
             </div>
-          </li>
-        ))}
-      </ul>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 mb-1">
+                {activity.title}
+              </p>
+              <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                {activity.description}
+              </p>
+              <p className="text-xs text-gray-500">
+                {activity.time}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 };

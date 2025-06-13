@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, Bell, Lock, User, Globe, Database, HelpCircle, Save } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Lock, User, Globe, Database, HelpCircle, Save, Users } from 'lucide-react';
+import { useRole } from '../../contexts/RoleContext';
+import UserManagement from '../../components/settings/UserManagement';
 
 interface SettingsSection {
   id: string;
@@ -8,47 +10,54 @@ interface SettingsSection {
   description: string;
 }
 
-const settingsSections: SettingsSection[] = [
-  {
-    id: 'profile',
-    title: 'Profile Settings',
-    icon: <User className="h-5 w-5" />,
-    description: 'Update your personal information and preferences'
-  },
-  {
-    id: 'notifications',
-    title: 'Notifications',
-    icon: <Bell className="h-5 w-5" />,
-    description: 'Configure how you receive alerts and notifications'
-  },
-  {
-    id: 'security',
-    title: 'Security',
-    icon: <Lock className="h-5 w-5" />,
-    description: 'Manage your password and security settings'
-  },
-  {
-    id: 'system',
-    title: 'System Settings',
-    icon: <Globe className="h-5 w-5" />,
-    description: 'Configure system-wide preferences'
-  },
-  {
-    id: 'database',
-    title: 'Database Settings',
-    icon: <Database className="h-5 w-5" />,
-    description: 'Manage database connections and backups'
-  },
-  {
-    id: 'help',
-    title: 'Help & Support',
-    icon: <HelpCircle className="h-5 w-5" />,
-    description: 'Get help and access documentation'
-  }
-];
-
 const Settings: React.FC = () => {
+  const { hasRole } = useRole();
   const [activeSection, setActiveSection] = useState('profile');
+
+  const settingsSections: SettingsSection[] = [
+    {
+      id: 'profile',
+      title: 'Profile Settings',
+      icon: <User className="h-5 w-5" />,
+      description: 'Update your personal information and preferences'
+    },
+    {
+      id: 'notifications',
+      title: 'Notifications',
+      icon: <Bell className="h-5 w-5" />,
+      description: 'Configure how you receive alerts and notifications'
+    },
+    {
+      id: 'security',
+      title: 'Security',
+      icon: <Lock className="h-5 w-5" />,
+      description: 'Manage your password and security settings'
+    },
+    {
+      id: 'system',
+      title: 'System Settings',
+      icon: <Globe className="h-5 w-5" />,
+      description: 'Configure system-wide preferences'
+    },
+    {
+      id: 'database',
+      title: 'Database Settings',
+      icon: <Database className="h-5 w-5" />,
+      description: 'Manage database connections and backups'
+    },
+    ...(hasRole('admin') ? [{
+      id: 'users',
+      title: 'User Management',
+      icon: <Users className="h-5 w-5" />,
+      description: 'Manage system users and their roles'
+    }] : []),
+    {
+      id: 'help',
+      title: 'Help & Support',
+      icon: <HelpCircle className="h-5 w-5" />,
+      description: 'Get help and access documentation'
+    }
+  ];
   const [notifications, setNotifications] = useState({
     email: true,
     push: true,
@@ -323,6 +332,11 @@ const Settings: React.FC = () => {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* User Management */}
+            {activeSection === 'users' && hasRole('admin') && (
+              <UserManagement />
             )}
 
             {/* Help & Support */}
