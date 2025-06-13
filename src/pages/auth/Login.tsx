@@ -111,7 +111,7 @@ const Login: React.FC = () => {
           
           <div className="mt-6 text-center text-sm">
             <p className="text-gray-600">
-              Demo credentials are pre-filled for you.
+              To get your credentials, please contact your system administrator.
             </p>
           </div>
         </div>
