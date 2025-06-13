@@ -13,17 +13,17 @@ import {
 
 const Dashboard: React.FC = () => {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-        <div className="flex space-x-2">
-          <select className="border border-gray-300 rounded-md text-sm p-2 bg-white">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Dashboard</h1>
+        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+          <select className="border border-gray-300 rounded-md text-sm p-2 bg-white w-full sm:w-auto">
             <option>Today</option>
             <option>This Week</option>
             <option>This Month</option>
             <option>This Year</option>
           </select>
-          <button className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200">
+          <button className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 w-full sm:w-auto">
             Download Report
           </button>
         </div>

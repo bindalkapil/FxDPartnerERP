@@ -3,6 +3,7 @@ import { ShoppingCart, Search, Filter, Plus, FileText, Trash2, Eye, Pencil } fro
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { getSalesOrders, deleteSalesOrder } from '../../lib/api';
+import MobileTable from '../../components/ui/MobileTable';
 
 interface SalesOrder {
   id: string;
@@ -16,10 +17,10 @@ interface SalesOrder {
   delivery_date: string | null;
   delivery_address: string | null;
   payment_mode: string;
-  subtotal: number;
-  tax_amount: number;
-  discount_amount: number;
-  total_amount: number;
+  subtotal: number | null;
+  tax_amount: number | null;
+  discount_amount: number | null;
+  total_amount: number | null;
   status: string;
   sale_type: string;
   sales_order_items: Array<{
@@ -149,15 +150,15 @@ const Sales: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
         <div className="flex items-center">
-          <ShoppingCart className="h-6 w-6 text-green-600 mr-2" />
-          <h1 className="text-2xl font-bold text-gray-800">Sales Orders</h1>
+          <ShoppingCart className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 mr-2" />
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800">Sales Orders</h1>
         </div>
         <button 
           onClick={() => navigate('/sales/new')}
-          className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
+          className="bg-green-600 text-white rounded-md px-3 sm:px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center justify-center w-full sm:w-auto"
         >
           <Plus className="h-4 w-4 mr-1" />
           New Sale
@@ -254,126 +255,133 @@ const Sales: React.FC = () => {
       </div>
 
       {/* Sales Table */}
-      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Order Details
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Items
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Total
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sale Type
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredSales.map((sale) => (
-                <tr key={sale.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
-                        <ShoppingCart className="h-5 w-5" />
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{sale.order_number}</div>
-                        <div className="text-sm text-gray-500">{formatDateTime(sale.order_date)}</div>
-                        {sale.delivery_date && (
-                          <div className="text-sm text-gray-500">Delivery: {formatDateTime(sale.delivery_date)}</div>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{sale.customer.name}</div>
-                    <div className="text-sm text-gray-500 capitalize">{sale.customer.customer_type}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900">
-                      {sale.sales_order_items.slice(0, 2).map((item, index) => (
-                        <div key={index}>
-                          {item.product_name} - {item.quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
-                        </div>
-                      ))}
-                      {sale.sales_order_items.length > 2 && (
-                        <div className="text-sm text-gray-500">
-                          +{sale.sales_order_items.length - 2} more items
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">₹{(sale.total_amount ?? 0).toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">{getPaymentModeDisplay(sale.payment_mode)}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getSaleTypeColor(sale.sale_type)}`}>
-                      {sale.sale_type === 'outstation' ? 'Outstation' : 'Counter'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(sale.status)}`}>
-                      {getStatusDisplayText(sale.status)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <button 
-                        onClick={() => navigate(`/sales/view/${sale.id}`)}
-                        className="text-indigo-600 hover:text-indigo-900"
-                        title="View Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      {(sale.status === 'draft' || sale.status === 'processing') && (
-                        <button 
-                          onClick={() => navigate(`/sales/edit/${sale.id}`)}
-                          className="text-gray-600 hover:text-gray-900"
-                          title="Edit Order"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      )}
-                      <button 
-                        onClick={() => navigate(`/sales/invoice/${sale.id}`)}
-                        className="text-green-600 hover:text-green-900"
-                        title="Generate Invoice"
-                      >
-                        <FileText className="h-4 w-4" />
-                      </button>
-                      {sale.status === 'draft' && (
-                        <button 
-                          onClick={() => handleDeleteOrder(sale.id)}
-                          className="text-red-600 hover:text-red-900"
-                          title="Delete Order"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        {filteredSales.length === 0 && !loading && (
+      <MobileTable
+        columns={[
+          {
+            key: 'orderDetails',
+            label: 'Order Details',
+            mobileLabel: 'Order',
+            render: (_, sale) => (
+              <div className="flex items-center">
+                <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
+                  <ShoppingCart className="h-5 w-5" />
+                </div>
+                <div className="ml-4">
+                  <div className="text-sm font-medium text-gray-900">{sale.order_number}</div>
+                  <div className="text-sm text-gray-500">{formatDateTime(sale.order_date)}</div>
+                  {sale.delivery_date && (
+                    <div className="text-sm text-gray-500">Delivery: {formatDateTime(sale.delivery_date)}</div>
+                  )}
+                </div>
+              </div>
+            )
+          },
+          {
+            key: 'customer',
+            label: 'Customer',
+            mobileLabel: 'Customer',
+            render: (_, sale) => (
+              <div>
+                <div className="text-sm text-gray-900">{sale.customer.name}</div>
+                <div className="text-sm text-gray-500 capitalize">{sale.customer.customer_type}</div>
+              </div>
+            )
+          },
+          {
+            key: 'items',
+            label: 'Items',
+            mobileLabel: 'Items',
+            render: (_, sale) => (
+              <div className="text-sm text-gray-900">
+                {sale.sales_order_items.slice(0, 2).map((item: any, index: number) => (
+                  <div key={index}>
+                    {item.product_name} - {item.quantity} {item.unit_type === 'box' ? 'boxes' : 'kg'}
+                  </div>
+                ))}
+                {sale.sales_order_items.length > 2 && (
+                  <div className="text-sm text-gray-500">
+                    +{sale.sales_order_items.length - 2} more items
+                  </div>
+                )}
+              </div>
+            )
+          },
+          {
+            key: 'total',
+            label: 'Total',
+            mobileLabel: 'Total',
+            render: (_, sale) => (
+              <div>
+                <div className="text-sm text-gray-900">₹{(sale.total_amount ?? 0).toLocaleString()}</div>
+                <div className="text-sm text-gray-500">{getPaymentModeDisplay(sale.payment_mode)}</div>
+              </div>
+            )
+          },
+          {
+            key: 'saleType',
+            label: 'Sale Type',
+            mobileLabel: 'Type',
+            render: (_, sale) => (
+              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getSaleTypeColor(sale.sale_type)}`}>
+                {sale.sale_type === 'outstation' ? 'Outstation' : 'Counter'}
+              </span>
+            )
+          },
+          {
+            key: 'status',
+            label: 'Status',
+            mobileLabel: 'Status',
+            render: (_, sale) => (
+              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(sale.status)}`}>
+                {getStatusDisplayText(sale.status)}
+              </span>
+            )
+          },
+          {
+            key: 'actions',
+            label: 'Actions',
+            mobileLabel: 'Actions',
+            render: (_, sale) => (
+              <div className="flex flex-wrap gap-2">
+                <button 
+                  onClick={() => navigate(`/sales/view/${sale.id}`)}
+                  className="text-indigo-600 hover:text-indigo-900 text-sm"
+                  title="View Details"
+                >
+                  <Eye className="h-4 w-4" />
+                </button>
+                {(sale.status === 'draft' || sale.status === 'processing') && (
+                  <button 
+                    onClick={() => navigate(`/sales/edit/${sale.id}`)}
+                    className="text-gray-600 hover:text-gray-900 text-sm"
+                    title="Edit Order"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                )}
+                <button 
+                  onClick={() => navigate(`/sales/invoice/${sale.id}`)}
+                  className="text-green-600 hover:text-green-900 text-sm"
+                  title="Generate Invoice"
+                >
+                  <FileText className="h-4 w-4" />
+                </button>
+                {sale.status === 'draft' && (
+                  <button 
+                    onClick={() => handleDeleteOrder(sale.id)}
+                    className="text-red-600 hover:text-red-900 text-sm"
+                    title="Delete Order"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            )
+          }
+        ]}
+        data={filteredSales}
+        loading={loading}
+        emptyState={
           <div className="py-12 text-center text-gray-500">
             <ShoppingCart className="h-12 w-12 mx-auto text-gray-300 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Sales Orders Found</h3>
@@ -392,8 +400,8 @@ const Sales: React.FC = () => {
               </button>
             )}
           </div>
-        )}
-      </div>
+        }
+      />
     </div>
   );
 };

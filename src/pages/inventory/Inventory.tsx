@@ -3,6 +3,7 @@ import { Package, Search, Filter, RefreshCw, Truck, Calendar, AlertCircle, Shopp
 import { toast } from 'react-hot-toast';
 import { getVehicleArrivals, getSalesOrders, getAvailableInventory } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
+import MobileTable from '../../components/ui/MobileTable';
 
 interface InventoryItem {
   id: string;
@@ -273,15 +274,15 @@ const Inventory: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
         <div className="flex items-center">
-          <Package className="h-6 w-6 text-green-600 mr-2" />
-          <h1 className="text-2xl font-bold text-gray-800">Inventory Management</h1>
+          <Package className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 mr-2" />
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800">Inventory Management</h1>
         </div>
         <button 
           onClick={loadInventoryData}
-          className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
+          className="bg-green-600 text-white rounded-md px-3 sm:px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center justify-center w-full sm:w-auto"
         >
           <RefreshCw className="h-4 w-4 mr-1" />
           Refresh Inventory
@@ -379,126 +380,106 @@ const Inventory: React.FC = () => {
       </div>
       
       {/* Inventory Table */}
-      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Product Details
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  SKU & Packaging
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Current Stock
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Last Activity
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredItems.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
-                        <Package className="h-5 w-5" />
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{item.productName}</div>
-                        <div className="text-sm text-gray-500">{item.category}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{item.skuCode}</div>
-                    <span className={`inline-flex px-2 text-xs leading-5 font-semibold rounded-full ${
-                      item.unitType === 'box' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                    }`}>
-                      {item.unitType === 'box' ? 'Box/Crate' : 'Loose'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {item.currentQuantity} {item.unitType === 'box' ? 'boxes' : 'kg'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {(() => {
-                        const lastArrival = item.vehicleArrivals.length > 0 ? item.vehicleArrivals[0] : null;
-                        const lastSale = item.salesOrders.length > 0 ? item.salesOrders[0] : null;
-                        
-                        if (!lastArrival && !lastSale) {
-                          return 'No activity';
-                        }
-                        
-                        if (!lastArrival) {
-                          return `Sale: ${formatDateTime(lastSale!.orderDate)}`;
-                        }
-                        
-                        if (!lastSale) {
-                          return `Arrival: ${formatDateTime(lastArrival.arrivalTime)}`;
-                        }
-                        
-                        const arrivalDate = new Date(lastArrival.arrivalTime);
-                        const saleDate = new Date(lastSale.orderDate);
-                        
-                        if (arrivalDate > saleDate) {
-                          return `Arrival: ${formatDateTime(lastArrival.arrivalTime)}`;
-                        } else {
-                          return `Sale: ${formatDateTime(lastSale.orderDate)}`;
-                        }
-                      })()}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {(() => {
-                        const lastArrival = item.vehicleArrivals.length > 0 ? item.vehicleArrivals[0] : null;
-                        const lastSale = item.salesOrders.length > 0 ? item.salesOrders[0] : null;
-                        
-                        if (!lastArrival && !lastSale) {
-                          return '';
-                        }
-                        
-                        if (!lastArrival) {
-                          return `To: ${lastSale!.customerName}`;
-                        }
-                        
-                        if (!lastSale) {
-                          return `From: ${lastArrival.supplier}`;
-                        }
-                        
-                        const arrivalDate = new Date(lastArrival.arrivalTime);
-                        const saleDate = new Date(lastSale.orderDate);
-                        
-                        if (arrivalDate > saleDate) {
-                          return `From: ${lastArrival.supplier}`;
-                        } else {
-                          return `To: ${lastSale.customerName}`;
-                        }
-                      })()}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => handleViewHistory(item)}
-                      className="text-green-600 hover:text-green-900"
-                    >
-                      View History
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        {filteredItems.length === 0 && (
+      <MobileTable
+        columns={[
+          {
+            key: 'productDetails',
+            label: 'Product Details',
+            mobileLabel: 'Product',
+            render: (_, item) => (
+              <div className="flex items-center">
+                <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
+                  <Package className="h-5 w-5" />
+                </div>
+                <div className="ml-4">
+                  <div className="text-sm font-medium text-gray-900">{item.productName}</div>
+                  <div className="text-sm text-gray-500">{item.category}</div>
+                </div>
+              </div>
+            )
+          },
+          {
+            key: 'skuDetails',
+            label: 'SKU & Packaging',
+            mobileLabel: 'SKU',
+            render: (_, item) => (
+              <div>
+                <div className="text-sm text-gray-900">{item.skuCode}</div>
+                <span className={`inline-flex px-2 text-xs leading-5 font-semibold rounded-full ${
+                  item.unitType === 'box' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                }`}>
+                  {item.unitType === 'box' ? 'Box/Crate' : 'Loose'}
+                </span>
+              </div>
+            )
+          },
+          {
+            key: 'currentStock',
+            label: 'Current Stock',
+            mobileLabel: 'Stock',
+            render: (_, item) => (
+              <div className="text-sm text-gray-900">
+                {item.currentQuantity} {item.unitType === 'box' ? 'boxes' : 'kg'}
+              </div>
+            )
+          },
+          {
+            key: 'lastActivity',
+            label: 'Last Activity',
+            mobileLabel: 'Activity',
+            render: (_, item) => {
+              const lastArrival = item.vehicleArrivals.length > 0 ? item.vehicleArrivals[0] : null;
+              const lastSale = item.salesOrders.length > 0 ? item.salesOrders[0] : null;
+              
+              let activityText = 'No activity';
+              let sourceText = '';
+              
+              if (!lastArrival && !lastSale) {
+                activityText = 'No activity';
+              } else if (!lastArrival) {
+                activityText = `Sale: ${formatDateTime(lastSale!.orderDate)}`;
+                sourceText = `To: ${lastSale!.customerName}`;
+              } else if (!lastSale) {
+                activityText = `Arrival: ${formatDateTime(lastArrival.arrivalTime)}`;
+                sourceText = `From: ${lastArrival.supplier}`;
+              } else {
+                const arrivalDate = new Date(lastArrival.arrivalTime);
+                const saleDate = new Date(lastSale.orderDate);
+                
+                if (arrivalDate > saleDate) {
+                  activityText = `Arrival: ${formatDateTime(lastArrival.arrivalTime)}`;
+                  sourceText = `From: ${lastArrival.supplier}`;
+                } else {
+                  activityText = `Sale: ${formatDateTime(lastSale.orderDate)}`;
+                  sourceText = `To: ${lastSale.customerName}`;
+                }
+              }
+              
+              return (
+                <div>
+                  <div className="text-sm text-gray-900">{activityText}</div>
+                  <div className="text-sm text-gray-500">{sourceText}</div>
+                </div>
+              );
+            }
+          },
+          {
+            key: 'actions',
+            label: 'Actions',
+            mobileLabel: 'Actions',
+            render: (_, item) => (
+              <button
+                onClick={() => handleViewHistory(item)}
+                className="text-green-600 hover:text-green-900 text-sm font-medium"
+              >
+                View History
+              </button>
+            )
+          }
+        ]}
+        data={filteredItems}
+        loading={loading}
+        emptyState={
           <div className="py-12 text-center text-gray-500">
             <Package className="h-12 w-12 mx-auto text-gray-300 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Inventory Items Found</h3>
@@ -509,29 +490,29 @@ const Inventory: React.FC = () => {
               }
             </p>
           </div>
-        )}
-      </div>
+        }
+      />
 
       {/* History Modal */}
       {showHistoryModal && selectedItem && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-2 sm:p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-gray-900">
+                <h3 className="text-base sm:text-lg font-medium text-gray-900 pr-4">
                   History for {selectedItem.productName} ({selectedItem.skuCode})
                 </h3>
                 <button
                   onClick={() => setShowHistoryModal(false)}
-                  className="text-gray-400 hover:text-gray-500"
+                  className="text-gray-400 hover:text-gray-500 p-1"
                 >
                   <span className="sr-only">Close</span>
-                  <X className="h-6 w-6" />
+                  <X className="h-5 w-5 sm:h-6 sm:w-6" />
                 </button>
               </div>
             </div>
 
-            <div className="px-6 py-4">
+            <div className="px-4 sm:px-6 py-4">
               {/* Arrival History */}
               <div className="mb-8">
                 <h4 className="font-medium text-gray-900 mb-3 flex items-center">

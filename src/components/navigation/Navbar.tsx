@@ -46,22 +46,22 @@ const Navbar: React.FC = () => {
   if (!user) return null;
   
   return (
-    <header className="bg-white border-b h-16 flex items-center justify-between px-4 md:px-6">
+    <header className="bg-white border-b h-14 sm:h-16 flex items-center justify-between px-3 sm:px-4 md:px-6">
       {/* Left section */}
       <div className="flex items-center">
         <button 
           onClick={toggleSidebar}
-          className="text-gray-500 hover:text-gray-700 focus:outline-none mr-4"
+          className="text-gray-500 hover:text-gray-700 focus:outline-none mr-2 sm:mr-4 p-1"
         >
-          <Menu size={24} />
+          <Menu size={20} className="sm:w-6 sm:h-6" />
         </button>
-        <h1 className="text-xl font-semibold text-gray-800 hidden md:block">
+        <h1 className="text-lg sm:text-xl font-semibold text-gray-800 hidden sm:block">
           FxD Partner ERP
         </h1>
       </div>
       
       {/* Right section */}
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-2 sm:space-x-4">
         {/* Notifications */}
         <div className="relative" ref={notificationsRef}>
           <button 
@@ -73,7 +73,7 @@ const Navbar: React.FC = () => {
           </button>
           
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg py-1 z-10">
+            <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white rounded-md shadow-lg py-1 z-50 max-w-[calc(100vw-2rem)]">
               <div className="px-4 py-2 border-b">
                 <h3 className="text-sm font-semibold text-gray-700">Notifications</h3>
               </div>
