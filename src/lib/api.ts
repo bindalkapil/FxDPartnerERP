@@ -308,8 +308,8 @@ export async function getSalesOrder(id: string) {
 }
 
 // Helper function to handle null values in numeric calculations
-function safeNumericValue(value: number | null, defaultValue: number = 0): number {
-  return value === null ? defaultValue : value;
+function safeNumericValue(value: number | null | undefined, defaultValue: number = 0): number {
+  return value === null || value === undefined ? defaultValue : value;
 }
 
 // Update inventory after sale
@@ -1082,11 +1082,11 @@ export async function createPurchaseRecord(
   items: Tables['purchase_record_items']['Insert'][],
   costs: Tables['purchase_record_costs']['Insert'][]
 ) {
-  // Ensure the status is valid - only 'completed' or 'cancelled' are allowed
-  // Default to 'completed' for new purchase records
+  // Ensure the status is valid - only 'partial_closure', 'full_closure' or 'cancelled' are allowed
+  // Default to 'partial_closure' for new purchase records
   const validRecord = {
     ...record,
-    status: 'completed'
+    status: 'partial_closure'
   };
 
   // Create the purchase record
@@ -1124,7 +1124,7 @@ export async function createPurchaseRecord(
 
   // Update supplier balance if supplier_id is provided
   if (validRecord.supplier_id) {
-    await updateSupplierBalance(validRecord.supplier_id, validRecord.total_amount || 0, 'add');
+    await updateSupplierBalance(validRecord.supplier_id, safeNumericValue(validRecord.total_amount), 'add');
   }
 
   return recordData;
@@ -1148,7 +1148,8 @@ export async function updatePurchaseRecord(
   // Ensure the status is valid if being updated
   const validRecord = record.status ? {
     ...record,
-    status: record.status === 'cancelled' ? 'cancelled' : 'completed'
+    status: record.status === 'cancelled' ? 'cancelled' : 
+           record.status === 'full_closure' ? 'full_closure' : 'partial_closure'
   } : record;
 
   // Update the record
@@ -1228,7 +1229,7 @@ export async function deletePurchaseRecord(id: string) {
 
   if (recordData && recordData.supplier_id) {
     // Update supplier balance by subtracting the record amount
-    await updateSupplierBalance(recordData.supplier_id, recordData.total_amount, 'subtract');
+    await updateSupplierBalance(recordData.supplier_id, safeNumericValue(recordData.total_amount), 'subtract');
   }
 
   const { error } = await supabase
@@ -1237,6 +1238,54 @@ export async function deletePurchaseRecord(id: string) {
     .eq('id', id);
   
   if (error) throw error;
+}
+
+// Update purchase record closure status
+export async function updatePurchaseRecordClosureStatus(
+  id: string,
+  status: 'partial_closure' | 'full_closure',
+  closureNotes?: string
+) {
+  // Get current record to check if it can be updated
+  const { data: currentRecord } = await supabase
+    .from('purchase_records')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (!currentRecord) throw new Error('Purchase record not found');
+
+  // Check if record can be updated based on current status
+  if (currentRecord.status === 'full_closure') {
+    throw new Error('Cannot update a fully closed purchase record');
+  }
+
+  if (currentRecord.status === 'cancelled') {
+    throw new Error('Cannot update a cancelled purchase record');
+  }
+
+  const updateData: any = {
+    status,
+    updated_at: new Date().toISOString()
+  };
+
+  // Set closure date and notes when moving to full closure
+  if (status === 'full_closure') {
+    updateData.closure_date = new Date().toISOString();
+    if (closureNotes) {
+      updateData.closure_notes = closureNotes;
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('purchase_records')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 // Payments API functions

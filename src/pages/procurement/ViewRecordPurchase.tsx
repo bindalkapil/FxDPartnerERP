@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Package2, ArrowLeft, FileText, Pencil } from 'lucide-react';
+import { Package2, ArrowLeft, FileText, Pencil, Settings } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getPurchaseRecord } from '../../lib/api';
+import PurchaseRecordClosureModal from '../../components/modals/PurchaseRecordClosureModal';
 
 interface PurchaseRecordData {
   id: string;
@@ -45,6 +46,17 @@ const ViewRecordPurchase: React.FC = () => {
   const navigate = useNavigate();
   const [orderData, setOrderData] = useState<PurchaseRecordData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [closureModal, setClosureModal] = useState<{
+    isOpen: boolean;
+    recordId: string;
+    currentStatus: string;
+    recordNumber: string;
+  }>({
+    isOpen: false,
+    recordId: '',
+    currentStatus: '',
+    recordNumber: ''
+  });
 
   useEffect(() => {
     if (id) {
@@ -72,10 +84,10 @@ const ViewRecordPurchase: React.FC = () => {
 
   const getStatusDisplay = (status: string) => {
     switch (status) {
-      case 'completed':
-        return 'Completed';
-      case 'draft':
-        return 'Draft';
+      case 'partial_closure':
+        return 'Partial Closure';
+      case 'full_closure':
+        return 'Full Closure';
       case 'cancelled':
         return 'Cancelled';
       default:
@@ -85,15 +97,39 @@ const ViewRecordPurchase: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
-        return 'bg-green-100 text-green-800';
-      case 'draft':
+      case 'partial_closure':
         return 'bg-yellow-100 text-yellow-800';
+      case 'full_closure':
+        return 'bg-green-100 text-green-800';
       case 'cancelled':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const handleOpenClosureModal = () => {
+    if (orderData) {
+      setClosureModal({
+        isOpen: true,
+        recordId: orderData.id,
+        currentStatus: orderData.status,
+        recordNumber: orderData.record_number
+      });
+    }
+  };
+
+  const handleCloseClosureModal = () => {
+    setClosureModal({
+      isOpen: false,
+      recordId: '',
+      currentStatus: '',
+      recordNumber: ''
+    });
+  };
+
+  const handleStatusUpdated = () => {
+    loadOrderData();
   };
 
   const getCostTypeDisplay = (type: string) => {
@@ -140,15 +176,26 @@ const ViewRecordPurchase: React.FC = () => {
             <h1 className="text-2xl font-bold text-gray-800">View Purchase Record</h1>
           </div>
         </div>
-        {orderData.status === 'draft' && (
-          <button
-            onClick={() => navigate(`/record-purchase/edit/${id}`)}
-            className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
-          >
-            <Pencil className="h-4 w-4 mr-1" />
-            Edit Record
-          </button>
-        )}
+        <div className="flex space-x-3">
+          {orderData.status === 'partial_closure' && (
+            <button
+              onClick={() => navigate(`/record-purchase/edit/${id}`)}
+              className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 transition-colors duration-200 flex items-center"
+            >
+              <Pencil className="h-4 w-4 mr-1" />
+              Edit Record
+            </button>
+          )}
+          {orderData.status !== 'cancelled' && (
+            <button
+              onClick={handleOpenClosureModal}
+              className="bg-blue-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors duration-200 flex items-center"
+            >
+              <Settings className="h-4 w-4 mr-1" />
+              Manage Closure
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white shadow-sm rounded-lg">
@@ -366,6 +413,16 @@ const ViewRecordPurchase: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Closure Modal */}
+      <PurchaseRecordClosureModal
+        isOpen={closureModal.isOpen}
+        onClose={handleCloseClosureModal}
+        recordId={closureModal.recordId}
+        currentStatus={closureModal.currentStatus}
+        recordNumber={closureModal.recordNumber}
+        onStatusUpdated={handleStatusUpdated}
+      />
     </div>
   );
 };

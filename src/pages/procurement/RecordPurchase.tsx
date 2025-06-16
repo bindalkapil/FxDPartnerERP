@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Search, Filter, Plus, Eye, Pencil, Trash2, Building } from 'lucide-react';
+import { FileText, Search, Filter, Plus, Eye, Pencil, Trash2, Building, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { getPurchaseRecords, deletePurchaseRecord } from '../../lib/api';
+import PurchaseRecordClosureModal from '../../components/modals/PurchaseRecordClosureModal';
 
 interface PurchaseRecord {
   id: string;
@@ -28,6 +29,17 @@ const RecordPurchase: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [closureModal, setClosureModal] = useState<{
+    isOpen: boolean;
+    recordId: string;
+    currentStatus: string;
+    recordNumber: string;
+  }>({
+    isOpen: false,
+    recordId: '',
+    currentStatus: '',
+    recordNumber: ''
+  });
 
   useEffect(() => {
     loadPurchaseRecords();
@@ -58,6 +70,28 @@ const RecordPurchase: React.FC = () => {
     }
   };
 
+  const handleOpenClosureModal = (record: PurchaseRecord) => {
+    setClosureModal({
+      isOpen: true,
+      recordId: record.id,
+      currentStatus: record.status,
+      recordNumber: record.record_number
+    });
+  };
+
+  const handleCloseClosureModal = () => {
+    setClosureModal({
+      isOpen: false,
+      recordId: '',
+      currentStatus: '',
+      recordNumber: ''
+    });
+  };
+
+  const handleStatusUpdated = () => {
+    loadPurchaseRecords();
+  };
+
   const filteredRecords = records.filter(record => {
     const matchesSearch = 
       record.supplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -70,10 +104,10 @@ const RecordPurchase: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
+      case 'partial_closure':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'full_closure':
         return 'bg-green-100 text-green-800';
-      case 'draft':
-        return 'bg-gray-100 text-gray-800';
       case 'cancelled':
         return 'bg-red-100 text-red-800';
       default:
@@ -138,9 +172,9 @@ const RecordPurchase: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Draft Records</p>
+              <p className="text-sm font-medium text-gray-500">Partial Closure</p>
               <p className="text-2xl font-bold text-gray-800">
-                {records.filter(record => record.status === 'draft').length}
+                {records.filter(record => record.status === 'partial_closure').length}
               </p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-yellow-100 text-yellow-600">
@@ -151,9 +185,9 @@ const RecordPurchase: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <div className="flex justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Completed</p>
+              <p className="text-sm font-medium text-gray-500">Full Closure</p>
               <p className="text-2xl font-bold text-gray-800">
-                {records.filter(record => record.status === 'completed').length}
+                {records.filter(record => record.status === 'full_closure').length}
               </p>
             </div>
             <div className="h-10 w-10 flex items-center justify-center rounded-full bg-green-100 text-green-600">
@@ -189,8 +223,8 @@ const RecordPurchase: React.FC = () => {
             onChange={(e) => setSelectedStatus(e.target.value)}
           >
             <option value="all">All</option>
-            <option value="draft">Draft</option>
-            <option value="completed">Completed</option>
+            <option value="partial_closure">Partial Closure</option>
+            <option value="full_closure">Full Closure</option>
             <option value="cancelled">Cancelled</option>
           </select>
         </div>
@@ -268,7 +302,9 @@ const RecordPurchase: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(record.status)}`}>
-                      {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                      {record.status === 'partial_closure' ? 'Partial Closure' : 
+                       record.status === 'full_closure' ? 'Full Closure' : 
+                       record.status.charAt(0).toUpperCase() + record.status.slice(1)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -280,7 +316,7 @@ const RecordPurchase: React.FC = () => {
                       >
                         <Eye className="h-4 w-4" />
                       </button>
-                      {record.status === 'draft' && (
+                      {record.status === 'partial_closure' && (
                         <button 
                           onClick={() => navigate(`/record-purchase/edit/${record.id}`)}
                           className="text-gray-600 hover:text-gray-900"
@@ -289,7 +325,16 @@ const RecordPurchase: React.FC = () => {
                           <Pencil className="h-4 w-4" />
                         </button>
                       )}
-                      {record.status === 'draft' && (
+                      {record.status !== 'cancelled' && (
+                        <button 
+                          onClick={() => handleOpenClosureModal(record)}
+                          className="text-blue-600 hover:text-blue-900"
+                          title="Manage Closure Status"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </button>
+                      )}
+                      {record.status === 'partial_closure' && (
                         <button 
                           onClick={() => handleDeleteRecord(record.id)}
                           className="text-red-600 hover:text-red-900"
@@ -327,6 +372,16 @@ const RecordPurchase: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Closure Modal */}
+      <PurchaseRecordClosureModal
+        isOpen={closureModal.isOpen}
+        onClose={handleCloseClosureModal}
+        recordId={closureModal.recordId}
+        currentStatus={closureModal.currentStatus}
+        recordNumber={closureModal.recordNumber}
+        onStatusUpdated={handleStatusUpdated}
+      />
     </div>
   );
 };

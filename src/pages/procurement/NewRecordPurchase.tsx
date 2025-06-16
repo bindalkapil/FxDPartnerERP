@@ -78,6 +78,8 @@ const NewRecordPurchase: React.FC = () => {
     pricingModel: 'commission',
     defaultCommission: 8,
     paymentTerms: 30,
+    closureStatus: 'partial_closure',
+    closureNotes: '',
     notes: ''
   });
 
@@ -289,7 +291,9 @@ const NewRecordPurchase: React.FC = () => {
         items_subtotal: itemsSubtotal,
         additional_costs_total: additionalCostsTotal,
         total_amount: totalAmount,
-        status: 'draft',
+        status: formData.closureStatus,
+        closure_date: formData.closureStatus === 'full_closure' ? new Date().toISOString() : null,
+        closure_notes: formData.closureStatus === 'full_closure' ? formData.closureNotes || null : null,
         notes: formData.notes || null
       };
 
@@ -496,6 +500,42 @@ const NewRecordPurchase: React.FC = () => {
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Closure Status <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.closureStatus}
+                  onChange={(e) => setFormData(prev => ({ ...prev, closureStatus: e.target.value }))}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                  required
+                >
+                  <option value="partial_closure">Partial Closure (Editable)</option>
+                  <option value="full_closure">Full Closure (Read-only)</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  {formData.closureStatus === 'partial_closure' 
+                    ? 'Record can be edited later but is treated as completed for finance.'
+                    : 'Record cannot be edited once created. Choose this for final records.'
+                  }
+                </p>
+              </div>
+
+              {formData.closureStatus === 'full_closure' && (
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Closure Notes (Optional)
+                  </label>
+                  <textarea
+                    value={formData.closureNotes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, closureNotes: e.target.value }))}
+                    rows={2}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
+                    placeholder="Add notes about why this record is being fully closed..."
+                  />
+                </div>
+              )}
             </div>
           </div>
 
