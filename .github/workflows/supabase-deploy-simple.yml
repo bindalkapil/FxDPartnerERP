@@ -1,0 +1,70 @@
+name: Deploy Supabase Migrations (Simple)
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deployment even if no changes detected'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Supabase CLI
+      uses: supabase/setup-cli@v1
+      with:
+        version: latest
+
+    - name: Verify environment
+      run: |
+        echo "🔍 Verifying environment..."
+        echo "Working directory: $(pwd)"
+        echo "Supabase CLI version: $(supabase --version)"
+        echo "Config file exists: $(test -f supabase/config.toml && echo 'Yes' || echo 'No')"
+        echo "Migration files:"
+        ls -la supabase/migrations/ || echo "No migrations directory found"
+
+    - name: Authenticate with Supabase
+      run: |
+        echo "🔐 Authenticating with Supabase..."
+        echo "$SUPABASE_ACCESS_TOKEN" | supabase auth login --token
+      env:
+        SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+    - name: Link project
+      run: |
+        echo "🔗 Linking to project $SUPABASE_PROJECT_ID..."
+        supabase link --project-ref $SUPABASE_PROJECT_ID
+      env:
+        SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+
+    - name: Check remote schema
+      run: |
+        echo "📋 Checking remote schema..."
+        supabase db remote commit || echo "No remote changes to commit"
+
+    - name: Apply migrations
+      run: |
+        echo "🚀 Applying migrations..."
+        supabase db push --include-all
+      env:
+        SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+    - name: Verify deployment
+      run: |
+        echo "✅ Deployment completed successfully!"
+        echo "📊 Migration status:"
+        supabase migration list || echo "Could not list migrations"
+
+    - name: Cleanup
+      if: always()
+      run: |
+        echo "🧹 Cleaning up..."
+        rm -f ~/.supabase/access-token 2>/dev/null || true
