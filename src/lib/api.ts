@@ -123,6 +123,11 @@ export async function updateSupplierBalance(supplierId: string, amount: number, 
   return data;
 }
 
+// Helper function to handle null values in numeric calculations
+function safeNumericValue(value: number | null | undefined, defaultValue: number = 0): number {
+  return value === null || value === undefined ? defaultValue : value;
+}
+
 // Customers
 export async function getCustomers() {
   const { data, error } = await supabase
@@ -305,11 +310,6 @@ export async function getSalesOrder(id: string) {
   
   if (error) throw error;
   return data;
-}
-
-// Helper function to handle null values in numeric calculations
-function safeNumericValue(value: number | null | undefined, defaultValue: number = 0): number {
-  return value === null || value === undefined ? defaultValue : value;
 }
 
 // Update inventory after sale
@@ -1083,10 +1083,10 @@ export async function createPurchaseRecord(
   costs: Tables['purchase_record_costs']['Insert'][]
 ) {
   // Ensure the status is valid - only 'partial_closure', 'full_closure' or 'cancelled' are allowed
-  // Default to 'partial_closure' for new purchase records
+  // Use the status from the record parameter, default to 'partial_closure' if not provided
   const validRecord = {
     ...record,
-    status: 'partial_closure'
+    status: record.status || 'partial_closure'
   };
 
   // Create the purchase record
@@ -1123,8 +1123,8 @@ export async function createPurchaseRecord(
   if (costsError) throw costsError;
 
   // Update supplier balance if supplier_id is provided
-  if (validRecord.supplier_id) {
-    await updateSupplierBalance(validRecord.supplier_id, safeNumericValue(validRecord.total_amount), 'add');
+  if (validRecord.supplier_id && validRecord.total_amount !== null && validRecord.total_amount !== undefined) {
+    await updateSupplierBalance(validRecord.supplier_id, validRecord.total_amount, 'add');
   }
 
   return recordData;
@@ -1164,7 +1164,7 @@ export async function updatePurchaseRecord(
 
   // Handle supplier balance updates for amount changes
   if (record.total_amount !== undefined && record.supplier_id) {
-    const amountDifference = record.total_amount - currentRecord.total_amount;
+    const amountDifference = record.total_amount - safeNumericValue(currentRecord.total_amount);
     if (amountDifference !== 0) {
       await updateSupplierBalance(record.supplier_id, Math.abs(amountDifference), amountDifference > 0 ? 'add' : 'subtract');
     }
@@ -1269,12 +1269,25 @@ export async function updatePurchaseRecordClosureStatus(
     updated_at: new Date().toISOString()
   };
 
-  // Set closure date and notes when moving to full closure
-  if (status === 'full_closure') {
-    updateData.closure_date = new Date().toISOString();
-    if (closureNotes) {
-      updateData.closure_notes = closureNotes;
+  // Only set closure fields if they exist in the database schema
+  // This prevents 400 errors when the migration hasn't been applied yet
+  try {
+    // Test if closure_date column exists by doing a simple select
+    await supabase
+      .from('purchase_records')
+      .select('closure_date')
+      .limit(1);
+    
+    // If we get here, the columns exist, so we can set them
+    if (status === 'full_closure') {
+      updateData.closure_date = new Date().toISOString();
+      if (closureNotes) {
+        updateData.closure_notes = closureNotes;
+      }
     }
+  } catch (schemaError) {
+    // Columns don't exist yet, just update the status
+    console.warn('Closure columns not yet available, updating status only');
   }
 
   const { data, error } = await supabase
