@@ -624,7 +624,7 @@ export async function deleteSalesOrder(id: string) {
 
     // Update customer balance if payment mode was credit
     if (orderData.payment_mode === 'credit' && orderData.customer_id) {
-      await updateCustomerBalance(orderData.customer_id, orderData.total_amount, 'subtract');
+      await updateCustomerBalance(orderData.customer_id, safeNumericValue(orderData.total_amount), 'subtract');
     }
   }
 
@@ -1124,7 +1124,7 @@ export async function createPurchaseRecord(
 
   // Update supplier balance if supplier_id is provided
   if (validRecord.supplier_id && validRecord.total_amount !== null && validRecord.total_amount !== undefined) {
-    await updateSupplierBalance(validRecord.supplier_id, validRecord.total_amount, 'add');
+    await updateSupplierBalance(validRecord.supplier_id, safeNumericValue(validRecord.total_amount), 'add');
   }
 
   return recordData;
@@ -1247,12 +1247,13 @@ export async function updatePurchaseRecordClosureStatus(
   closureNotes?: string
 ) {
   // Get current record to check if it can be updated
-  const { data: currentRecord } = await supabase
+  const { data: currentRecord, error: fetchError } = await supabase
     .from('purchase_records')
     .select('*')
     .eq('id', id)
     .single();
 
+  if (fetchError) throw fetchError;
   if (!currentRecord) throw new Error('Purchase record not found');
 
   // Check if record can be updated based on current status
@@ -1269,25 +1270,12 @@ export async function updatePurchaseRecordClosureStatus(
     updated_at: new Date().toISOString()
   };
 
-  // Only set closure fields if they exist in the database schema
-  // This prevents 400 errors when the migration hasn't been applied yet
-  try {
-    // Test if closure_date column exists by doing a simple select
-    await supabase
-      .from('purchase_records')
-      .select('closure_date')
-      .limit(1);
-    
-    // If we get here, the columns exist, so we can set them
-    if (status === 'full_closure') {
-      updateData.closure_date = new Date().toISOString();
-      if (closureNotes) {
-        updateData.closure_notes = closureNotes;
-      }
+  // Set closure fields for full closure
+  if (status === 'full_closure') {
+    updateData.closure_date = new Date().toISOString();
+    if (closureNotes) {
+      updateData.closure_notes = closureNotes;
     }
-  } catch (schemaError) {
-    // Columns don't exist yet, just update the status
-    console.warn('Closure columns not yet available, updating status only');
   }
 
   const { data, error } = await supabase
