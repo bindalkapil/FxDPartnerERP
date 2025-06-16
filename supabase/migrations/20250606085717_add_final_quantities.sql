@@ -20,10 +20,10 @@ SET
 
 -- Make the columns NOT NULL after setting default values
 ALTER TABLE vehicle_arrival_items
-ALTER COLUMN final_quantity,
-ALTER COLUMN final_total_weight;
+ALTER COLUMN final_quantity SET NOT NULL,
+ALTER COLUMN final_total_weight SET NOT NULL;
 
 -- Add check constraint to ensure final quantities are not negative
 ALTER TABLE vehicle_arrival_items
 ADD CONSTRAINT vehicle_arrival_items_final_quantities_check
-CHECK (final_quantity >= 0 AND final_total_weight >= 0); 
+CHECK (final_quantity >= 0 AND final_total_weight >= 0);

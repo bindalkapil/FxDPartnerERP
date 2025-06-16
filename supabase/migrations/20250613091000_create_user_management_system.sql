@@ -115,7 +115,7 @@ CREATE POLICY "Admins can update users" ON public.users
 
 CREATE POLICY "Users can update their own profile" ON public.users
     FOR UPDATE USING (auth.uid() = id)
-    WITH CHECK (auth.uid() = id AND role_id = OLD.role_id); -- Users can't change their own role
+    WITH CHECK (auth.uid() = id); -- Users can update their own profile but role changes are handled separately
 
 -- Create RLS policies for roles table
 CREATE POLICY "All authenticated users can view roles" ON public.roles
