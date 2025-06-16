@@ -100,187 +100,123 @@ secure_email_change_enabled = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
 max_frequency = "1s"
 
-# Use a production-ready SMTP server
-# [auth.email.smtp]
-# host = "localhost"
-# port = 587
-# user = ""
-# pass = ""
-# admin_email = ""
-# sender_name = ""
-
-# Uncomment to customize SMS template
-# [auth.sms.template]
-# Your code is {{ .Code }}
-
 [auth.external.apple]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.azure]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.bitbucket]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.discord]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.facebook]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.github]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.gitlab]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.google]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.keycloak]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.linkedin]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.notion]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.twitch]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.twitter]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.slack]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.spotify]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.workos]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [auth.external.zoom]
 enabled = false
 client_id = ""
 secret = ""
-# Overrides the default auth redirectUrl.
 redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
 url = ""
 
 [edge_runtime]
