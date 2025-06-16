@@ -17,7 +17,11 @@
     "supabase:diff": "supabase db diff",
     "supabase:push": "supabase db push",
     "supabase:pull": "supabase db pull",
-    "supabase:generate-types": "supabase gen types typescript --local > src/lib/database.types.ts"
+    "supabase:generate-types": "supabase gen types typescript --local > src/lib/database.types.ts",
+    "supabase:setup": "chmod +x scripts/setup-supabase-cli.sh && ./scripts/setup-supabase-cli.sh",
+    "supabase:deploy": "chmod +x scripts/deploy-migration.sh && ./scripts/deploy-migration.sh",
+    "supabase:verify": "chmod +x scripts/verify-migration.sh && ./scripts/verify-migration.sh",
+    "supabase:migration-list": "supabase migration list"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.0.5",
