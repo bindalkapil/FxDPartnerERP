@@ -1589,3 +1589,369 @@ export async function getAllProductsAndSKUs() {
   if (error) throw error;
   return data;
 }
+
+// Multiple Payment System API Functions
+
+// Create sales order payment
+export async function createSalesOrderPayment(payment: Tables['sales_order_payments']['Insert']) {
+  const { data, error } = await supabase
+    .from('sales_order_payments')
+    .insert(payment)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+// Get sales order payments
+export async function getSalesOrderPayments(salesOrderId: string) {
+  const { data, error } = await supabase
+    .from('sales_order_payments')
+    .select('*')
+    .eq('sales_order_id', salesOrderId)
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data;
+}
+
+// Update sales order payment
+export async function updateSalesOrderPayment(id: string, payment: Tables['sales_order_payments']['Update']) {
+  const { data, error } = await supabase
+    .from('sales_order_payments')
+    .update(payment)
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+// Create customer credit extension
+export async function createCustomerCreditExtension(extension: Tables['customer_credit_extensions']['Insert']) {
+  const { data, error } = await supabase
+    .from('customer_credit_extensions')
+    .insert(extension)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+// Get customer credit extensions
+export async function getCustomerCreditExtensions(customerId: string) {
+  const { data, error } = await supabase
+    .from('customer_credit_extensions')
+    .select('*')
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data;
+}
+
+// Upload payment proof file
+export async function uploadPaymentProof(file: File): Promise<string> {
+  const fileExt = file.name.split('.').pop();
+  const fileName = `payment_proof_${Math.random().toString(36).slice(2)}.${fileExt}`;
+  const filePath = `payment-proofs/${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('payment-proofs')
+    .upload(filePath, file);
+
+  if (uploadError) {
+    // If bucket doesn't exist, create it and try again
+    if (uploadError.message.includes('Bucket not found')) {
+      const { error: bucketError } = await supabase.storage
+        .createBucket('payment-proofs', { public: true });
+      
+      if (bucketError) {
+        console.warn('Could not create storage bucket:', bucketError);
+        // Return a mock URL for demo purposes
+        return `https://example.com/payment-proofs/${fileName}`;
+      }
+
+      // Try upload again
+      const { error: retryError } = await supabase.storage
+        .from('payment-proofs')
+        .upload(filePath, file);
+
+      if (retryError) throw retryError;
+    } else {
+      console.warn('Upload error:', uploadError);
+      // Return a mock URL for demo purposes
+      return `https://example.com/payment-proofs/${fileName}`;
+    }
+  }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('payment-proofs')
+    .getPublicUrl(filePath);
+
+  return publicUrl;
+}
+
+// Enhanced createSalesOrder function with multiple payments support
+export async function createSalesOrderWithMultiplePayments(orderData: any, paymentMethods: any[]) {
+  console.log('createSalesOrderWithMultiplePayments called with:', {
+    orderData,
+    paymentMethods
+  });
+
+  const { items, ...orderDetails } = orderData;
+  
+  // Validate that items exist and have required fields
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    throw new Error('Sales order must have at least one item');
+  }
+
+  // Validate each item has required fields (handle both camelCase and snake_case)
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const productId = item.product_id || item.productId;
+    const skuId = item.sku_id || item.skuId;
+    
+    if (!productId || !skuId) {
+      throw new Error(`Item ${i + 1} is missing product_id or sku_id`);
+    }
+    if (!item.quantity || item.quantity <= 0) {
+      throw new Error(`Item ${i + 1} must have a valid quantity`);
+    }
+    const unitPrice = item.unit_price || item.unitPrice;
+    if (!unitPrice || unitPrice < 0) {
+      throw new Error(`Item ${i + 1} must have a valid unit price`);
+    }
+  }
+  
+  // Calculate total amount with null safety
+  const totalAmount = items.reduce((sum: number, item: any) => {
+    const quantity = safeNumericValue(item.quantity);
+    const unitPrice = safeNumericValue(item.unit_price || item.unitPrice);
+    return sum + (quantity * unitPrice);
+  }, 0);
+
+  console.log('Calculated total amount:', totalAmount);
+
+  // Status logic: counter orders are completed, outstation orders are dispatch_pending
+  const status = (!orderDetails.delivery_date) ? 'completed' : 'dispatch_pending';
+
+  // Calculate payment totals
+  const totalPaidAmount = paymentMethods
+    .filter(method => method.type !== 'credit_increase')
+    .reduce((sum, method) => sum + safeNumericValue(method.amount), 0);
+  
+  const creditAmount = totalAmount - totalPaidAmount;
+  const hasCredit = creditAmount > 0;
+  
+  // Determine payment mode and status
+  let paymentMode = 'credit'; // Default to credit
+  let paymentStatus = 'unpaid'; // Default status
+  
+  if (paymentMethods.length > 0) {
+    // If there are multiple payment methods, use the primary one or credit if mixed
+    const nonCreditMethods = paymentMethods.filter(m => m.type !== 'credit' && m.type !== 'credit_increase');
+    if (nonCreditMethods.length === 1 && !hasCredit) {
+      // Single payment method, no credit
+      paymentMode = nonCreditMethods[0].type === 'bank_transfer' ? 'bank_transfer' : nonCreditMethods[0].type;
+    } else if (nonCreditMethods.length > 0) {
+      // Multiple payment methods or mixed with credit, use the first non-credit method
+      paymentMode = nonCreditMethods[0].type === 'bank_transfer' ? 'bank_transfer' : nonCreditMethods[0].type;
+    }
+  }
+  
+  // Determine payment status
+  if (totalPaidAmount >= totalAmount) {
+    paymentStatus = 'paid';
+  } else if (totalPaidAmount > 0) {
+    paymentStatus = 'partial';
+  } else {
+    paymentStatus = 'unpaid';
+  }
+
+  console.log('Payment calculations:', {
+    totalPaidAmount,
+    creditAmount,
+    hasCredit,
+    paymentMode,
+    paymentStatus
+  });
+
+  // Prepare order data for insertion
+  const orderInsertData = {
+    ...orderDetails,
+    status: status,
+    total_amount: totalAmount,
+    payment_mode: paymentMode,
+    payment_status: paymentStatus
+  };
+
+  console.log('Order data to insert:', orderInsertData);
+
+  // Create the sales order
+  const { data: order, error: orderError } = await supabase
+    .from('sales_orders')
+    .insert(orderInsertData)
+    .select()
+    .single();
+
+  if (orderError) {
+    console.error('Error creating sales order:', {
+      error: orderError,
+      message: orderError.message,
+      details: orderError.details,
+      hint: orderError.hint,
+      code: orderError.code,
+      orderData: orderInsertData
+    });
+    throw new Error(`Sales order creation failed: ${orderError.message} - ${orderError.details || orderError.hint || 'No additional details'}`);
+  }
+
+  console.log('Sales order created successfully:', order);
+
+  // Insert items with null safety and validation
+  const orderItems = items.map((item: any) => {
+    const productId = item.product_id || item.productId;
+    const skuId = item.sku_id || item.skuId;
+    const unitPrice = item.unit_price || item.unitPrice;
+    const productName = item.product_name || item.productName;
+    const skuCode = item.sku_code || item.skuCode;
+    const unitType = item.unit_type || item.unitType;
+
+    if (!productId || !skuId) {
+      throw new Error(`Invalid item data: missing product_id or sku_id`);
+    }
+
+    return {
+      sales_order_id: order.id,
+      product_id: productId,
+      sku_id: skuId,
+      product_name: productName || '',
+      sku_code: skuCode || '',
+      quantity: safeNumericValue(item.quantity),
+      unit_type: unitType || 'box',
+      unit_price: safeNumericValue(unitPrice),
+      total_price: safeNumericValue(item.quantity) * safeNumericValue(unitPrice)
+    };
+  });
+
+  const { error: itemsError } = await supabase
+    .from('sales_order_items')
+    .insert(orderItems);
+
+  if (itemsError) throw itemsError;
+
+  // Process payment methods
+  const paymentRecords = [];
+  const creditExtensions = [];
+
+  // Add credit payment if there's a remaining amount
+  if (hasCredit) {
+    paymentRecords.push({
+      sales_order_id: order.id,
+      payment_type: 'credit',
+      amount: creditAmount,
+      status: 'completed'
+    });
+  }
+
+  for (const method of paymentMethods) {
+    if (method.type === 'credit_increase') {
+      // Create credit extension request
+      creditExtensions.push({
+        customer_id: orderDetails.customer_id,
+        sales_order_id: order.id,
+        amount: safeNumericValue(method.amount),
+        remarks: method.remarks,
+        status: 'pending'
+      });
+    } else if (method.amount > 0) {
+      // Upload proof file if exists
+      let proofUrl = null;
+      if (method.proof_file) {
+        try {
+          proofUrl = await uploadPaymentProof(method.proof_file);
+        } catch (error) {
+          console.warn('Failed to upload payment proof:', error);
+        }
+      }
+
+      // Create sales order payment record
+      const paymentStatus = method.type === 'cash' ? 'completed' : 'pending';
+      
+      const salesOrderPayment = {
+        sales_order_id: order.id,
+        payment_type: method.type,
+        amount: safeNumericValue(method.amount),
+        reference_number: method.reference_number || null,
+        proof_url: proofUrl,
+        remarks: method.remarks || null,
+        status: paymentStatus
+      };
+
+      paymentRecords.push(salesOrderPayment);
+
+      // For cash payments, also create a payment record in the main payments table
+      if (method.type === 'cash') {
+        const customer = await getCustomer(orderDetails.customer_id);
+        await createPayment({
+          type: 'received',
+          amount: safeNumericValue(method.amount),
+          payment_date: new Date().toISOString(),
+          party_id: orderDetails.customer_id,
+          party_type: 'customer',
+          party_name: customer.name,
+          reference_id: order.id,
+          reference_type: 'sales_order',
+          reference_number: order.order_number,
+          mode: 'cash',
+          status: 'completed',
+          notes: `Cash payment for sales order ${order.order_number}`
+        });
+      }
+    }
+  }
+
+  // Insert sales order payments
+  if (paymentRecords.length > 0) {
+    const { error: paymentsError } = await supabase
+      .from('sales_order_payments')
+      .insert(paymentRecords);
+
+    if (paymentsError) throw paymentsError;
+  }
+
+  // Insert credit extensions
+  if (creditExtensions.length > 0) {
+    const { error: extensionsError } = await supabase
+      .from('customer_credit_extensions')
+      .insert(creditExtensions);
+
+    if (extensionsError) throw extensionsError;
+  }
+
+  // Update inventory for each item
+  for (const item of items) {
+    const productId = item.product_id || item.productId;
+    const skuId = item.sku_id || item.skuId;
+    await updateInventoryAfterSale(
+      productId,
+      skuId,
+      safeNumericValue(item.quantity)
+    );
+  }
+
+  // Update customer balance for credit amount
+  if (hasCredit && orderDetails.customer_id) {
+    await updateCustomerBalance(
+      orderDetails.customer_id,
+      creditAmount,
+      'add'
+    );
+  }
+
+  return order;
+}

@@ -795,6 +795,107 @@ export type Database = {
           }
         ]
       }
+      sales_order_payments: {
+        Row: {
+          id: string
+          sales_order_id: string
+          payment_type: string
+          amount: number
+          reference_number: string | null
+          proof_url: string | null
+          remarks: string | null
+          status: string
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          sales_order_id: string
+          payment_type: string
+          amount: number
+          reference_number?: string | null
+          proof_url?: string | null
+          remarks?: string | null
+          status?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          sales_order_id?: string
+          payment_type?: string
+          amount?: number
+          reference_number?: string | null
+          proof_url?: string | null
+          remarks?: string | null
+          status?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_order_payments_sales_order_id_fkey"
+            columns: ["sales_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_orders"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      customer_credit_extensions: {
+        Row: {
+          id: string
+          customer_id: string
+          sales_order_id: string | null
+          amount: number
+          remarks: string | null
+          status: string
+          approved_by: string | null
+          approved_at: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          customer_id: string
+          sales_order_id?: string | null
+          amount: number
+          remarks?: string | null
+          status?: string
+          approved_by?: string | null
+          approved_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          customer_id?: string
+          sales_order_id?: string | null
+          amount?: number
+          remarks?: string | null
+          status?: string
+          approved_by?: string | null
+          approved_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_credit_extensions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_credit_extensions_sales_order_id_fkey"
+            columns: ["sales_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_orders"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

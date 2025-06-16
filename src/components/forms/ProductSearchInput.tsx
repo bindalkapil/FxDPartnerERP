@@ -73,14 +73,38 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     setIsOpen(true);
     setSelectedIndex(-1);
 
-    // Clear selection if input doesn't match current selection
-    if (selectedItem && newValue !== `${selectedItem.product_name} - ${selectedItem.sku_code}`) {
-      onChange('');
+    // Clear selection if user is typing something different from the selected item
+    if (selectedItem) {
+      const expectedValue = `${selectedItem.product_name} - ${selectedItem.sku_code}`;
+      if (newValue !== expectedValue && newValue !== '') {
+        console.log('Clearing selection due to input change:', {
+          newValue,
+          expectedValue,
+          selectedItem: selectedItem.sku_id
+        });
+        onChange('');
+      } else if (newValue === '') {
+        // Also clear if input is completely empty
+        onChange('');
+      }
     }
   };
 
   // Handle item selection
   const handleSelectItem = (item: InventoryItem) => {
+    // Validate that the item exists in current inventory
+    const itemExists = inventory.find(inv => inv.sku_id === item.sku_id);
+    if (!itemExists) {
+      console.error('Selected item not found in inventory:', item);
+      return;
+    }
+
+    console.log('Selecting item:', {
+      sku_id: item.sku_id,
+      product_name: item.product_name,
+      sku_code: item.sku_code
+    });
+
     onChange(item.sku_id);
     setInputValue(`${item.product_name} - ${item.sku_code}`);
     setIsOpen(false);
@@ -138,9 +162,21 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     // Use timeout to allow click events to process
     setTimeout(() => {
       setIsOpen(false);
-      // Restore selected item text if we have a selection
+      // Restore selected item text if we have a selection and input doesn't match
       if (selectedItem) {
-        setInputValue(`${selectedItem.product_name} - ${selectedItem.sku_code}`);
+        const expectedValue = `${selectedItem.product_name} - ${selectedItem.sku_code}`;
+        if (inputValue !== expectedValue) {
+          console.log('Restoring input value on blur:', {
+            currentInput: inputValue,
+            expectedValue,
+            selectedItem: selectedItem.sku_id
+          });
+          setInputValue(expectedValue);
+        }
+      } else if (inputValue.trim() !== '') {
+        // If no selection but there's text, clear it
+        console.log('Clearing unmatched input on blur:', inputValue);
+        setInputValue('');
       }
     }, 200);
   };
@@ -153,10 +189,18 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     if (!isOpen || !inputRef.current) return null;
 
     const rect = inputRef.current.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const spaceBelow = viewportHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    
+    // Show dropdown above if there's more space above and not enough below
+    const showAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
+    
     return {
-      top: rect.bottom + window.scrollY,
+      top: showAbove ? rect.top + window.scrollY - 200 : rect.bottom + window.scrollY,
       left: rect.left + window.scrollX,
-      width: rect.width
+      width: rect.width,
+      maxHeight: showAbove ? Math.min(spaceAbove - 10, 300) : Math.min(spaceBelow - 10, 300)
     };
   }, [isOpen]);
 
@@ -180,9 +224,10 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
           top: dropdownPosition.top,
           left: dropdownPosition.left,
           width: dropdownPosition.width,
+          maxHeight: dropdownPosition.maxHeight,
           zIndex: 9999
         }}
-        className="bg-white border border-gray-300 rounded-md shadow-lg max-h-96 overflow-auto"
+        className="bg-white border border-gray-300 rounded-md shadow-lg overflow-auto"
       >
         {filteredItems.length > 0 ? (
           <ul className="py-1">

@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, ArrowLeft, Plus, Trash2, User, Calendar, MapPin, CreditCard, AlertTriangle, Edit } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getCustomers, getAvailableInventory, createSalesOrder } from '../../lib/api';
+import { getCustomers, getAvailableInventory, createSalesOrderWithMultiplePayments } from '../../lib/api';
 import ProductSearchInput from '../../components/forms/ProductSearchInput';
 import AdjustInventoryModal from '../../components/modals/AdjustInventoryModal';
+import MultiplePaymentSection, { PaymentMethod } from '../../components/forms/MultiplePaymentSection';
 
 interface SalesOrderItem {
   id: string;
@@ -31,17 +32,16 @@ interface Customer {
   contact: string;
   email: string;
   address: string;
-  delivery_addresses: DeliveryAddress[] | null;
+  delivery_addresses: any[] | null; // Using any[] to match Json[] from database
   payment_terms: number;
   credit_limit: number;
   current_balance: number;
 }
 
 interface InventoryItem {
-  id: string;
   product_id: string;
   product_name: string;
-  category: string;
+  product_category: string;
   sku_id: string;
   sku_code: string;
   unit_type: string;
@@ -68,12 +68,13 @@ const NewSale: React.FC = () => {
     deliveryDate: '',
     deliveryAddress: '',
     paymentTerms: 30,
-    paymentMode: 'cash',
     notes: ''
   });
 
   const [items, setItems] = useState<SalesOrderItem[]>([]);
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [paymentValidation, setPaymentValidation] = useState({ isValid: true, message: '' });
 
   useEffect(() => {
     loadInitialData();
@@ -87,7 +88,35 @@ const NewSale: React.FC = () => {
       ]);
       
       setCustomers(customersData || []);
-      setInventory(inventoryData || []);
+      
+      // Map and validate the inventory data to match the expected interface
+      const mappedInventory = (inventoryData || [])
+        .filter((item: any) => {
+          // Validate required fields
+          if (!item.product_id || !item.sku_id || !item.product_name || !item.sku_code) {
+            console.warn('Skipping invalid inventory item:', item);
+            return false;
+          }
+          return true;
+        })
+        .map((item: any) => ({
+          product_id: item.product_id,
+          product_name: item.product_name || '',
+          product_category: item.category || item.product_category || 'Uncategorized', // Handle both field names
+          sku_id: item.sku_id,
+          sku_code: item.sku_code || '',
+          unit_type: item.unit_type || 'box',
+          available_quantity: typeof item.available_quantity === 'number' ? item.available_quantity : 0,
+          total_weight: typeof item.total_weight === 'number' ? item.total_weight : 0
+        }));
+      
+      console.log('Loaded and mapped inventory data:', {
+        originalCount: inventoryData?.length || 0,
+        mappedCount: mappedInventory.length,
+        sampleItems: mappedInventory.slice(0, 3)
+      });
+      
+      setInventory(mappedInventory);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Failed to load required data');
@@ -202,12 +231,49 @@ const NewSale: React.FC = () => {
         
         // If SKU is changed, update related fields
         if (field === 'skuId') {
-          const inventoryItem = inventory.find(inv => inv.sku_id === value);
-          if (inventoryItem) {
-            updatedItem.productId = inventoryItem.product_id;
-            updatedItem.productName = inventoryItem.product_name;
-            updatedItem.skuCode = inventoryItem.sku_code;
-            updatedItem.unitType = inventoryItem.unit_type;
+          console.log('SKU selection changed:', {
+            itemId: id,
+            newSkuId: value,
+            inventoryCount: inventory.length
+          });
+          
+          if (value) {
+            const inventoryItem = inventory.find(inv => inv.sku_id === value);
+            console.log('Found inventory item:', inventoryItem);
+            
+            if (inventoryItem) {
+              // Validate the inventory item has all required fields
+              if (!inventoryItem.product_id || !inventoryItem.product_name || !inventoryItem.sku_code) {
+                console.error('Invalid inventory item found:', inventoryItem);
+                toast.error('Selected product has invalid data. Please contact support.');
+                return item; // Don't update if data is invalid
+              }
+              
+              updatedItem.productId = inventoryItem.product_id;
+              updatedItem.productName = inventoryItem.product_name;
+              updatedItem.skuCode = inventoryItem.sku_code;
+              updatedItem.unitType = inventoryItem.unit_type;
+              
+              console.log('Successfully updated item with inventory data:', {
+                productId: inventoryItem.product_id,
+                productName: inventoryItem.product_name,
+                skuCode: inventoryItem.sku_code,
+                unitType: inventoryItem.unit_type
+              });
+            } else {
+              console.warn('No inventory item found for SKU ID:', value);
+              // Clear related fields if no inventory item found
+              updatedItem.productId = '';
+              updatedItem.productName = '';
+              updatedItem.skuCode = '';
+              updatedItem.unitType = 'box';
+            }
+          } else {
+            // Clear all fields if no SKU selected
+            updatedItem.productId = '';
+            updatedItem.productName = '';
+            updatedItem.skuCode = '';
+            updatedItem.unitType = 'box';
           }
         }
         
@@ -237,21 +303,12 @@ const NewSale: React.FC = () => {
     return customers.find(c => c.id === formData.customerId);
   };
 
-  const checkCreditLimit = () => {
-    const customer = getSelectedCustomer();
-    if (!customer || formData.paymentMode !== 'credit') return { valid: true, message: '' };
+  const handlePaymentMethodsChange = (methods: PaymentMethod[]) => {
+    setPaymentMethods(methods);
+  };
 
-    const orderTotal = calculateTotal();
-    const availableCredit = customer.credit_limit - customer.current_balance;
-    
-    if (orderTotal > availableCredit) {
-      return {
-        valid: false,
-        message: `Order total (₹${orderTotal.toFixed(2)}) exceeds available credit limit (₹${availableCredit.toFixed(2)})`
-      };
-    }
-    
-    return { valid: true, message: '' };
+  const handlePaymentValidationChange = (isValid: boolean, message?: string) => {
+    setPaymentValidation({ isValid, message: message || '' });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -279,10 +336,9 @@ const NewSale: React.FC = () => {
       }
     }
 
-    // Check credit limit for credit payments
-    const creditCheck = checkCreditLimit();
-    if (!creditCheck.valid) {
-      toast.error(creditCheck.message);
+    // Check payment validation
+    if (!paymentValidation.isValid) {
+      toast.error(paymentValidation.message);
       return;
     }
 
@@ -312,6 +368,16 @@ const NewSale: React.FC = () => {
         totalPrice: item.totalPrice
       }));
 
+      // If no payment methods are added, create a default credit payment
+      let finalPaymentMethods = paymentMethods;
+      if (paymentMethods.length === 0) {
+        finalPaymentMethods = [{
+          id: `payment_${Date.now()}`,
+          type: 'credit' as const,
+          amount: totalAmount
+        }];
+      }
+
       // Create sales order with items included in the order data
       const orderData = {
         order_number: generateOrderNumber(),
@@ -320,8 +386,8 @@ const NewSale: React.FC = () => {
         delivery_date: saleType === 'outstation' ? formData.deliveryDate : null,
         delivery_address: saleType === 'outstation' ? formData.deliveryAddress : null,
         payment_terms: formData.paymentTerms,
-        payment_mode: formData.paymentMode,
-        payment_status: 'unpaid', // Default to unpaid
+        payment_mode: 'multiple', // Set to multiple for new payment system
+        payment_status: finalPaymentMethods.some(p => p.type === 'credit') ? 'partial' : 'paid', // Will be updated based on payment processing
         subtotal,
         tax_amount: 0, // Tax removed as requested
         discount_amount: discountAmount,
@@ -331,7 +397,7 @@ const NewSale: React.FC = () => {
         items: itemsData // Include items in the order data
       };
 
-      await createSalesOrder(orderData);
+      await createSalesOrderWithMultiplePayments(orderData, finalPaymentMethods);
       
       toast.success('Sales order created successfully!');
       navigate('/sales');
@@ -366,7 +432,6 @@ const NewSale: React.FC = () => {
   }
 
   const selectedCustomer = getSelectedCustomer();
-  const creditCheck = checkCreditLimit();
 
   return (
     <div className="space-y-6">
@@ -482,19 +547,6 @@ const NewSale: React.FC = () => {
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Payment Terms (Days)
-                </label>
-                <input
-                  type="number"
-                  value={formData.paymentTerms}
-                  onChange={(e) => setFormData(prev => ({ ...prev, paymentTerms: Number(e.target.value) }))}
-                  min="0"
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                />
-              </div>
-
               {saleType === 'outstation' && selectedCustomer && (
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -572,58 +624,6 @@ const NewSale: React.FC = () => {
               )}
             </div>
 
-            {/* Payment Information */}
-          <div className="border-t pt-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Payment Information</h2>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-1">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Payment Mode
-                </label>
-                <select
-                  value={formData.paymentMode}
-                  onChange={(e) => setFormData(prev => ({ ...prev, paymentMode: e.target.value }))}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
-                >
-                  <option value="cash">Cash</option>
-                  <option value="credit">Credit</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="upi">UPI</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Credit Limit Warning */}
-            {formData.paymentMode === 'credit' && !creditCheck.valid && (
-              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                <div className="flex items-center">
-                  <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
-                  <span className="text-sm font-medium text-red-800">{creditCheck.message}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-            {/* Customer Credit Information */}
-            {selectedCustomer && (
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Customer Credit Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-500">Credit Limit:</span>
-                    <span className="ml-2 font-medium">₹{selectedCustomer.credit_limit.toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Outstanding:</span>
-                    <span className="ml-2 font-medium">₹{selectedCustomer.current_balance.toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Available Credit:</span>
-                    <span className="ml-2 font-medium">₹{(selectedCustomer.credit_limit - selectedCustomer.current_balance).toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Items Section */}
@@ -666,8 +666,8 @@ const NewSale: React.FC = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {items.map((item) => (
-                    <tr key={item.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                    <tr key={item.id} className="border-b border-gray-200">
+                      <td className="px-6 py-4">
                         <ProductSearchInput
                           inventory={inventory}
                           value={item.skuId}
@@ -763,6 +763,21 @@ const NewSale: React.FC = () => {
             </div>
           </div>
 
+          {/* Multiple Payment Section */}
+          {selectedCustomer && (
+            <div className="border-t pt-6">
+              <MultiplePaymentSection
+                orderTotal={calculateTotal()}
+                customerId={formData.customerId}
+                customerCreditLimit={selectedCustomer.credit_limit}
+                customerCurrentBalance={selectedCustomer.current_balance}
+                paymentMethods={paymentMethods}
+                onPaymentMethodsChange={handlePaymentMethodsChange}
+                onValidationChange={handlePaymentValidationChange}
+              />
+            </div>
+          )}
+
           {/* Notes */}
           <div className="border-t pt-6">
             <label className="block text-sm font-medium text-gray-700">
@@ -789,7 +804,7 @@ const NewSale: React.FC = () => {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || (formData.paymentMode === 'credit' && !creditCheck.valid)}
+              disabled={isSubmitting || !paymentValidation.isValid}
               className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Creating Order...' : 'Create Sales Order'}

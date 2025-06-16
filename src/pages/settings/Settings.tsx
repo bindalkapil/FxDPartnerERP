@@ -270,7 +270,6 @@ const Settings: React.FC = () => {
                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                     >
                       <option value="INR">Indian Rupee (₹)</option>
-                      <option value="USD">US Dollar ($)</option>
                       <option value="EUR">Euro (€)</option>
                       <option value="GBP">British Pound (£)</option>
                     </select>

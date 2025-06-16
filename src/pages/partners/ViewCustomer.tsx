@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { User, ArrowLeft, Edit, Mail, Phone, MapPin, CreditCard, Building, Calendar, FileText, Eye, ShoppingCart, DollarSign, AlertTriangle } from 'lucide-react';
+import { User, ArrowLeft, Edit, Mail, Phone, MapPin, CreditCard, Building, Calendar, FileText, Eye, ShoppingCart, DollarSign, AlertTriangle, TrendingUp, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getCustomer, getSalesOrdersByCustomerId, getPaymentsByPartyId } from '../../lib/api';
+import { getCustomer, getSalesOrdersByCustomerId, getPaymentsByPartyId, getCustomerCreditExtensions } from '../../lib/api';
 
 interface Customer {
   id: string;
@@ -11,11 +11,7 @@ interface Customer {
   contact: string;
   email: string;
   address: string;
-  delivery_addresses: Array<{
-    label: string;
-    address: string;
-    is_default: boolean;
-  }> | null;
+  delivery_addresses: any[] | null;
   gst_number: string | null;
   pan_number: string | null;
   credit_limit: number;
@@ -23,8 +19,8 @@ interface Customer {
   payment_terms: number;
   status: string;
   notes: string | null;
-  created_at: string;
-  updated_at: string;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 interface SalesOrder {
@@ -34,9 +30,9 @@ interface SalesOrder {
   delivery_date: string | null;
   payment_mode: string;
   payment_status: string;
-  subtotal: number;
-  discount_amount: number;
-  total_amount: number;
+  subtotal: number | null;
+  discount_amount: number | null;
+  total_amount: number | null;
   status: string;
   sales_order_items: Array<{
     product_name: string;
@@ -60,14 +56,28 @@ interface Payment {
   notes: string | null;
 }
 
+interface CreditExtension {
+  id: string;
+  customer_id: string;
+  sales_order_id: string | null;
+  amount: number;
+  remarks: string | null;
+  status: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 const ViewCustomer: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [salesOrders, setSalesOrders] = useState<SalesOrder[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [creditExtensions, setCreditExtensions] = useState<CreditExtension[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'payments'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'payments' | 'credit_extensions'>('overview');
 
   useEffect(() => {
     if (id) {
@@ -79,15 +89,17 @@ const ViewCustomer: React.FC = () => {
     if (!id) return;
     
     try {
-      const [customerData, ordersData, paymentsData] = await Promise.all([
+      const [customerData, ordersData, paymentsData, creditExtensionsData] = await Promise.all([
         getCustomer(id),
         getSalesOrdersByCustomerId(id),
-        getPaymentsByPartyId(id)
+        getPaymentsByPartyId(id),
+        getCustomerCreditExtensions(id)
       ]);
       
       setCustomer(customerData);
       setSalesOrders(ordersData || []);
       setPayments(paymentsData || []);
+      setCreditExtensions(creditExtensionsData || []);
     } catch (error) {
       console.error('Error loading customer data:', error);
       toast.error('Failed to load customer data');
@@ -153,6 +165,32 @@ const ViewCustomer: React.FC = () => {
     }
   };
 
+  const getCreditExtensionStatusColor = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'rejected':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getCreditExtensionIcon = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return <CheckCircle className="h-4 w-4" />;
+      case 'pending':
+        return <Clock className="h-4 w-4" />;
+      case 'rejected':
+        return <XCircle className="h-4 w-4" />;
+      default:
+        return <Clock className="h-4 w-4" />;
+    }
+  };
+
   const getPaymentModeDisplay = (mode: string) => {
     switch (mode) {
       case 'bank_transfer':
@@ -191,6 +229,22 @@ const ViewCustomer: React.FC = () => {
     return { totalPayments, totalReceived, pendingPayments };
   };
 
+  const calculateCreditExtensionStats = () => {
+    const totalExtensions = creditExtensions.length;
+    const approvedExtensions = creditExtensions.filter(ext => ext.status === 'approved');
+    const pendingExtensions = creditExtensions.filter(ext => ext.status === 'pending');
+    const totalApprovedAmount = approvedExtensions.reduce((sum, ext) => sum + ext.amount, 0);
+    const totalPendingAmount = pendingExtensions.reduce((sum, ext) => sum + ext.amount, 0);
+
+    return { 
+      totalExtensions, 
+      approvedExtensions: approvedExtensions.length, 
+      pendingExtensions: pendingExtensions.length,
+      totalApprovedAmount,
+      totalPendingAmount
+    };
+  };
+
   const getAvailableCredit = () => {
     if (!customer) return 0;
     return (customer.credit_limit || 0) - (customer.current_balance || 0);
@@ -219,6 +273,7 @@ const ViewCustomer: React.FC = () => {
 
   const orderStats = calculateOrderStats();
   const paymentStats = calculatePaymentStats();
+  const creditExtensionStats = calculateCreditExtensionStats();
   const availableCredit = getAvailableCredit();
   const creditUtilization = getCreditUtilization();
 
@@ -353,6 +408,16 @@ const ViewCustomer: React.FC = () => {
             >
               Payment Records ({paymentStats.totalPayments})
             </button>
+            <button
+              onClick={() => setActiveTab('credit_extensions')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'credit_extensions'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Credit Extensions ({creditExtensionStats.totalExtensions})
+            </button>
           </nav>
         </div>
 
@@ -422,7 +487,7 @@ const ViewCustomer: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Delivery Addresses</h3>
                   <div className="space-y-3">
-                    {customer.delivery_addresses.map((addr, index) => (
+                    {customer.delivery_addresses.map((addr: any, index: number) => (
                       <div key={index} className="bg-gray-50 rounded-lg p-4">
                         <div className="flex items-start justify-between">
                           <div className="flex items-start">
@@ -506,11 +571,11 @@ const ViewCustomer: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="text-gray-500">Customer Since:</span>
-                      <span className="ml-2 font-medium">{formatDate(customer.created_at)}</span>
+                      <span className="ml-2 font-medium">{customer.created_at ? formatDate(customer.created_at) : 'N/A'}</span>
                     </div>
                     <div>
                       <span className="text-gray-500">Last Updated:</span>
-                      <span className="ml-2 font-medium">{formatDate(customer.updated_at)}</span>
+                      <span className="ml-2 font-medium">{customer.updated_at ? formatDate(customer.updated_at) : 'N/A'}</span>
                     </div>
                   </div>
                 </div>
@@ -623,9 +688,6 @@ const ViewCustomer: React.FC = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-medium text-gray-900">Payment Records</h3>
-                <div className="text-sm text-gray-500">
-                  Total Received: ₹{formatCurrency(paymentStats.totalReceived)}
-                </div>
               </div>
 
               {payments.length > 0 ? (
@@ -637,16 +699,16 @@ const ViewCustomer: React.FC = () => {
                           Payment Details
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Amount & Type
+                          Amount
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Mode
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Reference
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Mode & Status
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
                         </th>
                       </tr>
                     </thead>
@@ -655,47 +717,26 @@ const ViewCustomer: React.FC = () => {
                         <tr key={payment.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div>
-                              <div className="text-sm font-medium text-gray-900">
-                                {formatDateTime(payment.payment_date)}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {payment.notes && payment.notes.length > 50 
-                                  ? `${payment.notes.substring(0, 50)}...` 
-                                  : payment.notes || 'No notes'
-                                }
-                              </div>
+                              <div className="text-sm font-medium text-gray-900 capitalize">{payment.type}</div>
+                              <div className="text-sm text-gray-500">{formatDateTime(payment.payment_date)}</div>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className={`text-sm font-medium ${
-                              payment.type === 'received' ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              {payment.type === 'received' ? '+' : '-'}₹{formatCurrency(payment.amount)}
-                            </div>
-                            <div className="text-sm text-gray-500 capitalize">{payment.type}</div>
+                            <div className="text-sm text-gray-900">₹{formatCurrency(payment.amount)}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              {payment.reference_number || 'No reference'}
-                            </div>
-                            {payment.reference_type && (
-                              <div className="text-sm text-gray-500">
-                                {payment.reference_type.replace('_', ' ')}
-                              </div>
-                            )}
+                            <div className="text-sm text-gray-900 capitalize">{getPaymentModeDisplay(payment.mode)}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              {getPaymentModeDisplay(payment.mode)}
-                            </div>
-                            <span className={`inline-flex px-2 text-xs leading-5 font-semibold rounded-full ${getPaymentStatusColor(payment.status)}`}>
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getPaymentStatusColor(payment.status)}`}>
                               {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button className="text-indigo-600 hover:text-indigo-900">
-                              <Eye className="h-4 w-4" />
-                            </button>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{payment.reference_number || '-'}</div>
+                            {payment.reference_type && (
+                              <div className="text-sm text-gray-500">{payment.reference_type}</div>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -707,6 +748,159 @@ const ViewCustomer: React.FC = () => {
                   <DollarSign className="h-12 w-12 mx-auto text-gray-300 mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No Payment Records</h3>
                   <p className="text-sm text-gray-500">No payments have been recorded for this customer yet.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Credit Extensions Tab */}
+          {activeTab === 'credit_extensions' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">Credit Extensions</h3>
+                <div className="text-sm text-gray-500">
+                  Track temporary credit limit increases for this customer
+                </div>
+              </div>
+
+              {/* Credit Extension Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <TrendingUp className="h-8 w-8 text-blue-600 mr-3" />
+                    <div>
+                      <p className="text-2xl font-bold text-gray-900">{creditExtensionStats.totalExtensions}</p>
+                      <p className="text-sm text-gray-500">Total Extensions</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <CheckCircle className="h-8 w-8 text-green-600 mr-3" />
+                    <div>
+                      <p className="text-2xl font-bold text-gray-900">{creditExtensionStats.approvedExtensions}</p>
+                      <p className="text-sm text-gray-500">Approved</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-yellow-50 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <Clock className="h-8 w-8 text-yellow-600 mr-3" />
+                    <div>
+                      <p className="text-2xl font-bold text-gray-900">{creditExtensionStats.pendingExtensions}</p>
+                      <p className="text-sm text-gray-500">Pending</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <DollarSign className="h-8 w-8 text-purple-600 mr-3" />
+                    <div>
+                      <p className="text-2xl font-bold text-gray-900">₹{formatCurrency(creditExtensionStats.totalApprovedAmount)}</p>
+                      <p className="text-sm text-gray-500">Approved Amount</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {creditExtensions.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Request Details
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Amount
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Sales Order
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Remarks
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Approval Details
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {creditExtensions.map((extension) => (
+                        <tr key={extension.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {extension.created_at ? formatDateTime(extension.created_at) : 'N/A'}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                ID: {extension.id.slice(0, 8)}...
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">₹{formatCurrency(extension.amount)}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              {getCreditExtensionIcon(extension.status)}
+                              <span className={`ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getCreditExtensionStatusColor(extension.status)}`}>
+                                {extension.status.charAt(0).toUpperCase() + extension.status.slice(1)}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {extension.sales_order_id ? (
+                                <button
+                                  onClick={() => navigate(`/sales/view/${extension.sales_order_id}`)}
+                                  className="text-blue-600 hover:text-blue-800 underline"
+                                >
+                                  View Order
+                                </button>
+                              ) : (
+                                <span className="text-gray-500">-</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900 max-w-xs truncate">
+                              {extension.remarks || '-'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {extension.status === 'approved' && extension.approved_at ? (
+                                <div>
+                                  <div className="font-medium">Approved</div>
+                                  <div className="text-gray-500">{formatDateTime(extension.approved_at)}</div>
+                                  {extension.approved_by && (
+                                    <div className="text-gray-500">By: {extension.approved_by}</div>
+                                  )}
+                                </div>
+                              ) : extension.status === 'rejected' ? (
+                                <div className="text-red-600 font-medium">Rejected</div>
+                              ) : (
+                                <div className="text-yellow-600 font-medium">Pending Review</div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <TrendingUp className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Credit Extensions</h3>
+                  <p className="text-sm text-gray-500">No credit limit extensions have been requested for this customer.</p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Credit extensions are automatically created when using the "Credit Increase" payment method during sales order creation.
+                  </p>
                 </div>
               )}
             </div>
