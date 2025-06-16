@@ -99,16 +99,28 @@ const NewSale: React.FC = () => {
           }
           return true;
         })
-        .map((item: any) => ({
-          product_id: item.product_id,
-          product_name: item.product_name || '',
-          product_category: item.category || item.product_category || 'Uncategorized', // Handle both field names
-          sku_id: item.sku_id,
-          sku_code: item.sku_code || '',
-          unit_type: item.unit_type || 'box',
-          available_quantity: typeof item.available_quantity === 'number' ? item.available_quantity : 0,
-          total_weight: typeof item.total_weight === 'number' ? item.total_weight : 0
-        }));
+        .map((item: any) => {
+          const mappedItem = {
+            product_id: item.product_id,
+            product_name: item.product_name || '',
+            product_category: item.category || 'Uncategorized', // Use category from database schema
+            sku_id: item.sku_id,
+            sku_code: item.sku_code || '',
+            unit_type: item.unit_type || 'box',
+            available_quantity: typeof item.available_quantity === 'number' ? item.available_quantity : 0,
+            total_weight: typeof item.total_weight === 'number' ? item.total_weight : 0
+          };
+          
+          // Log each mapped item for debugging
+          console.log('Mapped inventory item:', {
+            product_id: mappedItem.product_id,
+            product_name: mappedItem.product_name,
+            sku_id: mappedItem.sku_id,
+            sku_code: mappedItem.sku_code
+          });
+          
+          return mappedItem;
+        });
       
       console.log('Loaded and mapped inventory data:', {
         originalCount: inventoryData?.length || 0,
@@ -224,7 +236,7 @@ const NewSale: React.FC = () => {
     setItems(prev => prev.filter(item => item.id !== id));
   };
 
-  const handleItemChange = (id: string, field: keyof SalesOrderItem, value: any) => {
+  const handleItemChange = (id: string, field: keyof SalesOrderItem, value: any, selectedItem?: InventoryItem) => {
     setItems(prev => prev.map(item => {
       if (item.id === id) {
         const updatedItem = { ...item, [field]: value };
@@ -238,8 +250,39 @@ const NewSale: React.FC = () => {
           });
           
           if (value) {
-            const inventoryItem = inventory.find(inv => inv.sku_id === value);
-            console.log('Found inventory item:', inventoryItem);
+            // Log all inventory items with this SKU ID to check for duplicates
+            const matchingItems = inventory.filter(inv => inv.sku_id === value);
+            console.log('All inventory items matching SKU ID:', {
+              skuId: value,
+              matchingCount: matchingItems.length,
+              items: matchingItems.map(item => ({
+                product_id: item.product_id,
+                product_name: item.product_name,
+                sku_id: item.sku_id,
+                sku_code: item.sku_code
+              }))
+            });
+            
+            // Use the selectedItem if provided (from ProductSearchInput), otherwise find by SKU ID
+            let inventoryItem: InventoryItem | undefined;
+            
+            if (selectedItem) {
+              // Use the exact item that was selected from the dropdown
+              inventoryItem = selectedItem;
+              console.log('Using selectedItem from ProductSearchInput:', inventoryItem);
+            } else {
+              // Fallback to finding by SKU ID (for backward compatibility)
+              inventoryItem = inventory.find(inv => inv.sku_id === value);
+              console.log('Found inventory item by SKU ID:', inventoryItem);
+            }
+            
+            // If there are multiple items with the same SKU ID, warn about the data integrity issue
+            if (matchingItems.length > 1) {
+              console.warn('Multiple products found with same SKU ID. This is a data integrity issue that should be fixed in the database.');
+              if (!selectedItem) {
+                console.log('Using first match due to duplicate SKU IDs and no selectedItem provided:', inventoryItem);
+              }
+            }
             
             if (inventoryItem) {
               // Validate the inventory item has all required fields
@@ -248,6 +291,15 @@ const NewSale: React.FC = () => {
                 toast.error('Selected product has invalid data. Please contact support.');
                 return item; // Don't update if data is invalid
               }
+              
+              // Double-check that we're getting the right product
+              console.log('Updating item with inventory data:', {
+                selectedSkuId: value,
+                foundProductId: inventoryItem.product_id,
+                foundProductName: inventoryItem.product_name,
+                foundSkuCode: inventoryItem.sku_code,
+                foundUnitType: inventoryItem.unit_type
+              });
               
               updatedItem.productId = inventoryItem.product_id;
               updatedItem.productName = inventoryItem.product_name;
@@ -671,7 +723,7 @@ const NewSale: React.FC = () => {
                         <ProductSearchInput
                           inventory={inventory}
                           value={item.skuId}
-                          onChange={(skuId) => handleItemChange(item.id, 'skuId', skuId)}
+                          onChange={(skuId, selectedItem) => handleItemChange(item.id, 'skuId', skuId, selectedItem)}
                           placeholder="Type to search products..."
                           className="text-sm"
                           onAdjustInventory={handleAdjustInventory}

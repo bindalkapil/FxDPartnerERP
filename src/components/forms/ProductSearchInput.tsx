@@ -16,7 +16,7 @@ interface InventoryItem {
 interface ProductSearchInputProps {
   inventory: InventoryItem[];
   value: string;
-  onChange: (skuId: string) => void;
+  onChange: (skuId: string, selectedItem?: InventoryItem) => void;
   placeholder?: string;
   className?: string;
   onAdjustInventory?: (item: InventoryItem) => void;
@@ -51,7 +51,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   // Filter items based on input value
   const filteredItems = React.useMemo(() => {
     if (!inputValue.trim()) {
-      return inventory;
+      return inventory.slice(0, 50); // Limit to first 50 items when no search
     }
 
     const searchTerms = inputValue.toLowerCase().split(/\s+/);
@@ -63,7 +63,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
       ].map(text => (text || '').toLowerCase()).join(' ');
 
       return searchTerms.every(term => searchableText.includes(term));
-    });
+    }).slice(0, 50); // Limit results to 50 items
   }, [inputValue, inventory]);
 
   // Handle input changes
@@ -99,13 +99,27 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
       return;
     }
 
-    console.log('Selecting item:', {
+    console.log('ProductSearchInput - Selecting item:', {
       sku_id: item.sku_id,
       product_name: item.product_name,
-      sku_code: item.sku_code
+      sku_code: item.sku_code,
+      product_id: item.product_id
     });
 
-    onChange(item.sku_id);
+    // Double-check the item we're about to select
+    console.log('ProductSearchInput - Full item being selected:', item);
+    
+    // Check if there are multiple items with the same SKU ID
+    const duplicateItems = inventory.filter(inv => inv.sku_id === item.sku_id);
+    if (duplicateItems.length > 1) {
+      console.warn('ProductSearchInput - Multiple items found with same SKU ID:', {
+        skuId: item.sku_id,
+        count: duplicateItems.length,
+        items: duplicateItems
+      });
+    }
+
+    onChange(item.sku_id, item);
     setInputValue(`${item.product_name} - ${item.sku_code}`);
     setIsOpen(false);
     setSelectedIndex(-1);
@@ -181,6 +195,23 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     }, 200);
   };
 
+  // Handle adjust inventory click
+  const handleAdjustInventory = (e: React.MouseEvent, item: InventoryItem) => {
+    e.stopPropagation();
+    if (onAdjustInventory) {
+      onAdjustInventory(item);
+    }
+  };
+
+  // Create portal root if it doesn't exist
+  useEffect(() => {
+    if (!document.getElementById('portal-root')) {
+      const portalRoot = document.createElement('div');
+      portalRoot.id = 'portal-root';
+      document.body.appendChild(portalRoot);
+    }
+  }, []);
+
   // Get portal root
   const portalRoot = document.getElementById('portal-root');
 
@@ -203,14 +234,6 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
       maxHeight: showAbove ? Math.min(spaceAbove - 10, 300) : Math.min(spaceBelow - 10, 300)
     };
   }, [isOpen]);
-
-  // Handle adjust inventory click
-  const handleAdjustInventory = (e: React.MouseEvent, item: InventoryItem) => {
-    e.stopPropagation();
-    if (onAdjustInventory) {
-      onAdjustInventory(item);
-    }
-  };
 
   // Render dropdown
   const renderDropdown = () => {
