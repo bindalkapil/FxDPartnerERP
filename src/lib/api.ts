@@ -312,27 +312,45 @@ export async function getSalesOrder(id: string) {
   return data;
 }
 
-// Update inventory after sale
+// Update inventory after sale - now allows negative inventory
 async function updateInventoryAfterSale(productId: string, skuId: string, quantity: number) {
   // First get the current quantity
   const { data: currentInventory, error: fetchError } = await supabase
     .from('current_inventory')
-    .select('available_quantity')
+    .select('available_quantity, product_name, sku_code')
     .match({ product_id: productId, sku_id: skuId })
     .single();
 
-  if (fetchError) throw fetchError;
+  if (fetchError) {
+    if (fetchError.code === 'PGRST116') {
+      // No inventory record found - this means the product/SKU doesn't exist in inventory
+      throw new Error(`Product not found in inventory. Please check if the product exists and has been received.`);
+    }
+    throw fetchError;
+  }
 
-  // Then update with the new quantity (allow negative values)
+  const currentQuantity = currentInventory?.available_quantity || 0;
+  const newQuantity = currentQuantity - quantity;
+
+  // Update with the new quantity (now allows negative values)
   const { error: updateError } = await supabase
     .from('current_inventory')
     .update({
-      available_quantity: (currentInventory?.available_quantity || 0) - quantity,
+      available_quantity: newQuantity,
       updated_at: new Date().toISOString()
     })
     .match({ product_id: productId, sku_id: skuId });
 
   if (updateError) throw updateError;
+
+  // Return information about whether inventory went negative
+  return {
+    productName: currentInventory.product_name,
+    skuCode: currentInventory.sku_code,
+    previousQuantity: currentQuantity,
+    newQuantity: newQuantity,
+    wentNegative: newQuantity < 0
+  };
 }
 
 // Updated createSalesOrder function with CORRECTED status logic
@@ -1695,6 +1713,62 @@ export async function uploadPaymentProof(file: File): Promise<string> {
   return publicUrl;
 }
 
+// Check for negative inventory warnings before creating sales order
+export async function checkInventoryForSalesOrder(items: any[]) {
+  const warnings = [];
+  
+  for (const item of items) {
+    const productId = item.product_id || item.productId;
+    const skuId = item.sku_id || item.skuId;
+    const quantity = safeNumericValue(item.quantity);
+    
+    if (!productId || !skuId || quantity <= 0) {
+      continue; // Skip invalid items
+    }
+    
+    // Get current inventory
+    const { data: currentInventory, error: fetchError } = await supabase
+      .from('current_inventory')
+      .select('available_quantity, product_name, sku_code')
+      .match({ product_id: productId, sku_id: skuId })
+      .single();
+    
+    if (fetchError) {
+      if (fetchError.code === 'PGRST116') {
+        warnings.push({
+          productId,
+          skuId,
+          productName: item.product_name || item.productName || 'Unknown Product',
+          skuCode: item.sku_code || item.skuCode || 'Unknown SKU',
+          currentQuantity: 0,
+          requestedQuantity: quantity,
+          resultingQuantity: -quantity,
+          type: 'not_found'
+        });
+      }
+      continue;
+    }
+    
+    const currentQuantity = currentInventory?.available_quantity || 0;
+    const resultingQuantity = currentQuantity - quantity;
+    
+    if (resultingQuantity < 0) {
+      warnings.push({
+        productId,
+        skuId,
+        productName: currentInventory.product_name,
+        skuCode: currentInventory.sku_code,
+        currentQuantity,
+        requestedQuantity: quantity,
+        resultingQuantity,
+        type: 'negative'
+      });
+    }
+  }
+  
+  return warnings;
+}
+
 // Enhanced createSalesOrder function with multiple payments support
 export async function createSalesOrderWithMultiplePayments(orderData: any, paymentMethods: any[]) {
   console.log('createSalesOrderWithMultiplePayments called with:', {
@@ -1707,6 +1781,23 @@ export async function createSalesOrderWithMultiplePayments(orderData: any, payme
   // Validate that items exist and have required fields
   if (!items || !Array.isArray(items) || items.length === 0) {
     throw new Error('Sales order must have at least one item');
+  }
+
+  // Validate customer_id exists
+  if (!orderDetails.customer_id) {
+    throw new Error('Customer ID is required');
+  }
+
+  // Validate customer exists
+  const { data: customer, error: customerError } = await supabase
+    .from('customers')
+    .select('id, name')
+    .eq('id', orderDetails.customer_id)
+    .single();
+
+  if (customerError || !customer) {
+    console.error('Customer validation failed:', customerError);
+    throw new Error('Invalid customer ID - customer not found');
   }
 
   // Validate each item has required fields (handle both camelCase and snake_case)
@@ -1722,8 +1813,29 @@ export async function createSalesOrderWithMultiplePayments(orderData: any, payme
       throw new Error(`Item ${i + 1} must have a valid quantity`);
     }
     const unitPrice = item.unit_price || item.unitPrice;
-    if (!unitPrice || unitPrice < 0) {
+    if (unitPrice === undefined || unitPrice === null || unitPrice < 0) {
       throw new Error(`Item ${i + 1} must have a valid unit price`);
+    }
+
+    // Validate that product and SKU exist
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('id, name')
+      .eq('id', productId)
+      .single();
+
+    if (productError || !product) {
+      throw new Error(`Item ${i + 1}: Invalid product ID - product not found`);
+    }
+
+    const { data: sku, error: skuError } = await supabase
+      .from('skus')
+      .select('id, code')
+      .eq('id', skuId)
+      .single();
+
+    if (skuError || !sku) {
+      throw new Error(`Item ${i + 1}: Invalid SKU ID - SKU not found`);
     }
   }
   
@@ -1780,13 +1892,31 @@ export async function createSalesOrderWithMultiplePayments(orderData: any, payme
     paymentStatus
   });
 
-  // Prepare order data for insertion
+  // Ensure order_date is properly formatted
+  let orderDate = orderDetails.order_date;
+  if (!orderDate) {
+    orderDate = new Date().toISOString();
+  } else if (typeof orderDate === 'string' && !orderDate.includes('T')) {
+    // If it's a datetime-local format, convert to ISO string
+    orderDate = new Date(orderDate).toISOString();
+  }
+
+  // Prepare order data for insertion with proper field validation
   const orderInsertData = {
-    ...orderDetails,
-    status: status,
-    total_amount: totalAmount,
+    order_number: orderDetails.order_number || `SO-${Date.now()}`,
+    customer_id: orderDetails.customer_id,
+    order_date: orderDate,
+    delivery_date: orderDetails.delivery_date || null,
+    delivery_address: orderDetails.delivery_address || null,
+    payment_terms: safeNumericValue(orderDetails.payment_terms, 30),
     payment_mode: paymentMode,
-    payment_status: paymentStatus
+    payment_status: paymentStatus,
+    subtotal: safeNumericValue(orderDetails.subtotal, totalAmount),
+    tax_amount: safeNumericValue(orderDetails.tax_amount, 0),
+    discount_amount: safeNumericValue(orderDetails.discount_amount, 0),
+    total_amount: totalAmount,
+    status: status,
+    notes: orderDetails.notes || null
   };
 
   console.log('Order data to insert:', orderInsertData);
@@ -1807,7 +1937,20 @@ export async function createSalesOrderWithMultiplePayments(orderData: any, payme
       code: orderError.code,
       orderData: orderInsertData
     });
-    throw new Error(`Sales order creation failed: ${orderError.message} - ${orderError.details || orderError.hint || 'No additional details'}`);
+    
+    // Provide more specific error messages
+    let errorMessage = 'Sales order creation failed';
+    if (orderError.code === '23505') {
+      errorMessage = 'Duplicate order number. Please try again.';
+    } else if (orderError.code === '23503') {
+      errorMessage = 'Invalid reference data. Please check customer and item details.';
+    } else if (orderError.code === '23514') {
+      errorMessage = 'Invalid data format. Please check all required fields.';
+    } else if (orderError.message) {
+      errorMessage = orderError.message;
+    }
+    
+    throw new Error(`${errorMessage}: ${orderError.details || orderError.hint || 'Please check your data and try again'}`);
   }
 
   console.log('Sales order created successfully:', order);

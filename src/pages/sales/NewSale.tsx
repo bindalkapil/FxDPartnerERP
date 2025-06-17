@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, ArrowLeft, Plus, Trash2, User, Calendar, MapPin, CreditCard, AlertTriangle, Edit } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getCustomers, getAvailableInventory, createSalesOrderWithMultiplePayments } from '../../lib/api';
+import { getCustomers, getAvailableInventory, createSalesOrderWithMultiplePayments, checkInventoryForSalesOrder } from '../../lib/api';
 import ProductSearchInput from '../../components/forms/ProductSearchInput';
 import AdjustInventoryModal from '../../components/modals/AdjustInventoryModal';
 import MultiplePaymentSection, { PaymentMethod } from '../../components/forms/MultiplePaymentSection';
@@ -75,6 +75,10 @@ const NewSale: React.FC = () => {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [paymentValidation, setPaymentValidation] = useState({ isValid: true, message: '' });
+  const [showNegativeInventoryModal, setShowNegativeInventoryModal] = useState(false);
+  const [negativeInventoryWarnings, setNegativeInventoryWarnings] = useState<any[]>([]);
+  const [pendingOrderData, setPendingOrderData] = useState<any>(null);
+  const [pendingPaymentMethods, setPendingPaymentMethods] = useState<any[]>([]);
 
   useEffect(() => {
     loadInitialData();
@@ -86,6 +90,9 @@ const NewSale: React.FC = () => {
         getCustomers(),
         getAvailableInventory()
       ]);
+      
+      console.log('Loaded customers data:', customersData);
+      console.log('Number of customers:', customersData?.length || 0);
       
       setCustomers(customersData || []);
       
@@ -420,34 +427,113 @@ const NewSale: React.FC = () => {
         totalPrice: item.totalPrice
       }));
 
-      // If no payment methods are added, create a default credit payment
-      let finalPaymentMethods = paymentMethods;
-      if (paymentMethods.length === 0) {
-        finalPaymentMethods = [{
-          id: `payment_${Date.now()}`,
-          type: 'credit' as const,
-          amount: totalAmount
-        }];
+      // Check for negative inventory warnings
+      const warnings = await checkInventoryForSalesOrder(itemsData);
+      
+      if (warnings.length > 0) {
+        // Store the order data and payment methods for later use
+        const orderData = {
+          order_number: generateOrderNumber(),
+          customer_id: formData.customerId,
+          order_date: formData.orderDate,
+          delivery_date: saleType === 'outstation' ? formData.deliveryDate : null,
+          delivery_address: saleType === 'outstation' ? formData.deliveryAddress : null,
+          payment_terms: formData.paymentTerms,
+          payment_mode: 'multiple',
+          payment_status: paymentMethods.some(p => p.type === 'credit') ? 'partial' : 'paid',
+          subtotal,
+          tax_amount: 0,
+          discount_amount: discountAmount,
+          total_amount: totalAmount,
+          status: saleType === 'counter' ? 'completed' : 'processing',
+          notes: formData.notes || null,
+          items: itemsData
+        };
+
+        let finalPaymentMethods = paymentMethods;
+        if (paymentMethods.length === 0) {
+          finalPaymentMethods = [{
+            id: `payment_${Date.now()}`,
+            type: 'credit' as const,
+            amount: totalAmount
+          }];
+        }
+
+        setPendingOrderData(orderData);
+        setPendingPaymentMethods(finalPaymentMethods);
+        setNegativeInventoryWarnings(warnings);
+        setShowNegativeInventoryModal(true);
+        setIsSubmitting(false);
+        return;
       }
 
-      // Create sales order with items included in the order data
-      const orderData = {
-        order_number: generateOrderNumber(),
-        customer_id: formData.customerId,
-        order_date: formData.orderDate,
-        delivery_date: saleType === 'outstation' ? formData.deliveryDate : null,
-        delivery_address: saleType === 'outstation' ? formData.deliveryAddress : null,
-        payment_terms: formData.paymentTerms,
-        payment_mode: 'multiple', // Set to multiple for new payment system
-        payment_status: finalPaymentMethods.some(p => p.type === 'credit') ? 'partial' : 'paid', // Will be updated based on payment processing
-        subtotal,
-        tax_amount: 0, // Tax removed as requested
-        discount_amount: discountAmount,
-        total_amount: totalAmount,
-        status: saleType === 'counter' ? 'completed' : 'processing', // Set status based on sale type
-        notes: formData.notes || null,
-        items: itemsData // Include items in the order data
-      };
+      // If no warnings, proceed with order creation
+      await proceedWithOrderCreation();
+    } catch (error) {
+      console.error('Error checking inventory or creating sales order:', error);
+      toast.error('Failed to create sales order. Please try again.');
+      setIsSubmitting(false);
+    }
+  };
+
+  const proceedWithOrderCreation = async () => {
+    try {
+      setIsSubmitting(true);
+      
+      let orderData = pendingOrderData;
+      let finalPaymentMethods = pendingPaymentMethods;
+
+      // If no pending data (direct creation without warnings), prepare it
+      if (!orderData) {
+        const subtotal = calculateSubtotal();
+        const totalAmount = calculateTotal();
+
+        const itemsData = items.map(item => ({
+          productId: item.productId,
+          skuId: item.skuId,
+          productName: item.productName,
+          skuCode: item.skuCode,
+          quantity: item.quantity,
+          unitType: item.unitType,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice
+        }));
+
+        finalPaymentMethods = paymentMethods;
+        if (paymentMethods.length === 0) {
+          finalPaymentMethods = [{
+            id: `payment_${Date.now()}`,
+            type: 'credit' as const,
+            amount: totalAmount
+          }];
+        }
+
+        orderData = {
+          order_number: generateOrderNumber(),
+          customer_id: formData.customerId,
+          order_date: formData.orderDate,
+          delivery_date: saleType === 'outstation' ? formData.deliveryDate : null,
+          delivery_address: saleType === 'outstation' ? formData.deliveryAddress : null,
+          payment_terms: formData.paymentTerms,
+          payment_mode: 'multiple',
+          payment_status: finalPaymentMethods.some(p => p.type === 'credit') ? 'partial' : 'paid',
+          subtotal,
+          tax_amount: 0,
+          discount_amount: discountAmount,
+          total_amount: totalAmount,
+          status: saleType === 'counter' ? 'completed' : 'processing',
+          notes: formData.notes || null,
+          items: itemsData
+        };
+      }
+
+      // Log the data being sent for debugging
+      console.log('Order data being sent:', {
+        orderData: orderData,
+        finalPaymentMethods: finalPaymentMethods,
+        formData: formData,
+        items: items
+      });
 
       await createSalesOrderWithMultiplePayments(orderData, finalPaymentMethods);
       
@@ -455,9 +541,62 @@ const NewSale: React.FC = () => {
       navigate('/sales');
     } catch (error) {
       console.error('Error creating sales order:', error);
-      toast.error('Failed to create sales order. Please try again.');
+      
+      // Enhanced error logging with more details
+      console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+        
+        // Show more specific error message
+        if (error.message.includes('customer')) {
+          toast.error('Customer validation failed. Please select a valid customer.');
+        } else if (error.message.includes('product') || error.message.includes('SKU')) {
+          toast.error('Product validation failed. Please check that all selected products are valid.');
+        } else if (error.message.includes('Invalid data format')) {
+          toast.error('Data format error. Please check all required fields.');
+        } else {
+          toast.error(`Failed to create sales order: ${error.message}`);
+        }
+      } else {
+        // Handle non-Error objects (like Supabase errors)
+        console.error('Non-Error object details:', {
+          type: typeof error,
+          constructor: error?.constructor?.name,
+          keys: Object.keys(error || {}),
+          error: error
+        });
+        
+        // Try to extract error message from various possible structures
+        let errorMessage = 'Failed to create sales order. Please try again.';
+        
+        if (error && typeof error === 'object') {
+          const errorObj = error as any; // Type assertion for error object
+          if (errorObj.message) {
+            errorMessage = `Error: ${errorObj.message}`;
+          } else if (errorObj.error && errorObj.error.message) {
+            errorMessage = `Error: ${errorObj.error.message}`;
+          } else if (errorObj.details) {
+            errorMessage = `Error: ${errorObj.details}`;
+          } else if (errorObj.hint) {
+            errorMessage = `Error: ${errorObj.hint}`;
+          } else if (errorObj.code) {
+            errorMessage = `Database error (${errorObj.code}). Please check your data.`;
+          }
+        }
+        
+        toast.error(errorMessage);
+      }
     } finally {
       setIsSubmitting(false);
+      // Clear pending data
+      setPendingOrderData(null);
+      setPendingPaymentMethods([]);
+      setNegativeInventoryWarnings([]);
     }
   };
 
@@ -878,6 +1017,114 @@ const NewSale: React.FC = () => {
             availableQuantity: selectedInventoryItem.available_quantity
           }}
         />
+      )}
+
+      {/* Negative Inventory Warning Modal */}
+      {showNegativeInventoryModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center mb-4">
+                <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100">
+                  <AlertTriangle className="h-6 w-6 text-yellow-600" />
+                </div>
+                <div className="ml-4">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    Inventory Warning
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    The following items will result in negative inventory
+                  </p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                  <div className="space-y-3">
+                    {negativeInventoryWarnings.map((warning, index) => (
+                      <div key={index} className="flex justify-between items-center text-sm">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">
+                            {warning.productName} ({warning.skuCode})
+                          </div>
+                          <div className="text-gray-600">
+                            {warning.type === 'not_found' ? (
+                              'Product not found in inventory'
+                            ) : (
+                              <>
+                                Available: {warning.currentQuantity} | 
+                                Requested: {warning.requestedQuantity} | 
+                                Resulting: {warning.resultingQuantity}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          {warning.type === 'not_found' ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              Not Found
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              {Math.abs(warning.resultingQuantity)} Short
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <AlertTriangle className="h-5 w-5 text-blue-400" />
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-blue-800">
+                      What happens if you proceed?
+                    </h3>
+                    <div className="mt-2 text-sm text-blue-700">
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>Inventory quantities will go negative for the listed items</li>
+                        <li>This indicates backorders or oversold items</li>
+                        <li>You'll need to restock these items to fulfill the order</li>
+                        <li>The sales order will still be created successfully</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNegativeInventoryModal(false);
+                    setNegativeInventoryWarnings([]);
+                    setPendingOrderData(null);
+                    setPendingPaymentMethods([]);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowNegativeInventoryModal(false);
+                    await proceedWithOrderCreation();
+                  }}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Creating Order...' : 'Proceed with Negative Inventory'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

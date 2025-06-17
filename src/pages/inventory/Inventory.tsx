@@ -1,9 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Search, Filter, RefreshCw, Truck, Calendar, AlertCircle, ShoppingCart, X } from 'lucide-react';
+import { Package, Search, Filter, RefreshCw, Truck, Calendar, AlertCircle, ShoppingCart, X, Plus, Minus } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getVehicleArrivals, getSalesOrders, getAvailableInventory } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 import MobileTable from '../../components/ui/MobileTable';
+
+interface TimelineEntry {
+  id: string;
+  date: string;
+  type: 'arrival' | 'sale';
+  quantity: number;
+  weight?: number;
+  source: string; // supplier or customer name
+  details: string; // vehicle number or order number
+  status?: string;
+}
 
 interface InventoryItem {
   id: string;
@@ -232,6 +243,40 @@ const Inventory: React.FC = () => {
   };
 
   const inventoryStats = getTotalInventoryValue();
+
+  const createTimelineEntries = (item: InventoryItem): TimelineEntry[] => {
+    const entries: TimelineEntry[] = [];
+
+    // Add arrival entries
+    item.vehicleArrivals.forEach((arrival, index) => {
+      entries.push({
+        id: `arrival-${arrival.id}-${item.skuId}-${index}`,
+        date: arrival.arrivalTime,
+        type: 'arrival',
+        quantity: arrival.quantity,
+        weight: arrival.weight,
+        source: arrival.supplier,
+        details: arrival.id, // Use arrival ID as Purchase Record Number
+        status: arrival.status
+      });
+    });
+
+    // Add sales entries
+    item.salesOrders.forEach((order, index) => {
+      entries.push({
+        id: `sale-${order.id}-${item.skuId}-${index}`,
+        date: order.orderDate,
+        type: 'sale',
+        quantity: order.quantity,
+        source: order.customerName,
+        details: order.orderNumber,
+        status: order.status
+      });
+    });
+
+    // Sort by date (most recent first)
+    return entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  };
 
   const handleViewHistory = (item: InventoryItem) => {
     setSelectedItem(item);
@@ -513,74 +558,131 @@ const Inventory: React.FC = () => {
             </div>
 
             <div className="px-4 sm:px-6 py-4">
-              {/* Arrival History */}
-              <div className="mb-8">
-                <h4 className="font-medium text-gray-900 mb-3 flex items-center">
-                  <Truck className="h-4 w-4 mr-2" />
-                  Arrival History
-                </h4>
-                <div className="space-y-3">
-                  {selectedItem.vehicleArrivals.map((arrival, index) => (
-                    <div key={index} className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-                        <div>
-                          <span className="font-medium text-gray-700">Arrival Date:</span>
-                          <div className="text-gray-900">{formatDateTime(arrival.arrivalTime)}</div>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Supplier:</span>
-                          <div className="text-gray-900">{arrival.supplier}</div>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Vehicle:</span>
-                          <div className="text-gray-900">{arrival.vehicleNumber || 'Not specified'}</div>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Quantity:</span>
-                          <div className="text-gray-900">
-                            {arrival.quantity} {selectedItem.unitType === 'box' ? 'boxes' : 'kg'} 
-                            ({arrival.weight} kg total)
-                          </div>
-                        </div>
-                      </div>
+              {(() => {
+                const timelineEntries = createTimelineEntries(selectedItem);
+                
+                if (timelineEntries.length === 0) {
+                  return (
+                    <div className="text-center py-12">
+                      <Calendar className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No History Available</h3>
+                      <p className="text-sm text-gray-500">
+                        No arrivals or sales recorded for this inventory item yet.
+                      </p>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  );
+                }
 
-              {/* Sales History */}
-              <div>
-                <h4 className="font-medium text-gray-900 mb-3 flex items-center">
-                  <ShoppingCart className="h-4 w-4 mr-2" />
-                  Sales History
-                </h4>
-                <div className="space-y-3">
-                  {selectedItem.salesOrders.map((order, index) => (
-                    <div key={index} className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-                        <div>
-                          <span className="font-medium text-gray-700">Order Date:</span>
-                          <div className="text-gray-900">{formatDateTime(order.orderDate)}</div>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Order Number:</span>
-                          <div className="text-gray-900">{order.orderNumber}</div>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Customer:</span>
-                          <div className="text-gray-900">{order.customerName}</div>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Quantity:</span>
-                          <div className="text-gray-900">
-                            {order.quantity} {selectedItem.unitType === 'box' ? 'boxes' : 'kg'}
-                          </div>
-                        </div>
+                return (
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-4 flex items-center">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Inventory Timeline
+                      <span className="ml-2 text-sm font-normal text-gray-500">
+                        ({timelineEntries.length} {timelineEntries.length === 1 ? 'entry' : 'entries'})
+                      </span>
+                    </h4>
+                    
+                    <div className="relative">
+                      {/* Timeline line */}
+                      <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                      
+                      <div className="space-y-4">
+                        {timelineEntries.map((entry, index) => {
+                          // Calculate running balance after this transaction
+                          let runningBalance = selectedItem.currentQuantity;
+                          for (let i = 0; i < index; i++) {
+                            const prevEntry = timelineEntries[i];
+                            if (prevEntry.type === 'arrival') {
+                              runningBalance -= prevEntry.quantity;
+                            } else {
+                              runningBalance += prevEntry.quantity;
+                            }
+                          }
+                          
+                          return (
+                            <div key={entry.id} className="relative flex items-start">
+                              {/* Timeline dot */}
+                              <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center z-10 ${
+                                entry.type === 'arrival' 
+                                  ? 'bg-green-100 text-green-600' 
+                                  : 'bg-red-100 text-red-600'
+                              }`}>
+                                {entry.type === 'arrival' ? (
+                                  <Plus className="h-5 w-5" />
+                                ) : (
+                                  <Minus className="h-5 w-5" />
+                                )}
+                              </div>
+                              
+                              {/* Timeline content */}
+                              <div className="ml-4 flex-1 min-w-0">
+                                <div className={`rounded-lg p-4 shadow-sm border ${
+                                  entry.type === 'arrival' 
+                                    ? 'bg-green-50 border-green-200' 
+                                    : 'bg-red-50 border-red-200'
+                                }`}>
+                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2">
+                                    <div className="flex items-center">
+                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                        entry.type === 'arrival' 
+                                          ? 'bg-green-100 text-green-800' 
+                                          : 'bg-red-100 text-red-800'
+                                      }`}>
+                                        {entry.type === 'arrival' ? (
+                                          <>
+                                            <Truck className="h-3 w-3 mr-1" />
+                                            Arrival
+                                          </>
+                                        ) : (
+                                          <>
+                                            <ShoppingCart className="h-3 w-3 mr-1" />
+                                            Sale
+                                          </>
+                                        )}
+                                      </span>
+                                      <span className="ml-2 text-sm font-medium text-gray-900">
+                                        {entry.type === 'arrival' ? '+' : '-'}{entry.quantity} {selectedItem.unitType === 'box' ? 'boxes' : 'kg'}
+                                      </span>
+                                      <span className="ml-2 text-sm font-semibold text-gray-600">
+                                        (Balance: {runningBalance} {selectedItem.unitType === 'box' ? 'boxes' : 'kg'})
+                                      </span>
+                                    </div>
+                                    <div className="text-sm text-gray-500 mt-1 sm:mt-0">
+                                      {formatDateTime(entry.date)}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                      <span className="font-medium text-gray-700">
+                                        {entry.type === 'arrival' ? 'From:' : 'To:'}
+                                      </span>
+                                      <div className="text-gray-900">{entry.source}</div>
+                                    </div>
+                                    {entry.type === 'sale' && (
+                                      <div>
+                                        <span className="font-medium text-gray-700">Order:</span>
+                                        <div className="text-gray-900">{entry.details}</div>
+                                      </div>
+                                    )}
+                                    {entry.type === 'arrival' && (
+                                      <div>
+                                        <span className="font-medium text-gray-700">Purchase Record:</span>
+                                        <div className="text-gray-900">{entry.details}</div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
