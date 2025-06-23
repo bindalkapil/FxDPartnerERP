@@ -39,6 +39,8 @@ interface InventoryItem {
     quantity: number;
     weight: number;
     status: string;
+    purchaseRecordNumber?: string | null;
+    purchaseRecordId?: string | null;
   }>;
   salesOrders: Array<{
     id: string;
@@ -120,6 +122,12 @@ const Inventory: React.FC = () => {
               inventoryItem.totalQuantity += arrivalItem.final_quantity || arrivalItem.quantity;
               inventoryItem.totalWeight += arrivalItem.final_total_weight || arrivalItem.total_weight;
               inventoryItem.arrivalCount += 1;
+              
+              // Get the purchase record number if available
+              const purchaseRecord = arrival.purchase_records && arrival.purchase_records.length > 0 
+                ? arrival.purchase_records[0] 
+                : null;
+              
               inventoryItem.vehicleArrivals.push({
                 id: arrival.id,
                 arrivalTime: arrival.arrival_time,
@@ -127,7 +135,9 @@ const Inventory: React.FC = () => {
                 vehicleNumber: arrival.vehicle_number,
                 quantity: arrivalItem.final_quantity || arrivalItem.quantity,
                 weight: arrivalItem.final_total_weight || arrivalItem.total_weight,
-                status: arrival.status
+                status: arrival.status,
+                purchaseRecordNumber: purchaseRecord?.record_number || null,
+                purchaseRecordId: purchaseRecord?.id || null
               });
             }
           });
@@ -256,7 +266,7 @@ const Inventory: React.FC = () => {
         quantity: arrival.quantity,
         weight: arrival.weight,
         source: arrival.supplier,
-        details: arrival.id, // Use arrival ID as Purchase Record Number
+        details: arrival.purchaseRecordNumber || `VA-${arrival.id.slice(-8)}`, // Use PR number or fallback to vehicle arrival ID
         status: arrival.status
       });
     });

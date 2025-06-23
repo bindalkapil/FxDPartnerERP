@@ -1,5 +1,8 @@
 import { supabase } from './supabase';
 
+// Only run seed data in development environment
+const isDevelopment = import.meta.env.DEV || import.meta.env.VITE_ENVIRONMENT === 'development';
+
 const products = [
   { name: 'POMO MH', category: 'Pomegranate', description: 'Maharashtra Pomegranate' },
   { name: 'POMO GJ', category: 'Pomegranate', description: 'Gujarat Pomegranate' },
@@ -42,6 +45,14 @@ const skus = [
 ];
 
 export async function seedData() {
+  // Only seed data in development environment
+  if (!isDevelopment) {
+    console.log('Skipping seed data - not in development environment');
+    return;
+  }
+
+  console.log('Seeding development data...');
+  
   // Insert products
   for (const product of products) {
     const { data: existingProduct } = await supabase

@@ -715,7 +715,12 @@ export async function getVehicleArrivals() {
         product:products(*),
         sku:skus(*)
       ),
-      vehicle_arrival_attachments(*)
+      vehicle_arrival_attachments(*),
+      purchase_records(
+        id,
+        record_number,
+        status
+      )
     `)
     .order('arrival_time', { ascending: false });
   
