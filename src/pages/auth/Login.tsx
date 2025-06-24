@@ -5,10 +5,11 @@ import { toast } from 'react-hot-toast';
 import { Lock, Mail, Package } from 'lucide-react';
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('demo@fruitshop.com');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const [isSignUp, setIsSignUp] = useState(false);
+  const { login, signUp } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -16,11 +17,17 @@ const Login: React.FC = () => {
     setIsLoading(true);
     
     try {
-      await login(email, password);
-      toast.success('Logged in successfully');
-      navigate('/');
-    } catch (error) {
-      toast.error('Invalid credentials');
+      if (isSignUp) {
+        await signUp(email, password);
+        toast.success('Account created successfully! Please sign in.');
+        setIsSignUp(false);
+      } else {
+        await login(email, password);
+        toast.success('Logged in successfully');
+        navigate('/');
+      }
+    } catch (error: any) {
+      toast.error(error.message || (isSignUp ? 'Failed to create account' : 'Invalid credentials'));
     } finally {
       setIsLoading(false);
     }
@@ -37,7 +44,7 @@ const Login: React.FC = () => {
               </div>
             </div>
             <h1 className="text-2xl font-bold text-gray-800">Welcome to FxD Partner ERP</h1>
-            <p className="text-gray-600 mt-2">Sign in to your account</p>
+            <p className="text-gray-600 mt-2">{isSignUp ? 'Create your account' : 'Sign in to your account'}</p>
           </div>
           
           <form onSubmit={handleSubmit}>
@@ -105,14 +112,31 @@ const Login: React.FC = () => {
               disabled={isLoading}
               className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
             >
-              {isLoading ? 'Signing in...' : 'Sign in'}
+              {isLoading ? (isSignUp ? 'Creating account...' : 'Signing in...') : (isSignUp ? 'Create Account' : 'Sign in')}
             </button>
           </form>
           
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-sm text-green-600 hover:text-green-500 font-medium"
+            >
+              {isSignUp ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
+            </button>
+          </div>
+          
           <div className="mt-6 text-center text-sm">
-            <p className="text-gray-600">
-              To get your credentials, please contact your system administrator.
+            <p className="text-gray-600 mb-3">
+              Only registered users can access the system. Please contact your system administrator to get your account created.
             </p>
+            <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-left">
+              <p className="text-amber-800 font-medium mb-2">For Testing:</p>
+              <div className="text-amber-700 text-xs space-y-1">
+                <p>You can create a test account by signing up with any email address.</p>
+                <p>New accounts will be created with 'viewer' role by default.</p>
+              </div>
+            </div>
           </div>
         </div>
         

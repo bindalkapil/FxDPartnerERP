@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSidebar } from '../../contexts/SidebarContext';
-import { Truck, ClipboardList, Package, ShoppingCart, Truck as TruckLoading, Users, User, BookOpen, CreditCard, Settings, Home } from 'lucide-react';
+import { Truck, ClipboardList, Package, ShoppingCart, Truck as TruckLoading, Users, User, BookOpen, CreditCard, Settings, Home, Shield } from 'lucide-react';
 
 interface NavItemProps {
   to: string;

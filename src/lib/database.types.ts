@@ -9,6 +9,139 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      users: {
+        Row: {
+          id: string
+          email: string
+          full_name: string
+          role_id: string
+          status: string
+          created_at: string | null
+          updated_at: string | null
+          last_login: string | null
+        }
+        Insert: {
+          id: string
+          email: string
+          full_name: string
+          role_id?: string
+          status?: string
+          created_at?: string | null
+          updated_at?: string | null
+          last_login?: string | null
+        }
+        Update: {
+          id?: string
+          email?: string
+          full_name?: string
+          role_id?: string
+          status?: string
+          created_at?: string | null
+          updated_at?: string | null
+          last_login?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "users_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      roles: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          permissions: Json
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id: string
+          name: string
+          description?: string | null
+          permissions?: Json
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          permissions?: Json
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      organizations: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          status: string
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          status?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          status?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_organizations: {
+        Row: {
+          id: string
+          user_id: string
+          organization_id: string
+          role: string
+          status: string
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          organization_id: string
+          role?: string
+          status?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          organization_id?: string
+          role?: string
+          status?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_organizations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       customers: {
         Row: {
           id: string
@@ -25,6 +158,7 @@ export type Database = {
           payment_terms: number
           status: string
           notes: string | null
+          organization_id: string | null
           created_at: string | null
           updated_at: string | null
         }
@@ -43,6 +177,7 @@ export type Database = {
           payment_terms?: number
           status?: string
           notes?: string | null
+          organization_id?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -61,10 +196,19 @@ export type Database = {
           payment_terms?: number
           status?: string
           notes?: string | null
+          organization_id?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "customers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       payments: {
         Row: {
