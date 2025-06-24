@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { SuperAdminAuthProvider } from './contexts/SuperAdminAuthContext';
 import { SidebarProvider } from './contexts/SidebarContext';
 import { HashRouter as Router } from 'react-router-dom'
+import { initializeOrganizationContext } from './lib/organization-context-fix';
 
 // Layouts
 import DashboardLayout from './layouts/DashboardLayout';
@@ -68,6 +69,11 @@ const SuperAdminPrivateRoute = ({ children }: { children: React.ReactNode }) => 
 };
 
 function App() {
+  // Initialize organization context on app load
+  useEffect(() => {
+    initializeOrganizationContext().catch(console.error);
+  }, []);
+
   return (
     <AuthProvider>
       <SuperAdminAuthProvider>

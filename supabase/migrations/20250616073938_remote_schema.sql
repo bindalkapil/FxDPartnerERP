@@ -6,47 +6,33 @@ drop policy "Admins can update users" on "public"."users";
 
 drop policy "Admins can view all users" on "public"."users";
 
-revoke delete on table "public"."test_deployment" from "anon";
-
-revoke insert on table "public"."test_deployment" from "anon";
-
-revoke references on table "public"."test_deployment" from "anon";
-
-revoke select on table "public"."test_deployment" from "anon";
-
-revoke trigger on table "public"."test_deployment" from "anon";
-
-revoke truncate on table "public"."test_deployment" from "anon";
-
-revoke update on table "public"."test_deployment" from "anon";
-
-revoke delete on table "public"."test_deployment" from "authenticated";
-
-revoke insert on table "public"."test_deployment" from "authenticated";
-
-revoke references on table "public"."test_deployment" from "authenticated";
-
-revoke select on table "public"."test_deployment" from "authenticated";
-
-revoke trigger on table "public"."test_deployment" from "authenticated";
-
-revoke truncate on table "public"."test_deployment" from "authenticated";
-
-revoke update on table "public"."test_deployment" from "authenticated";
-
-revoke delete on table "public"."test_deployment" from "service_role";
-
-revoke insert on table "public"."test_deployment" from "service_role";
-
-revoke references on table "public"."test_deployment" from "service_role";
-
-revoke select on table "public"."test_deployment" from "service_role";
-
-revoke trigger on table "public"."test_deployment" from "service_role";
-
-revoke truncate on table "public"."test_deployment" from "service_role";
-
-revoke update on table "public"."test_deployment" from "service_role";
+-- Skip test_deployment table operations if table doesn't exist
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'test_deployment') THEN
+        EXECUTE 'revoke delete on table "public"."test_deployment" from "anon"';
+        EXECUTE 'revoke insert on table "public"."test_deployment" from "anon"';
+        EXECUTE 'revoke references on table "public"."test_deployment" from "anon"';
+        EXECUTE 'revoke select on table "public"."test_deployment" from "anon"';
+        EXECUTE 'revoke trigger on table "public"."test_deployment" from "anon"';
+        EXECUTE 'revoke truncate on table "public"."test_deployment" from "anon"';
+        EXECUTE 'revoke update on table "public"."test_deployment" from "anon"';
+        EXECUTE 'revoke delete on table "public"."test_deployment" from "authenticated"';
+        EXECUTE 'revoke insert on table "public"."test_deployment" from "authenticated"';
+        EXECUTE 'revoke references on table "public"."test_deployment" from "authenticated"';
+        EXECUTE 'revoke select on table "public"."test_deployment" from "authenticated"';
+        EXECUTE 'revoke trigger on table "public"."test_deployment" from "authenticated"';
+        EXECUTE 'revoke truncate on table "public"."test_deployment" from "authenticated"';
+        EXECUTE 'revoke update on table "public"."test_deployment" from "authenticated"';
+        EXECUTE 'revoke delete on table "public"."test_deployment" from "service_role"';
+        EXECUTE 'revoke insert on table "public"."test_deployment" from "service_role"';
+        EXECUTE 'revoke references on table "public"."test_deployment" from "service_role"';
+        EXECUTE 'revoke select on table "public"."test_deployment" from "service_role"';
+        EXECUTE 'revoke trigger on table "public"."test_deployment" from "service_role"';
+        EXECUTE 'revoke truncate on table "public"."test_deployment" from "service_role"';
+        EXECUTE 'revoke update on table "public"."test_deployment" from "service_role"';
+    END IF;
+END $$;
 
 alter table "public"."customers" drop constraint "customers_credit_limit_check";
 
@@ -56,7 +42,13 @@ alter table "public"."suppliers" drop constraint "suppliers_payment_terms_check"
 
 alter table "public"."purchase_records" drop constraint "purchase_records_status_check";
 
-alter table "public"."test_deployment" drop constraint "test_deployment_pkey";
+-- Skip test_deployment constraint drop if table doesn't exist
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'test_deployment') THEN
+        EXECUTE 'alter table "public"."test_deployment" drop constraint "test_deployment_pkey"';
+    END IF;
+END $$;
 
 drop index if exists "public"."customers_is_active_idx";
 
@@ -72,7 +64,7 @@ drop index if exists "public"."suppliers_phone_idx";
 
 drop index if exists "public"."test_deployment_pkey";
 
-drop table "public"."test_deployment";
+drop table if exists "public"."test_deployment";
 
 alter table "public"."customers" drop column "city";
 
@@ -218,6 +210,3 @@ as permissive
 for all
 to public
 using ((auth.role() = 'service_role'::text));
-
-
-

@@ -1,38 +1,39 @@
 // Add sales-related API functions
 import { supabase } from './supabase';
 import type { Database } from './database.types';
+import { 
+  setCurrentOrganization as setOrgContext, 
+  getCurrentOrganization as getCurrentOrgContext,
+  ensureOrganizationContext,
+  handleOrganizationError,
+  withOrganizationContext
+} from './organization-context-fix';
 
 type Tables = Database['public']['Tables'];
 
-// Organization context for API calls
-let currentOrganizationId: string | null = null;
-
-export function setCurrentOrganization(organizationId: string | null) {
-  currentOrganizationId = organizationId;
-  console.log('API: Current organization set to:', organizationId);
-}
-
-export function getCurrentOrganization(): string | null {
-  return currentOrganizationId;
-}
+// Re-export organization functions for backward compatibility
+export const setCurrentOrganization = setOrgContext;
+export const getCurrentOrganization = getCurrentOrgContext;
 
 // Helper function to add organization filter to queries
 function addOrganizationFilter(query: any, tableName?: string) {
-  if (currentOrganizationId) {
-    return query.eq('organization_id', currentOrganizationId);
+  const currentOrgId = getCurrentOrganization();
+  if (currentOrgId) {
+    return query.eq('organization_id', currentOrgId);
   }
   return query;
 }
 
 // Helper function to add organization_id to insert data
 function addOrganizationToInsert<T extends Record<string, any>>(data: T): T {
-  if (currentOrganizationId) {
+  const currentOrgId = getCurrentOrganization();
+  if (currentOrgId) {
     // Validate that the organization ID is a proper UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (uuidRegex.test(currentOrganizationId)) {
-      return { ...data, organization_id: currentOrganizationId };
+    if (uuidRegex.test(currentOrgId)) {
+      return { ...data, organization_id: currentOrgId };
     } else {
-      console.warn('Invalid organization ID format:', currentOrganizationId);
+      console.warn('Invalid organization ID format:', currentOrgId);
       // Don't add organization_id if it's not a valid UUID
       return data;
     }
@@ -42,52 +43,56 @@ function addOrganizationToInsert<T extends Record<string, any>>(data: T): T {
 
 // Products
 export async function getProducts() {
-  let query = supabase
-    .from('products')
-    .select(`
-      *,
-      skus(*)
-    `)
-    .order('created_at', { ascending: false });
-  
-  query = addOrganizationFilter(query);
-  
-  const { data, error } = await query;
-  
-  if (error) throw error;
-  return data;
+  return withOrganizationContext(async () => {
+    let query = supabase
+      .from('products')
+      .select(`
+        *,
+        skus(*)
+      `)
+      .order('created_at', { ascending: false });
+    
+    query = addOrganizationFilter(query);
+    
+    const { data, error } = await query;
+    
+    if (error) throw handleOrganizationError(error);
+    return data;
+  });
 }
 
 export async function createProduct(product: Tables['products']['Insert']) {
-  // First, check if a product with this name already exists in current organization
-  let checkQuery = supabase
-    .from('products')
-    .select('*')
-    .eq('name', product.name);
-  
-  checkQuery = addOrganizationFilter(checkQuery);
-  
-  const { data: existingProduct, error: checkError } = await checkQuery;
+  return withOrganizationContext(async () => {
+    // First, check if a product with this name already exists in current organization
+    let checkQuery = supabase
+      .from('products')
+      .select('*')
+      .eq('name', product.name);
+    
+    checkQuery = addOrganizationFilter(checkQuery);
+    
+    const { data: existingProduct, error: checkError } = await checkQuery;
 
-  if (checkError) {
-    throw checkError;
-  }
+    if (checkError) {
+      throw handleOrganizationError(checkError);
+    }
 
-  if (existingProduct && existingProduct.length > 0) {
-    // Product already exists, return the existing one
-    return existingProduct[0];
-  }
+    if (existingProduct && existingProduct.length > 0) {
+      // Product already exists, return the existing one
+      return existingProduct[0];
+    }
 
-  // Product doesn't exist, create a new one with organization
-  const productWithOrg = addOrganizationToInsert(product);
-  const { data, error } = await supabase
-    .from('products')
-    .insert(productWithOrg)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
+    // Product doesn't exist, create a new one with organization
+    const productWithOrg = addOrganizationToInsert(product);
+    const { data, error } = await supabase
+      .from('products')
+      .insert(productWithOrg)
+      .select()
+      .single();
+    
+    if (error) throw handleOrganizationError(error);
+    return data;
+  });
 }
 
 // SKUs

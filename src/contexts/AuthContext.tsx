@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { setCurrentOrganization } from '../lib/api';
+import { setCurrentOrganization, initializeOrganizationContext } from '../lib/organization-context-fix';
 import { supabase } from '../lib/supabase';
 
 interface Organization {
