@@ -145,7 +145,7 @@ export async function fetchUserProfile(userId: string) {
   console.log('🔄 Fetching user profile for:', userId);
   
   try {
-    // Use longer timeout for profile fetch to prevent timeout errors
+    // Increased timeout to 60 seconds as suggested, but also improved fallback handling
     const { data: userProfile, error: profileError } = await Promise.race([
       supabase
         .from('users')
@@ -153,14 +153,14 @@ export async function fetchUserProfile(userId: string) {
         .eq('id', userId)
         .single(),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 30000) // Increased from 15000 to 30000
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 60000) // Increased from 30000 to 60000
       )
     ]) as any;
 
     if (profileError) {
       console.warn('Profile fetch error:', profileError);
       
-      // If profile fetch fails, try to get basic auth user info
+      // If profile fetch fails, try to get basic auth user info immediately
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       
       if (authError || !user) {
@@ -178,8 +178,23 @@ export async function fetchUserProfile(userId: string) {
       
       console.log('✅ Using fallback profile from auth user');
       
-      // Still try to fetch organizations
-      const organizations = await fetchUserOrganizations(userId);
+      // Try to fetch organizations but don't let it block the profile response
+      let organizations: Organization[] = [];
+      try {
+        // Use a shorter timeout for organizations when we're already in fallback mode
+        organizations = await Promise.race([
+          fetchUserOrganizations(userId),
+          new Promise<Organization[]>((resolve) => 
+            setTimeout(() => {
+              console.warn('Organizations fetch timed out in fallback mode, returning empty array');
+              resolve([]);
+            }, 5000) // Much shorter timeout in fallback mode
+          )
+        ]);
+      } catch (orgError) {
+        console.warn('Organization fetch failed in fallback mode, continuing with empty organizations:', orgError);
+        // Don't throw here - allow the app to continue with just the profile
+      }
       
       return {
         profile: fallbackProfile,
@@ -189,10 +204,19 @@ export async function fetchUserProfile(userId: string) {
 
     console.log('✅ User profile fetched:', userProfile.email);
 
-    // Fetch organizations with timeout handling
+    // Fetch organizations with timeout handling - don't let this block the main response
     let organizations: Organization[] = [];
     try {
-      organizations = await fetchUserOrganizations(userId);
+      // Use Promise.race to ensure organizations don't block the response
+      organizations = await Promise.race([
+        fetchUserOrganizations(userId),
+        new Promise<Organization[]>((resolve) => 
+          setTimeout(() => {
+            console.warn('Organizations fetch timed out, returning empty array');
+            resolve([]);
+          }, 10000) // 10 second timeout for organizations
+        )
+      ]);
     } catch (orgError) {
       console.warn('Organization fetch failed, continuing with empty organizations:', orgError);
       // Don't throw here - allow the app to continue with just the profile
@@ -206,9 +230,14 @@ export async function fetchUserProfile(userId: string) {
   } catch (error) {
     console.error('User profile fetch failed completely:', error);
     
-    // Final fallback - try to get minimal info from auth
+    // Final fallback - try to get minimal info from auth with very short timeout
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await Promise.race([
+        supabase.auth.getUser(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Auth user fetch timeout')), 5000)
+        )
+      ]) as any;
       
       if (!authError && user) {
         const fallbackProfile = {
