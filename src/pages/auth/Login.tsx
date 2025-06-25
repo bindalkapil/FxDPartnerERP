@@ -110,9 +110,16 @@ const Login: React.FC = () => {
           </form>
           
           <div className="mt-6 text-center text-sm">
-            <p className="text-gray-600">
-              To get your credentials, please contact your system administrator.
-            </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+              <p className="text-blue-800 font-medium mb-2">Demo Credentials:</p>
+              <div className="text-xs text-blue-700 space-y-1">
+                <p><strong>Admin:</strong> admin@fruitshop.com</p>
+                <p><strong>Manager:</strong> manager@fruitshop.com</p>
+                <p><strong>Staff:</strong> staff@fruitshop.com</p>
+                <p><strong>Demo:</strong> demo@fruitshop.com</p>
+                <p className="mt-2"><strong>Password:</strong> password (for all users)</p>
+              </div>
+            </div>
           </div>
         </div>
         

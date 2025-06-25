@@ -4,8 +4,8 @@ import App from './App.tsx';
 import './index.css';
 import { seedData } from './lib/seed-data';
 
-// Seed initial data
-seedData().catch(console.error);
+// Seed initial data - temporarily disabled
+// seedData().catch(console.error);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
