@@ -4,6 +4,9 @@ import { Database } from './database.types';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-key';
 
+// For demo purposes, use service role key to bypass RLS since we disabled it
+const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzZGJsbnJhZW9wYm9hbGVtampvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTE5MTg0NiwiZXhwIjoyMDY0NzY3ODQ2fQ.d6qfFcwIg8lq5YCEP2Rt0sIOZBFNfWaTVxNnW5z1-wY';
+
 if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
   console.error('Missing Supabase environment variables:', {
     url: import.meta.env.VITE_SUPABASE_URL ? 'present' : 'missing',
