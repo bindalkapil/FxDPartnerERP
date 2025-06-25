@@ -19,30 +19,26 @@ export function setCurrentOrganization(organizationId: string | null): Promise<v
             return;
           }
 
-          const { error } = await supabase
+          const { data, error } = await supabase
             .from('user_organizations')
             .select('organization_id')
             .eq('organization_id', organizationId)
             .eq('user_id', user.user.id)
-            .eq('status', 'active')
-            .limit(1)
-            .single();
+            .eq('status', 'active');
 
-          if (error && error.code !== 'PGRST116') {
+          if (error) {
             console.error('Organization context validation failed:', error);
             reject(new Error(`Invalid organization or access denied: ${error.message}`));
             return;
           }
 
-          // Try to set the session variable using raw SQL
-          const { error: configError } = await supabase
-            .from('user_organizations')
-            .select('1')
-            .limit(0); // This is just to establish a connection
-
-          if (configError) {
-            console.warn('Could not establish database connection for config:', configError);
+          // Check if user has access to the organization
+          if (!data || data.length === 0) {
+            console.error('User does not have access to organization:', organizationId);
+            reject(new Error('Access denied. You do not have permission to access this organization.'));
+            return;
           }
+
         } catch (contextError) {
           console.error('Failed to set organization context:', contextError);
           reject(new Error(`Failed to set organization context: ${contextError}`));
@@ -89,15 +85,14 @@ export async function validateOrganizationAccess(organizationId: string): Promis
       .select('organization_id')
       .eq('user_id', user.user.id)
       .eq('organization_id', organizationId)
-      .eq('status', 'active')
-      .single();
+      .eq('status', 'active');
 
     if (error) {
       console.error('Error validating organization access:', error);
       return false;
     }
 
-    return !!data;
+    return data && data.length > 0;
   } catch (error) {
     console.error('Error validating organization access:', error);
     return false;
