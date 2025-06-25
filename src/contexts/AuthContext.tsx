@@ -56,7 +56,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log('✅ Restored user from localStorage:', parsedUser.email);
             setUser(parsedUser);
             
-            if (parsedUser.currentOrganization) {
+            // Only set organization context if we have a valid organization
+            if (parsedUser.currentOrganization && parsedUser.currentOrganization.id !== '00000000-0000-0000-0000-000000000000') {
               setCurrentOrganization(parsedUser.currentOrganization.id);
             }
           } catch (error) {
@@ -70,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const { data: { session }, error } = await Promise.race([
             supabase.auth.getSession(),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Session check timeout')), 3000)
+              setTimeout(() => reject(new Error('Session check timeout')), 8000) // Increased timeout
             )
           ]) as any;
           
@@ -113,12 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log('🔄 Creating fallback profile, attempting to get real organizations...');
             
             // Try to get real organizations for the user
-            let organizations: Organization[] = [{
-              id: '00000000-0000-0000-0000-000000000000',
-              name: 'Default Organization',
-              slug: 'default',
-              role: 'admin'
-            }];
+            let organizations: Organization[] = [];
 
             try {
               // Use the robust organization API
@@ -131,21 +127,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               console.warn('Could not fetch organizations for fallback profile:', orgError);
             }
 
-            const minimalUser: User = {
-              id: session.user.id,
-              name: session.user.user_metadata?.full_name || session.user.email || 'User',
-              email: session.user.email || '',
-              role: 'admin',
-              organizations: organizations,
-              currentOrganization: organizations[0]
-            };
-            
-            setUser(minimalUser);
-            localStorage.setItem('auth', 'true');
-            localStorage.setItem('user', JSON.stringify(minimalUser));
-            console.log('✅ Created fallback minimal profile with', organizations.length, 'organizations');
+            // Only create a user if we have valid organizations
+            if (organizations.length > 0) {
+              const minimalUser: User = {
+                id: session.user.id,
+                name: session.user.user_metadata?.full_name || session.user.email || 'User',
+                email: session.user.email || '',
+                role: 'admin',
+                organizations: organizations,
+                currentOrganization: organizations[0]
+              };
+              
+              setUser(minimalUser);
+              localStorage.setItem('auth', 'true');
+              localStorage.setItem('user', JSON.stringify(minimalUser));
+              
+              // Set organization context with valid ID
+              if (organizations[0].id) {
+                setCurrentOrganization(organizations[0].id);
+              }
+              
+              console.log('✅ Created fallback minimal profile with', organizations.length, 'organizations');
+            } else {
+              console.warn('❌ No valid organizations found, cannot create user profile');
+              // Don't create a user without valid organizations
+              clearAuthState();
+            }
           } catch (fallbackError) {
             console.error('Failed to create fallback profile:', fallbackError);
+            clearAuthState();
           }
         }
       } else if (event === 'SIGNED_OUT') {
@@ -172,7 +182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('🔄 Loading user profile for:', userId);
       
-      // Try to fetch user profile with shorter timeout and better error handling
+      // Try to fetch user profile with increased timeout
       const profilePromise = supabase
         .from('users')
         .select('id, email, full_name, role_id, status')
@@ -182,7 +192,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: userProfile, error: profileError } = await Promise.race([
         profilePromise,
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+          setTimeout(() => reject(new Error('Profile fetch timeout')), 15000) // Increased from 5000 to 15000
         )
       ]) as any;
 
@@ -192,30 +202,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (authUser) {
           console.log('📝 Creating minimal profile from auth data');
-          const minimalUser: User = {
-            id: authUser.id,
-            name: authUser.user_metadata?.full_name || authUser.email || 'User',
-            email: authUser.email || '',
-            role: 'admin', // Default role
-            organizations: [{
-              id: '00000000-0000-0000-0000-000000000000',
-              name: 'Default Organization',
-              slug: 'default',
-              role: 'admin'
-            }],
-            currentOrganization: {
-              id: '00000000-0000-0000-0000-000000000000',
-              name: 'Default Organization',
-              slug: 'default',
-              role: 'admin'
-            }
-          };
           
-          setUser(minimalUser);
-          localStorage.setItem('auth', 'true');
-          localStorage.setItem('user', JSON.stringify(minimalUser));
-          console.log('✅ Minimal user profile created');
-          return;
+          // Try to get organizations first
+          let organizations: Organization[] = [];
+          try {
+            organizations = await fetchUserOrganizations(authUser.id);
+          } catch (orgError) {
+            console.warn('Could not fetch organizations for minimal profile:', orgError);
+          }
+
+          // Only create user if we have valid organizations
+          if (organizations.length > 0) {
+            const minimalUser: User = {
+              id: authUser.id,
+              name: authUser.user_metadata?.full_name || authUser.email || 'User',
+              email: authUser.email || '',
+              role: 'admin', // Default role
+              organizations: organizations,
+              currentOrganization: organizations[0]
+            };
+            
+            setUser(minimalUser);
+            localStorage.setItem('auth', 'true');
+            localStorage.setItem('user', JSON.stringify(minimalUser));
+            
+            // Set organization context with valid ID
+            if (organizations[0].id) {
+              setCurrentOrganization(organizations[0].id);
+            }
+            
+            console.log('✅ Minimal user profile created');
+            return;
+          } else {
+            console.warn('❌ No valid organizations found for minimal profile');
+            throw new Error('No valid organizations found');
+          }
         }
         throw new Error('User profile not found and no auth data available');
       }
@@ -230,22 +251,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Use the robust organization API
           organizations = await fetchUserOrganizations(userId);
           if (organizations.length === 0) {
-            console.warn('No organizations found, using default');
-            organizations = [{
-              id: '00000000-0000-0000-0000-000000000000',
-              name: 'Default Organization',
-              slug: 'default',
-              role: 'admin'
-            }];
+            console.warn('No organizations found for user');
+            throw new Error('No organizations found');
           }
         } catch (orgError) {
-          console.warn('Organizations fetch error, using default:', orgError);
-          organizations = [{
-            id: '00000000-0000-0000-0000-000000000000',
-            name: 'Default Organization',
-            slug: 'default',
-            role: 'admin'
-          }];
+          console.warn('Organizations fetch error:', orgError);
+          throw orgError;
         }
 
         const authenticatedUser: User = {
@@ -261,8 +272,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('auth', 'true');
         localStorage.setItem('user', JSON.stringify(authenticatedUser));
         
-        // Set the current organization in the API
-        if (authenticatedUser.currentOrganization) {
+        // Set the current organization in the API with valid ID
+        if (authenticatedUser.currentOrganization && authenticatedUser.currentOrganization.id) {
           try {
             await setCurrentOrganization(authenticatedUser.currentOrganization.id);
           } catch (orgError) {
@@ -285,31 +296,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }, 1000);
 
       } catch (orgError) {
-        console.warn('Organization loading failed, continuing with minimal profile:', orgError);
-        // Continue with basic profile even if organizations fail
-        const basicUser: User = {
-          id: userProfile.id,
-          name: userProfile.full_name || userProfile.email,
-          email: userProfile.email,
-          role: userProfile.role_id || 'admin',
-          organizations: [{
-            id: '00000000-0000-0000-0000-000000000000',
-            name: 'Default Organization',
-            slug: 'default',
-            role: 'admin'
-          }],
-          currentOrganization: {
-            id: '00000000-0000-0000-0000-000000000000',
-            name: 'Default Organization',
-            slug: 'default',
-            role: 'admin'
-          }
-        };
-        
-        setUser(basicUser);
-        localStorage.setItem('auth', 'true');
-        localStorage.setItem('user', JSON.stringify(basicUser));
-        console.log('✅ Basic user profile created');
+        console.warn('Organization loading failed:', orgError);
+        // Don't create user without valid organizations
+        throw new Error('Failed to load user organizations');
       }
 
     } catch (error) {
@@ -323,7 +312,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Clear any existing state
       clearAuthState();
       
-      // Authenticate with Supabase with timeout
+      // Authenticate with Supabase with increased timeout
       const authPromise = supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
@@ -332,7 +321,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: authData, error: authError } = await Promise.race([
         authPromise,
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Login timeout')), 15000)
+          setTimeout(() => reject(new Error('Login timeout')), 20000) // Increased from 15000 to 20000
         )
       ]) as any;
 
@@ -356,7 +345,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string) => {
     try {
-      // Sign up with Supabase with timeout
+      // Sign up with Supabase with increased timeout
       const signUpPromise = supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -365,7 +354,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: authData, error: authError } = await Promise.race([
         signUpPromise,
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Sign up timeout')), 15000)
+          setTimeout(() => reject(new Error('Sign up timeout')), 20000) // Increased from 15000 to 20000
         )
       ]) as any;
 
