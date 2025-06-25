@@ -1,48 +1,12 @@
 // Add sales-related API functions
 import { supabase } from './supabase';
 import type { Database } from './database.types';
-import { 
-  setCurrentOrganization as setOrgContext, 
-  getCurrentOrganization as getCurrentOrgContext,
-  ensureOrganizationContext,
-  handleOrganizationError
-} from './organization-context';
 
 type Tables = Database['public']['Tables'];
 
-// Re-export organization functions for backward compatibility
-export const setCurrentOrganization = setOrgContext;
-export const getCurrentOrganization = getCurrentOrgContext;
-
-// Helper function to add organization filter to queries
-function addOrganizationFilter(query: any, tableName?: string) {
-  const currentOrgId = getCurrentOrganization();
-  if (currentOrgId) {
-    return query.eq('organization_id', currentOrgId);
-  }
-  return query;
-}
-
-// Helper function to add organization_id to insert data
-function addOrganizationToInsert<T extends Record<string, any>>(data: T): T {
-  const currentOrgId = getCurrentOrganization();
-  if (currentOrgId) {
-    // Validate that the organization ID is a proper UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (uuidRegex.test(currentOrgId)) {
-      return { ...data, organization_id: currentOrgId };
-    } else {
-      console.warn('Invalid organization ID format:', currentOrgId);
-      // Don't add organization_id if it's not a valid UUID
-      return data;
-    }
-  }
-  return data;
-}
-
 // Products
 export async function getProducts() {
-  let query = supabase
+  const { data, error } = await supabase
     .from('products')
     .select(`
       *,
@@ -50,27 +14,19 @@ export async function getProducts() {
     `)
     .order('created_at', { ascending: false });
   
-  query = addOrganizationFilter(query);
-  
-  const { data, error } = await query;
-  
-  if (error) throw handleOrganizationError(error);
+  if (error) throw error;
   return data;
 }
 
 export async function createProduct(product: Tables['products']['Insert']) {
-  // First, check if a product with this name already exists in current organization
-  let checkQuery = supabase
+  // First, check if a product with this name already exists
+  const { data: existingProduct, error: checkError } = await supabase
     .from('products')
     .select('*')
     .eq('name', product.name);
-  
-  checkQuery = addOrganizationFilter(checkQuery);
-  
-  const { data: existingProduct, error: checkError } = await checkQuery;
 
   if (checkError) {
-    throw handleOrganizationError(checkError);
+    throw checkError;
   }
 
   if (existingProduct && existingProduct.length > 0) {
@@ -78,15 +34,14 @@ export async function createProduct(product: Tables['products']['Insert']) {
     return existingProduct[0];
   }
 
-  // Product doesn't exist, create a new one with organization
-  const productWithOrg = addOrganizationToInsert(product);
+  // Product doesn't exist, create a new one
   const { data, error } = await supabase
     .from('products')
-    .insert(productWithOrg)
+    .insert(product)
     .select()
     .single();
   
-  if (error) throw handleOrganizationError(error);
+  if (error) throw error;
   return data;
 }
 
@@ -175,41 +130,30 @@ function safeNumericValue(value: number | null | undefined, defaultValue: number
 
 // Customers
 export async function getCustomers() {
-  let query = supabase
+  const { data, error } = await supabase
     .from('customers')
     .select('*')
     .order('created_at', { ascending: false });
   
-  query = addOrganizationFilter(query);
-  
-  const { data, error } = await query;
-  
-  if (error) {
-    console.error('Error fetching customers:', error);
-    throw error;
-  }
+  if (error) throw error;
   return data;
 }
 
 export async function getCustomer(id: string) {
-  let query = supabase
+  const { data, error } = await supabase
     .from('customers')
     .select('*')
-    .eq('id', id);
-  
-  query = addOrganizationFilter(query);
-  
-  const { data, error } = await query.single();
+    .eq('id', id)
+    .single();
   
   if (error) throw error;
   return data;
 }
 
 export async function createCustomer(customer: Tables['customers']['Insert']) {
-  const customerWithOrg = addOrganizationToInsert(customer);
   const { data, error } = await supabase
     .from('customers')
-    .insert(customerWithOrg)
+    .insert(customer)
     .select()
     .single();
   
@@ -262,41 +206,30 @@ export async function getPaymentsByPartyId(partyId: string) {
 
 // Suppliers
 export async function getSuppliers() {
-  let query = supabase
+  const { data, error } = await supabase
     .from('suppliers')
     .select('*')
     .order('created_at', { ascending: false });
   
-  query = addOrganizationFilter(query);
-  
-  const { data, error } = await query;
-  
-  if (error) {
-    console.error('Error fetching suppliers:', error);
-    throw error;
-  }
+  if (error) throw error;
   return data;
 }
 
 export async function getSupplier(id: string) {
-  let query = supabase
+  const { data, error } = await supabase
     .from('suppliers')
     .select('*')
-    .eq('id', id);
-  
-  query = addOrganizationFilter(query);
-  
-  const { data, error } = await query.single();
+    .eq('id', id)
+    .single();
   
   if (error) throw error;
   return data;
 }
 
 export async function createSupplier(supplier: Tables['suppliers']['Insert']) {
-  const supplierWithOrg = addOrganizationToInsert(supplier);
   const { data, error } = await supabase
     .from('suppliers')
-    .insert(supplierWithOrg)
+    .insert(supplier)
     .select()
     .single();
   
@@ -1839,115 +1772,6 @@ export async function checkInventoryForSalesOrder(items: any[]) {
   }
   
   return warnings;
-}
-
-// Organization and User Management API Functions
-
-// Get all organizations
-export async function getOrganizations() {
-  const { data, error } = await supabase
-    .from('organizations')
-    .select('*')
-    .order('name');
-  
-  if (error) throw error;
-  return data;
-}
-
-// Create organization
-export async function createOrganization(organization: Tables['organizations']['Insert']) {
-  const { data, error } = await supabase
-    .from('organizations')
-    .insert(organization)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-// Update organization
-export async function updateOrganization(id: string, organization: Tables['organizations']['Update']) {
-  const { data, error } = await supabase
-    .from('organizations')
-    .update(organization)
-    .eq('id', id)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-// Get all user-organization relationships
-export async function getUserOrganizations() {
-  const { data, error } = await supabase
-    .from('user_organizations')
-    .select(`
-      *,
-      organization:organizations(*)
-    `)
-    .order('created_at', { ascending: false });
-  
-  if (error) throw error;
-  return data;
-}
-
-// Create user-organization relationship
-export async function createUserOrganization(userOrg: Tables['user_organizations']['Insert']) {
-  const { data, error } = await supabase
-    .from('user_organizations')
-    .insert(userOrg)
-    .select(`
-      *,
-      organization:organizations(*)
-    `)
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-// Update user-organization relationship
-export async function updateUserOrganization(id: string, userOrg: Tables['user_organizations']['Update']) {
-  const { data, error } = await supabase
-    .from('user_organizations')
-    .update(userOrg)
-    .eq('id', id)
-    .select(`
-      *,
-      organization:organizations(*)
-    `)
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-// Delete user-organization relationship
-export async function deleteUserOrganization(id: string) {
-  const { error } = await supabase
-    .from('user_organizations')
-    .delete()
-    .eq('id', id);
-  
-  if (error) throw error;
-}
-
-// Get user organizations by user ID
-export async function getUserOrganizationsByUserId(userId: string) {
-  const { data, error } = await supabase
-    .from('user_organizations')
-    .select(`
-      *,
-      organization:organizations(*)
-    `)
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false });
-  
-  if (error) throw error;
-  return data;
 }
 
 // Enhanced createSalesOrder function with multiple payments support

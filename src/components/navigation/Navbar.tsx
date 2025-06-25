@@ -2,7 +2,6 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSidebar } from '../../contexts/SidebarContext';
-import OrganizationSwitcher from './OrganizationSwitcher';
 import { 
   Menu, 
   Bell, 
@@ -13,7 +12,7 @@ import {
 } from 'lucide-react';
 
 const Navbar: React.FC = () => {
-  const { user, logout, switchOrganization, loading } = useAuth();
+  const { user, logout } = useAuth();
   const { toggleSidebar } = useSidebar();
   const navigate = useNavigate();
   const [showProfileMenu, setShowProfileMenu] = React.useState(false);
@@ -47,7 +46,7 @@ const Navbar: React.FC = () => {
   if (!user) return null;
   
   return (
-    <header className="bg-white border-b h-14 sm:h-16 flex items-center px-3 sm:px-4 md:px-6">
+    <header className="bg-white border-b h-14 sm:h-16 flex items-center justify-between px-3 sm:px-4 md:px-6">
       {/* Left section */}
       <div className="flex items-center">
         <button 
@@ -59,18 +58,6 @@ const Navbar: React.FC = () => {
         <h1 className="text-lg sm:text-xl font-semibold text-gray-800 hidden sm:block">
           FxD Partner ERP
         </h1>
-      </div>
-      
-      {/* Center section - Organization Switcher */}
-      <div className="flex-1 flex justify-center">
-        {user.currentOrganization && user.organizations && (
-          <OrganizationSwitcher
-            currentOrganization={user.currentOrganization}
-            organizations={user.organizations}
-            onSwitchOrganization={switchOrganization}
-            loading={loading}
-          />
-        )}
       </div>
       
       {/* Right section */}
