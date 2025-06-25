@@ -1,35 +1,192 @@
-import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { Shield, Eye, EyeOff } from 'lucide-react';
-import { useSuperAdminAuth } from '../../contexts/SuperAdminAuthContext';
+import { Shield, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
+import { setCurrentOrganization } from '../../lib/organization-context';
 
 const SuperAdminLogin: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { login, isAuthenticated } = useSuperAdminAuth();
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
 
-  // Redirect if already authenticated
-  if (isAuthenticated) {
-    return <Navigate to="/superadmin" replace />;
-  }
+  // Check if user is already logged in and is a superadmin
+  useEffect(() => {
+    let mounted = true;
+
+    const checkSuperAdminStatus = async () => {
+      if (authLoading) return; // Wait for auth to finish loading
+
+      try {
+        if (user) {
+          const { data: userOrgs } = await supabase
+            .from('user_organizations')
+            .select('role, status')
+            .eq('user_id', user.id)
+            .eq('role', 'superadmin')
+            .eq('status', 'active');
+
+          if (mounted && userOrgs && userOrgs.length > 0) {
+            navigate('/superadmin', { replace: true });
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Error checking superadmin status:', error);
+      } finally {
+        if (mounted) {
+          setCheckingAuth(false);
+        }
+      }
+    };
+
+    checkSuperAdminStatus();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user, authLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (loading) return; // Prevent double submission
+    
+    if (!email.trim() || !password.trim()) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await login(email, password);
+      // Sign in with Supabase Auth with timeout
+      const authPromise = supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      const { data, error } = await Promise.race([
+        authPromise,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Login timeout')), 15000)
+        )
+      ]) as any;
+
+      if (error) throw error;
+
+      if (!data.user) {
+        throw new Error('Authentication failed - no user returned');
+      }
+
+      // Check if the user has superadmin role with timeout
+      const orgsPromise = supabase
+        .from('user_organizations')
+        .select(`
+          role, 
+          status,
+          organizations (
+            id,
+            name,
+            slug
+          )
+        `)
+        .eq('user_id', data.user.id)
+        .eq('role', 'superadmin')
+        .eq('status', 'active');
+
+      const { data: userOrgs, error: orgError } = await Promise.race([
+        orgsPromise,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Organization check timeout')), 10000)
+        )
+      ]) as any;
+
+      if (orgError) throw orgError;
+
+      if (!userOrgs || userOrgs.length === 0) {
+        // User exists but doesn't have superadmin role
+        await supabase.auth.signOut();
+        throw new Error('Access denied. SuperAdmin privileges required.');
+      }
+
+      // Fetch user profile with timeout
+      const profilePromise = supabase
+        .from('users')
+        .select('id, email, full_name, role_id, status')
+        .eq('id', data.user.id)
+        .single();
+
+      const { data: userProfile, error: profileError } = await Promise.race([
+        profilePromise,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Profile fetch timeout')), 10000)
+        )
+      ]) as any;
+
+      if (profileError || !userProfile) {
+        throw new Error('User profile not found');
+      }
+
+      // Create user object for AuthContext
+      const authenticatedUser = {
+        id: userProfile.id,
+        name: userProfile.full_name || userProfile.email,
+        email: userProfile.email,
+        role: userProfile.role_id,
+        organizations: userOrgs.map((uo: any) => ({
+          id: uo.organizations.id,
+          name: uo.organizations.name,
+          slug: uo.organizations.slug,
+          role: uo.role
+        })),
+        currentOrganization: userOrgs[0] ? {
+          id: userOrgs[0].organizations.id,
+          name: userOrgs[0].organizations.name,
+          slug: userOrgs[0].organizations.slug,
+          role: userOrgs[0].role
+        } : undefined
+      };
+
+      // Update localStorage to maintain auth state
+      localStorage.setItem('auth', 'true');
+      localStorage.setItem('user', JSON.stringify(authenticatedUser));
+
+      // Set organization context if available
+      if (authenticatedUser.currentOrganization) {
+        setCurrentOrganization(authenticatedUser.currentOrganization.id);
+      }
+
       toast.success('SuperAdmin login successful');
-    } catch (error) {
-      console.error('Login error:', error);
-      toast.error('Invalid superadmin credentials');
+      
+      // Navigate to superadmin dashboard
+      navigate('/superadmin', { replace: true });
+
+    } catch (error: any) {
+      console.error('SuperAdmin login error:', error);
+      const errorMessage = error.message || 'Invalid credentials';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
+
+  // Show loading spinner while checking auth state
+  if (authLoading || checkingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin text-red-600" />
+          <span className="text-red-600">Loading...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -58,10 +215,11 @@ const SuperAdminLogin: React.FC = () => {
                 type="email"
                 autoComplete="email"
                 required
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-red-500 focus:border-red-500 focus:z-10 sm:text-sm"
+                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-red-500 focus:border-red-500 focus:z-10 sm:text-sm disabled:bg-gray-50 disabled:cursor-not-allowed"
                 placeholder="Enter superadmin email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
               />
             </div>
             
@@ -76,15 +234,18 @@ const SuperAdminLogin: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   required
-                  className="appearance-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-red-500 focus:border-red-500 focus:z-10 sm:text-sm"
+                  className="appearance-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-red-500 focus:border-red-500 focus:z-10 sm:text-sm disabled:bg-gray-50 disabled:cursor-not-allowed"
                   placeholder="Enter superadmin password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
+                  minLength={6}
                 />
                 <button
                   type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center disabled:cursor-not-allowed"
                   onClick={() => setShowPassword(!showPassword)}
+                  disabled={loading}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4 text-gray-400" />
@@ -100,11 +261,11 @@ const SuperAdminLogin: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
               {loading ? (
                 <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   Signing in...
                 </div>
               ) : (
@@ -138,7 +299,7 @@ const SuperAdminLogin: React.FC = () => {
           <div className="text-center">
             <a
               href="/"
-              className="text-sm text-red-600 hover:text-red-500"
+              className="text-sm text-red-600 hover:text-red-500 transition-colors duration-200"
             >
               ← Back to regular login
             </a>

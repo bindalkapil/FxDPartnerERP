@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { Plus, Edit2, Trash2, Users, Building2, Shield, UserCheck, UserX, Database, Settings, BarChart3, LogOut } from 'lucide-react';
-import { useSuperAdminAuth } from '../../contexts/SuperAdminAuthContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { 
   getAllOrganizations, 
   createOrganization, 
@@ -41,7 +42,7 @@ interface SystemStats {
 }
 
 const SuperAdmin: React.FC = () => {
-  const { logout } = useSuperAdminAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'organizations' | 'users' | 'system'>('dashboard');
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -87,12 +88,16 @@ const SuperAdmin: React.FC = () => {
       setOrganizations(orgsData);
       setUserOrganizations(userOrgsData);
       
-      // Calculate system stats
+      // Calculate system stats - get unique users count
+      const uniqueUserIds = new Set(userOrgsData.map(userOrg => userOrg.user_id));
+      const activeUserOrgs = userOrgsData.filter(user => user.status === 'active');
+      const activeUniqueUserIds = new Set(activeUserOrgs.map(userOrg => userOrg.user_id));
+      
       const stats: SystemStats = {
         totalOrganizations: orgsData.length,
         activeOrganizations: orgsData.filter(org => org.status === 'active').length,
-        totalUsers: userOrgsData.length,
-        activeUsers: userOrgsData.filter(user => user.status === 'active').length
+        totalUsers: uniqueUserIds.size,
+        activeUsers: activeUniqueUserIds.size
       };
       setSystemStats(stats);
     } catch (error) {
@@ -226,8 +231,8 @@ const SuperAdmin: React.FC = () => {
                 Super Administrator
               </div>
               <button
-                onClick={() => {
-                  logout();
+                onClick={async () => {
+                  await supabase.auth.signOut();
                   navigate('/superadmin/login');
                   toast.success('Logged out successfully');
                 }}

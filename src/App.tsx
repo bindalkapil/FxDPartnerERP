@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { AuthProvider } from './contexts/AuthContext';
-import { SuperAdminAuthProvider } from './contexts/SuperAdminAuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SidebarProvider } from './contexts/SidebarContext';
 import { HashRouter as Router } from 'react-router-dom'
-import { initializeOrganizationContext } from './lib/organization-context-fix';
+import { supabase } from './lib/supabase';
 
 // Layouts
 import DashboardLayout from './layouts/DashboardLayout';
@@ -46,11 +45,17 @@ import NotFound from './pages/NotFound';
 
 // Auth Guard Component
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
-  // This is a placeholder for authentication logic
-  // In a real app, you would check if the user is authenticated
-  const isAuthenticated = localStorage.getItem('auth') === 'true';
+  const { user, loading } = useAuth();
   
-  if (!isAuthenticated) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+      </div>
+    );
+  }
+  
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
   
@@ -59,28 +64,62 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
 
 // SuperAdmin Auth Guard Component
 const SuperAdminPrivateRoute = ({ children }: { children: React.ReactNode }) => {
-  const isAuthenticated = localStorage.getItem('superadmin_auth') === 'true';
-  
-  if (!isAuthenticated) {
+  const { user, loading } = useAuth();
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkSuperAdminStatus = async () => {
+      if (!user) {
+        setIsSuperAdmin(false);
+        return;
+      }
+
+      try {
+        const { data: userOrgs } = await supabase
+          .from('user_organizations')
+          .select('role, status')
+          .eq('user_id', user.id)
+          .eq('role', 'superadmin')
+          .eq('status', 'active');
+
+        setIsSuperAdmin(userOrgs && userOrgs.length > 0);
+      } catch (error) {
+        console.error('Error checking superadmin status:', error);
+        setIsSuperAdmin(false);
+      }
+    };
+
+    checkSuperAdminStatus();
+  }, [user]);
+
+  if (loading || isSuperAdmin === null) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
+
+  if (!user || !isSuperAdmin) {
     return <Navigate to="/superadmin/login" replace />;
   }
-  
+
   return <>{children}</>;
 };
 
 function App() {
-  // Initialize organization context on app load
-  useEffect(() => {
-    initializeOrganizationContext().catch(console.error);
-  }, []);
 
   return (
     <AuthProvider>
-      <SuperAdminAuthProvider>
-        <SidebarProvider>
-          <Router>
-            <Toaster position="top-right" />
-            <Routes>
+      <SidebarProvider>
+        <Router
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true
+          }}
+        >
+          <Toaster position="top-right" />
+          <Routes>
               {/* Regular User Routes */}
               <Route path="/login" element={<Login />} />
               
@@ -151,7 +190,6 @@ function App() {
             </Routes>
           </Router>
         </SidebarProvider>
-      </SuperAdminAuthProvider>
     </AuthProvider>
   );
 }

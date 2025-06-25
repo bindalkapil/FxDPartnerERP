@@ -5,9 +5,8 @@ import {
   setCurrentOrganization as setOrgContext, 
   getCurrentOrganization as getCurrentOrgContext,
   ensureOrganizationContext,
-  handleOrganizationError,
-  withOrganizationContext
-} from './organization-context-fix';
+  handleOrganizationError
+} from './organization-context';
 
 type Tables = Database['public']['Tables'];
 
@@ -43,56 +42,52 @@ function addOrganizationToInsert<T extends Record<string, any>>(data: T): T {
 
 // Products
 export async function getProducts() {
-  return withOrganizationContext(async () => {
-    let query = supabase
-      .from('products')
-      .select(`
-        *,
-        skus(*)
-      `)
-      .order('created_at', { ascending: false });
-    
-    query = addOrganizationFilter(query);
-    
-    const { data, error } = await query;
-    
-    if (error) throw handleOrganizationError(error);
-    return data;
-  });
+  let query = supabase
+    .from('products')
+    .select(`
+      *,
+      skus(*)
+    `)
+    .order('created_at', { ascending: false });
+  
+  query = addOrganizationFilter(query);
+  
+  const { data, error } = await query;
+  
+  if (error) throw handleOrganizationError(error);
+  return data;
 }
 
 export async function createProduct(product: Tables['products']['Insert']) {
-  return withOrganizationContext(async () => {
-    // First, check if a product with this name already exists in current organization
-    let checkQuery = supabase
-      .from('products')
-      .select('*')
-      .eq('name', product.name);
-    
-    checkQuery = addOrganizationFilter(checkQuery);
-    
-    const { data: existingProduct, error: checkError } = await checkQuery;
+  // First, check if a product with this name already exists in current organization
+  let checkQuery = supabase
+    .from('products')
+    .select('*')
+    .eq('name', product.name);
+  
+  checkQuery = addOrganizationFilter(checkQuery);
+  
+  const { data: existingProduct, error: checkError } = await checkQuery;
 
-    if (checkError) {
-      throw handleOrganizationError(checkError);
-    }
+  if (checkError) {
+    throw handleOrganizationError(checkError);
+  }
 
-    if (existingProduct && existingProduct.length > 0) {
-      // Product already exists, return the existing one
-      return existingProduct[0];
-    }
+  if (existingProduct && existingProduct.length > 0) {
+    // Product already exists, return the existing one
+    return existingProduct[0];
+  }
 
-    // Product doesn't exist, create a new one with organization
-    const productWithOrg = addOrganizationToInsert(product);
-    const { data, error } = await supabase
-      .from('products')
-      .insert(productWithOrg)
-      .select()
-      .single();
-    
-    if (error) throw handleOrganizationError(error);
-    return data;
-  });
+  // Product doesn't exist, create a new one with organization
+  const productWithOrg = addOrganizationToInsert(product);
+  const { data, error } = await supabase
+    .from('products')
+    .insert(productWithOrg)
+    .select()
+    .single();
+  
+  if (error) throw handleOrganizationError(error);
+  return data;
 }
 
 // SKUs
