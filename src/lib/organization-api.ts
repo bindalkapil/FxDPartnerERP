@@ -8,13 +8,22 @@ export interface Organization {
 }
 
 /**
+ * Create a timeout promise helper
+ */
+function createTimeoutPromise<T>(ms: number, errorMessage: string): Promise<T> {
+  return new Promise((_, reject) => 
+    setTimeout(() => reject(new Error(errorMessage)), ms)
+  );
+}
+
+/**
  * Fetch user's organizations with optimized approach and better error handling
  */
 export async function fetchUserOrganizations(userId: string): Promise<Organization[]> {
   console.log('🔄 Fetching organizations for user:', userId);
   
   try {
-    // Use a more direct approach with shorter timeout for initial attempt
+    // Use a more direct approach with reasonable timeout
     const { data: userOrganizations, error } = await Promise.race([
       supabase
         .from('user_organizations')
@@ -30,10 +39,8 @@ export async function fetchUserOrganizations(userId: string): Promise<Organizati
         `)
         .eq('user_id', userId)
         .eq('status', 'active')
-        .limit(50), // Add limit to prevent large result sets
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Organizations fetch timeout')), 8000) // Reduced from 15000 to 8000
-      )
+        .limit(50),
+      createTimeoutPromise(10000, 'Organizations fetch timeout')
     ]) as any;
 
     if (error) {
@@ -85,9 +92,7 @@ async function fetchOrganizationsSimple(userId: string): Promise<Organization[]>
         .eq('user_id', userId)
         .eq('status', 'active')
         .limit(20),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Simple user orgs fetch timeout')), 5000)
-      )
+      createTimeoutPromise(8000, 'Simple user orgs fetch timeout')
     ]) as any;
 
     if (userOrgError || !userOrgData || userOrgData.length === 0) {
@@ -105,9 +110,7 @@ async function fetchOrganizationsSimple(userId: string): Promise<Organization[]>
         .in('id', orgIds)
         .eq('status', 'active')
         .limit(20),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Organizations details fetch timeout')), 5000)
-      )
+      createTimeoutPromise(8000, 'Organizations details fetch timeout')
     ]) as any;
 
     if (orgError || !orgData) {
@@ -139,62 +142,58 @@ async function fetchOrganizationsSimple(userId: string): Promise<Organization[]>
 }
 
 /**
+ * Get basic auth user info as immediate fallback
+ */
+async function getAuthUserFallback() {
+  try {
+    const { data: { user }, error: authError } = await Promise.race([
+      supabase.auth.getUser(),
+      createTimeoutPromise(5000, 'Auth user fetch timeout')
+    ]) as any;
+    
+    if (authError || !user) {
+      throw new Error('Failed to get auth user');
+    }
+    
+    return {
+      id: user.id,
+      email: user.email || '',
+      full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+      role_id: 'viewer',
+      status: 'active'
+    };
+  } catch (error) {
+    console.error('Auth user fallback failed:', error);
+    throw error;
+  }
+}
+
+/**
  * Fetch user profile with optimized approach and better error handling
  */
 export async function fetchUserProfile(userId: string) {
   console.log('🔄 Fetching user profile for:', userId);
   
   try {
-    // Increased timeout to 60 seconds as suggested, but also improved fallback handling
+    // Try to fetch the full user profile with a reasonable timeout
     const { data: userProfile, error: profileError } = await Promise.race([
       supabase
         .from('users')
         .select('id, email, full_name, role_id, status')
         .eq('id', userId)
         .single(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 60000) // Increased from 30000 to 60000
-      )
+      createTimeoutPromise(30000, 'Profile fetch timeout') // Reduced from 60s to 30s
     ]) as any;
 
     if (profileError) {
       console.warn('Profile fetch error:', profileError);
       
-      // If profile fetch fails, try to get basic auth user info immediately
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      
-      if (authError || !user) {
-        throw new Error('Failed to get user profile and auth user');
-      }
-      
-      // Create a minimal profile from auth user
-      const fallbackProfile = {
-        id: user.id,
-        email: user.email || '',
-        full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-        role_id: 'viewer',
-        status: 'active'
-      };
-      
+      // Immediately try auth user fallback
+      const fallbackProfile = await getAuthUserFallback();
       console.log('✅ Using fallback profile from auth user');
       
-      // Try to fetch organizations but don't let it block the profile response
-      let organizations: Organization[] = [];
-      try {
-        // Use a shorter timeout for organizations when we're already in fallback mode
-        organizations = await Promise.race([
-          fetchUserOrganizations(userId),
-          new Promise<Organization[]>((resolve) => 
-            setTimeout(() => {
-              console.warn('Organizations fetch timed out in fallback mode, returning empty array');
-              resolve([]);
-            }, 5000) // Much shorter timeout in fallback mode
-          )
-        ]);
-      } catch (orgError) {
-        console.warn('Organization fetch failed in fallback mode, continuing with empty organizations:', orgError);
-        // Don't throw here - allow the app to continue with just the profile
-      }
+      // Try to fetch organizations but don't let it block the response
+      const organizations = await fetchOrganizationsWithTimeout(userId, 8000);
       
       return {
         profile: fallbackProfile,
@@ -204,23 +203,8 @@ export async function fetchUserProfile(userId: string) {
 
     console.log('✅ User profile fetched:', userProfile.email);
 
-    // Fetch organizations with timeout handling - don't let this block the main response
-    let organizations: Organization[] = [];
-    try {
-      // Use Promise.race to ensure organizations don't block the response
-      organizations = await Promise.race([
-        fetchUserOrganizations(userId),
-        new Promise<Organization[]>((resolve) => 
-          setTimeout(() => {
-            console.warn('Organizations fetch timed out, returning empty array');
-            resolve([]);
-          }, 10000) // 10 second timeout for organizations
-        )
-      ]);
-    } catch (orgError) {
-      console.warn('Organization fetch failed, continuing with empty organizations:', orgError);
-      // Don't throw here - allow the app to continue with just the profile
-    }
+    // Fetch organizations with timeout handling
+    const organizations = await fetchOrganizationsWithTimeout(userId, 15000);
 
     return {
       profile: userProfile,
@@ -228,38 +212,41 @@ export async function fetchUserProfile(userId: string) {
     };
 
   } catch (error) {
-    console.error('User profile fetch failed completely:', error);
+    console.error('User profile fetch failed:', error);
     
-    // Final fallback - try to get minimal info from auth with very short timeout
+    // Final fallback - try to get minimal info from auth
     try {
-      const { data: { user }, error: authError } = await Promise.race([
-        supabase.auth.getUser(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Auth user fetch timeout')), 5000)
-        )
-      ]) as any;
+      const fallbackProfile = await getAuthUserFallback();
+      console.log('✅ Using minimal fallback profile');
       
-      if (!authError && user) {
-        const fallbackProfile = {
-          id: user.id,
-          email: user.email || '',
-          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-          role_id: 'viewer',
-          status: 'active'
-        };
-        
-        console.log('✅ Using minimal fallback profile');
-        
-        return {
-          profile: fallbackProfile,
-          organizations: []
-        };
-      }
+      return {
+        profile: fallbackProfile,
+        organizations: []
+      };
     } catch (fallbackError) {
-      console.error('Fallback profile fetch also failed:', fallbackError);
+      console.error('All profile fetch attempts failed:', fallbackError);
+      throw new Error('Unable to load user profile. Please try refreshing the page.');
     }
-    
-    throw error;
+  }
+}
+
+/**
+ * Fetch organizations with timeout and graceful failure
+ */
+async function fetchOrganizationsWithTimeout(userId: string, timeoutMs: number): Promise<Organization[]> {
+  try {
+    return await Promise.race([
+      fetchUserOrganizations(userId),
+      new Promise<Organization[]>((resolve) => 
+        setTimeout(() => {
+          console.warn(`Organizations fetch timed out after ${timeoutMs}ms, returning empty array`);
+          resolve([]);
+        }, timeoutMs)
+      )
+    ]);
+  } catch (orgError) {
+    console.warn('Organization fetch failed, continuing with empty organizations:', orgError);
+    return [];
   }
 }
 
@@ -276,9 +263,7 @@ export async function checkSuperAdminAccess(userId: string): Promise<boolean> {
         .eq('role', 'superadmin')
         .eq('status', 'active')
         .limit(1),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Superadmin check timeout')), 3000)
-      )
+      createTimeoutPromise(5000, 'Superadmin check timeout')
     ]) as any;
 
     if (error) {
