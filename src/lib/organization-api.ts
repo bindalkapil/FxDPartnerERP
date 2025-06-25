@@ -145,7 +145,7 @@ export async function fetchUserProfile(userId: string) {
   console.log('🔄 Fetching user profile for:', userId);
   
   try {
-    // Use shorter timeout and simpler query for profile
+    // Use longer timeout for profile fetch to prevent timeout errors
     const { data: userProfile, error: profileError } = await Promise.race([
       supabase
         .from('users')
@@ -153,7 +153,7 @@ export async function fetchUserProfile(userId: string) {
         .eq('id', userId)
         .single(),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 8000) // Reduced from 15000 to 8000
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 15000) // Increased from 8000 to 15000
       )
     ]) as any;
 
