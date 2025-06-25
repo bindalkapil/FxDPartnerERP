@@ -153,7 +153,7 @@ export async function fetchUserProfile(userId: string) {
         .eq('id', userId)
         .single(),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 15000) // Increased from 8000 to 15000
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 30000) // Increased from 15000 to 30000
       )
     ]) as any;
 
