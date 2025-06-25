@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, ChevronDown, Package, AlertTriangle } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 interface InventoryItem {
+  id: string;
   product_id: string;
   product_name: string;
   product_category: string;
@@ -16,7 +18,7 @@ interface InventoryItem {
 interface ProductSearchInputProps {
   inventory: InventoryItem[];
   value: string;
-  onChange: (skuId: string, selectedItem?: InventoryItem) => void;
+  onChange: (inventoryId: string, selectedItem?: InventoryItem) => void;
   placeholder?: string;
   className?: string;
   onAdjustInventory?: (item: InventoryItem) => void;
@@ -36,8 +38,8 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Get the currently selected item
-  const selectedItem = inventory.find(item => item.sku_id === value);
+  // Get the currently selected item by unique ID
+  const selectedItem = inventory.find(item => item.id === value);
 
   // Update input value when selection changes
   useEffect(() => {
@@ -55,7 +57,7 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     }
 
     const searchTerms = inputValue.toLowerCase().split(/\s+/);
-    return inventory.filter(item => {
+    const filtered = inventory.filter(item => {
       const searchableText = [
         item.product_name,
         item.sku_code,
@@ -64,11 +66,29 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
 
       return searchTerms.every(term => searchableText.includes(term));
     }).slice(0, 50); // Limit results to 50 items
+
+    // Debug logging for Premium SKU searches
+    if (inputValue.toLowerCase().includes('premium')) {
+      console.log('🔍 ProductSearchInput - Filtering for Premium SKUs:', {
+        searchInput: inputValue,
+        totalInventory: inventory.length,
+        filteredResults: filtered.length,
+        premiumItems: filtered.filter(item => item.sku_code === 'Premium').map(item => ({
+          product_name: item.product_name,
+          sku_code: item.sku_code,
+          sku_id: item.sku_id,
+          displayText: `${item.product_name} - ${item.sku_code}`
+        }))
+      });
+    }
+
+    return filtered;
   }, [inputValue, inventory]);
 
   // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
+    console.log(newValue)
     setInputValue(newValue);
     setIsOpen(true);
     setSelectedIndex(-1);
@@ -76,51 +96,81 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
     // Clear selection if user is typing something different from the selected item
     if (selectedItem) {
       const expectedValue = `${selectedItem.product_name} - ${selectedItem.sku_code}`;
-      if (newValue !== expectedValue && newValue !== '') {
+      
+      // If the user is typing something new (not just deleting text from the current selection)
+      // or if they've completely cleared the input, reset the selection
+      if ((newValue !== expectedValue && newValue !== expectedValue.substring(0, newValue.length)) || newValue === '') {
         console.log('Clearing selection due to input change:', {
           newValue,
           expectedValue,
           selectedItem: selectedItem.sku_id
         });
-        onChange('');
-      } else if (newValue === '') {
-        // Also clear if input is completely empty
-        onChange('');
+        // Clear selection - this will prevent table updates until user makes a definitive selection
+        // Pass undefined as selectedItem to indicate intentional clearing
+        onChange('', undefined);
       }
     }
   };
 
   // Handle item selection
   const handleSelectItem = (item: InventoryItem) => {
-    // Validate that the item exists in current inventory
-    const itemExists = inventory.find(inv => inv.sku_id === item.sku_id);
+    // Enhanced validation that the item exists in current inventory
+    const itemExists = inventory.find(inv =>
+      inv.sku_id === item.sku_id &&
+      inv.product_id === item.product_id
+    );
+
     if (!itemExists) {
       console.error('Selected item not found in inventory:', item);
+      toast.error('Selected product not found in current inventory. Please refresh and try again.');
       return;
     }
 
-    console.log('ProductSearchInput - Selecting item:', {
-      sku_id: item.sku_id,
-      product_name: item.product_name,
-      sku_code: item.sku_code,
-      product_id: item.product_id
-    });
-
-    // Double-check the item we're about to select
-    console.log('ProductSearchInput - Full item being selected:', item);
-    
-    // Check if there are multiple items with the same SKU ID
-    const duplicateItems = inventory.filter(inv => inv.sku_id === item.sku_id);
-    if (duplicateItems.length > 1) {
-      console.warn('ProductSearchInput - Multiple items found with same SKU ID:', {
-        skuId: item.sku_id,
-        count: duplicateItems.length,
-        items: duplicateItems
-      });
+    // Additional validation for required fields
+    if (!item.sku_id || !item.product_id || !item.product_name || !item.sku_code) {
+      console.error('Selected item has missing required fields:', item);
+      toast.error('Selected product has incomplete data. Please contact support.');
+      return;
     }
 
-    onChange(item.sku_id, item);
+    console.log('🎯 ProductSearchInput - Processing selected item:', {
+      originalItem: {
+        sku_id: item.sku_id,
+        product_name: item.product_name,
+        sku_code: item.sku_code,
+        product_id: item.product_id
+      }
+    });
+
+    // CRITICAL FIX: Always use the exact item that was clicked
+    // Create a clean copy to ensure no reference issues
+    const selectedItemCopy: InventoryItem = {
+      id: item.id,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      product_category: item.product_category,
+      sku_id: item.sku_id,
+      sku_code: item.sku_code,
+      unit_type: item.unit_type,
+      available_quantity: item.available_quantity,
+      total_weight: item.total_weight
+    };
+
+    console.log('📤 ProductSearchInput - About to call onChange with:', {
+      skuIdParam: item.sku_id,
+      selectedItemParam: {
+        product_id: selectedItemCopy.product_id,
+        product_name: selectedItemCopy.product_name,
+        sku_code: selectedItemCopy.sku_code,
+        sku_id: selectedItemCopy.sku_id
+      },
+      expectedResult: `Should show "${selectedItemCopy.product_name}" in table`
+    });
+
+    // Pass the unique ID to ensure correct selection
+    onChange(item.id, selectedItemCopy);
     setInputValue(`${item.product_name} - ${item.sku_code}`);
+
     setIsOpen(false);
     setSelectedIndex(-1);
     inputRef.current?.blur();
@@ -187,10 +237,6 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
           });
           setInputValue(expectedValue);
         }
-      } else if (inputValue.trim() !== '') {
-        // If no selection but there's text, clear it
-        console.log('Clearing unmatched input on blur:', inputValue);
-        setInputValue('');
       }
     }, 200);
   };
@@ -256,8 +302,22 @@ const ProductSearchInput: React.FC<ProductSearchInputProps> = ({
           <ul className="py-1">
             {filteredItems.map((item, index) => (
               <li
-                key={`${item.product_id}_${item.sku_id}`}
-                onClick={() => handleSelectItem(item)}
+                key={`${item.product_id}_${item.sku_id}_${index}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('🔍 DROPDOWN ITEM CLICKED:', {
+                    index,
+                    clickedItem: {
+                      product_id: item.product_id,
+                      product_name: item.product_name,
+                      sku_code: item.sku_code,
+                      sku_id: item.sku_id
+                    },
+                    userExpectedSelection: `${item.product_name} - ${item.sku_code}`
+                  });
+                  handleSelectItem(item);
+                }}
                 className={`px-3 py-2 cursor-pointer transition-colors duration-150 ${
                   index === selectedIndex
                     ? 'bg-green-50 text-green-900'

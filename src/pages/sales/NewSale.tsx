@@ -9,6 +9,7 @@ import MultiplePaymentSection, { PaymentMethod } from '../../components/forms/Mu
 
 interface SalesOrderItem {
   id: string;
+  inventoryId: string;
   productId: string;
   productName: string;
   skuId: string;
@@ -39,6 +40,7 @@ interface Customer {
 }
 
 interface InventoryItem {
+  id: string;
   product_id: string;
   product_name: string;
   product_category: string;
@@ -79,7 +81,7 @@ const NewSale: React.FC = () => {
   const [negativeInventoryWarnings, setNegativeInventoryWarnings] = useState<any[]>([]);
   const [pendingOrderData, setPendingOrderData] = useState<any>(null);
   const [pendingPaymentMethods, setPendingPaymentMethods] = useState<any[]>([]);
-
+  console.log(items)
   useEffect(() => {
     loadInitialData();
   }, []);
@@ -108,6 +110,7 @@ const NewSale: React.FC = () => {
         })
         .map((item: any) => {
           const mappedItem = {
+            id: item.id || `${item.product_id}_${item.sku_id}`, // Generate ID if not present
             product_id: item.product_id,
             product_name: item.product_name || '',
             product_category: item.category || 'Uncategorized', // Use category from database schema
@@ -118,13 +121,16 @@ const NewSale: React.FC = () => {
             total_weight: typeof item.total_weight === 'number' ? item.total_weight : 0
           };
           
-          // Log each mapped item for debugging
-          console.log('Mapped inventory item:', {
-            product_id: mappedItem.product_id,
-            product_name: mappedItem.product_name,
-            sku_id: mappedItem.sku_id,
-            sku_code: mappedItem.sku_code
-          });
+          // Enhanced logging for debugging the specific issue
+          if (mappedItem.sku_code === 'Premium') {
+            console.log('🍎🍌 PREMIUM SKU FOUND:', {
+              product_id: mappedItem.product_id,
+              product_name: mappedItem.product_name,
+              sku_id: mappedItem.sku_id,
+              sku_code: mappedItem.sku_code,
+              searchKey: `${mappedItem.product_name} - ${mappedItem.sku_code}`
+            });
+          }
           
           return mappedItem;
         });
@@ -134,7 +140,38 @@ const NewSale: React.FC = () => {
         mappedCount: mappedInventory.length,
         sampleItems: mappedInventory.slice(0, 3)
       });
-      
+
+      // Data validation: Check for proper unique constraints
+      const productSkuCombinations = new Set<string>();
+      const duplicateCombinations: string[] = [];
+
+      mappedInventory.forEach(item => {
+        const combination = `${item.product_id}_${item.sku_id}`;
+        if (productSkuCombinations.has(combination)) {
+          duplicateCombinations.push(combination);
+        }
+        productSkuCombinations.add(combination);
+      });
+
+      if (duplicateCombinations.length > 0) {
+        console.error('CRITICAL: Duplicate product_id + sku_id combinations found:', duplicateCombinations);
+        toast.error('Data integrity error: Duplicate product/SKU combinations found. Please contact support.');
+      }
+
+      // Log SKU code sharing (this is normal business logic)
+      const skuCodeCounts = new Map<string, number>();
+      mappedInventory.forEach(item => {
+        const count = skuCodeCounts.get(item.sku_code) || 0;
+        skuCodeCounts.set(item.sku_code, count + 1);
+      });
+
+      const sharedSkuCodes = Array.from(skuCodeCounts.entries()).filter(([_, count]) => count > 1);
+      if (sharedSkuCodes.length > 0) {
+        console.log('Products sharing SKU codes (normal business logic):',
+          sharedSkuCodes.map(([code, count]) => `${code}: ${count} products`)
+        );
+      }
+
       setInventory(mappedInventory);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -227,6 +264,7 @@ const NewSale: React.FC = () => {
   const handleAddItem = () => {
     const newItem: SalesOrderItem = {
       id: `item_${Date.now()}`,
+      inventoryId: '',
       productId: '',
       productName: '',
       skuId: '',
@@ -244,105 +282,147 @@ const NewSale: React.FC = () => {
   };
 
   const handleItemChange = (id: string, field: keyof SalesOrderItem, value: any, selectedItem?: InventoryItem) => {
-    setItems(prev => prev.map(item => {
-      if (item.id === id) {
-        const updatedItem = { ...item, [field]: value };
+    console.log('Adjusting inventory for item:', selectedItem);
+console.log('Selected item ID:', selectedItem?.id);
+    // For inventory ID changes (when selecting a product), handle differently to ensure we have complete product info before updating UI
+    if (field === 'inventoryId') {
+      console.log('📥 NewSale - SKU selection changed:', {
+        itemId: id,
+        newSkuId: value,
+        hasSelectedItem: !!selectedItem,
+        selectedItemDetails: selectedItem ? {
+          product_id: selectedItem.product_id,
+          product_name: selectedItem.product_name,
+          sku_id: selectedItem.sku_id,
+          sku_code: selectedItem.sku_code
+        } : null,
+        timestamp: new Date().toISOString()
+      });
+
+      // Clear selection if no value provided (user cleared the input or is typing)
+      if (!value) {
+        console.log('Clearing product selection for item:', id);
         
-        // If SKU is changed, update related fields
-        if (field === 'skuId') {
-          console.log('SKU selection changed:', {
-            itemId: id,
-            newSkuId: value,
-            inventoryCount: inventory.length
-          });
-          
-          if (value) {
-            // Log all inventory items with this SKU ID to check for duplicates
-            const matchingItems = inventory.filter(inv => inv.sku_id === value);
-            console.log('All inventory items matching SKU ID:', {
-              skuId: value,
-              matchingCount: matchingItems.length,
-              items: matchingItems.map(item => ({
-                product_id: item.product_id,
-                product_name: item.product_name,
-                sku_id: item.sku_id,
-                sku_code: item.sku_code
-              }))
-            });
-            
-            // Use the selectedItem if provided (from ProductSearchInput), otherwise find by SKU ID
-            let inventoryItem: InventoryItem | undefined;
-            
-            if (selectedItem) {
-              // Use the exact item that was selected from the dropdown
-              inventoryItem = selectedItem;
-              console.log('Using selectedItem from ProductSearchInput:', inventoryItem);
-            } else {
-              // Fallback to finding by SKU ID (for backward compatibility)
-              inventoryItem = inventory.find(inv => inv.sku_id === value);
-              console.log('Found inventory item by SKU ID:', inventoryItem);
-            }
-            
-            // If there are multiple items with the same SKU ID, warn about the data integrity issue
-            if (matchingItems.length > 1) {
-              console.warn('Multiple products found with same SKU ID. This is a data integrity issue that should be fixed in the database.');
-              if (!selectedItem) {
-                console.log('Using first match due to duplicate SKU IDs and no selectedItem provided:', inventoryItem);
-              }
-            }
-            
-            if (inventoryItem) {
-              // Validate the inventory item has all required fields
-              if (!inventoryItem.product_id || !inventoryItem.product_name || !inventoryItem.sku_code) {
-                console.error('Invalid inventory item found:', inventoryItem);
-                toast.error('Selected product has invalid data. Please contact support.');
-                return item; // Don't update if data is invalid
-              }
-              
-              // Double-check that we're getting the right product
-              console.log('Updating item with inventory data:', {
-                selectedSkuId: value,
-                foundProductId: inventoryItem.product_id,
-                foundProductName: inventoryItem.product_name,
-                foundSkuCode: inventoryItem.sku_code,
-                foundUnitType: inventoryItem.unit_type
-              });
-              
-              updatedItem.productId = inventoryItem.product_id;
-              updatedItem.productName = inventoryItem.product_name;
-              updatedItem.skuCode = inventoryItem.sku_code;
-              updatedItem.unitType = inventoryItem.unit_type;
-              
-              console.log('Successfully updated item with inventory data:', {
-                productId: inventoryItem.product_id,
-                productName: inventoryItem.product_name,
-                skuCode: inventoryItem.sku_code,
-                unitType: inventoryItem.unit_type
-              });
-            } else {
-              console.warn('No inventory item found for SKU ID:', value);
-              // Clear related fields if no inventory item found
-              updatedItem.productId = '';
-              updatedItem.productName = '';
-              updatedItem.skuCode = '';
-              updatedItem.unitType = 'box';
-            }
-          } else {
-            // Clear all fields if no SKU selected
-            updatedItem.productId = '';
-            updatedItem.productName = '';
-            updatedItem.skuCode = '';
-            updatedItem.unitType = 'box';
+        setItems(prev => prev.map(item => {
+          if (item.id === id) {
+            return {
+              ...item,
+              inventoryId: '',
+              skuId: '',
+              productId: '',
+              productName: '',
+              skuCode: '',
+              unitType: 'box'
+            };
           }
-        }
-        
-        // Recalculate total price
-        updatedItem.totalPrice = updatedItem.quantity * updatedItem.unitPrice;
-        
-        return updatedItem;
+          return item;
+        }));
+        return;
       }
-      return item;
-    }));
+
+      // CRITICAL: Only update the table if we have a selectedItem from ProductSearchInput
+      // This ensures we use the exact product the user selected, not just any product with the same SKU ID
+      if (selectedItem) {
+        // Validate the selectedItem has all required fields
+        if (!selectedItem.product_id || !selectedItem.product_name || !selectedItem.sku_code || !selectedItem.sku_id) {
+          console.error('Invalid inventory item found:', selectedItem);
+          toast.error('Selected product has invalid data. Please contact support.');
+          return;
+        }
+
+        // Validate that the selectedItem's id matches the value (this should always be true)
+        if (selectedItem.id !== value) {
+          console.error('Inventory ID mismatch between value and selectedItem:', {
+            expectedInventoryId: value,
+            selectedItemInventoryId: selectedItem.id,
+            selectedItem
+          });
+          toast.error('Product selection error. Please try selecting the product again.');
+          return;
+        }
+
+        console.log('✅ NewSale - Processing exact selected item from ProductSearchInput:', {
+          product_id: selectedItem.product_id,
+          product_name: selectedItem.product_name,
+          sku_id: selectedItem.sku_id,
+          sku_code: selectedItem.sku_code,
+          itemId: id,
+          expectedTableDisplay: `Should show "${selectedItem.product_name}" with SKU "${selectedItem.sku_code}"`
+        });
+
+        // Update all fields atomically with the exact selected item
+        // This is the key fix: we use the exact selectedItem, not a lookup by SKU ID
+        setItems(prev => prev.map(item => {
+          if (item.id === id) {
+            const updatedItem = {
+              ...item,
+              inventoryId: selectedItem.id,
+              skuId: selectedItem.sku_id,
+              productId: selectedItem.product_id,
+              productName: selectedItem.product_name,
+              skuCode: selectedItem.sku_code,
+              unitType: selectedItem.unit_type
+            };
+
+            console.log('🎯 NewSale - Updated item in table with exact selection:', {
+              itemId: id,
+              updatedItem: {
+                productName: updatedItem.productName,
+                skuCode: updatedItem.skuCode,
+                productId: updatedItem.productId,
+                skuId: updatedItem.skuId
+              },
+              verification: `Table should now display "${updatedItem.productName}" with SKU "${updatedItem.skuCode}"`
+            });
+
+            return updatedItem;
+          }
+          return item;
+        }));
+        return;
+      } else {
+        // If no selectedItem is provided, we should not proceed with the update
+        // This prevents the fallback logic from running and potentially selecting the wrong product
+        console.warn('⚠️ No selectedItem provided for SKU change. Ignoring update to prevent incorrect product selection.', {
+          skuId: value,
+          itemId: id
+        });
+        
+        // Clear the selection to force user to select again from dropdown
+        setItems(prev => prev.map(item => {
+          if (item.id === id) {
+            return {
+              ...item,
+              inventoryId: '',
+              skuId: '',
+              productId: '',
+              productName: '',
+              skuCode: '',
+              unitType: 'box'
+            };
+          }
+          return item;
+        }));
+        
+        toast.error('Please select a product from the dropdown list');
+        return;
+      }
+    } else {
+      // For non-SKU changes, use the simple update logic
+      setItems(prev => prev.map(item => {
+        if (item.id === id) {
+          const updatedItem = { ...item, [field]: value };
+
+          // Recalculate total price if quantity or unit price changes
+          if (field === 'quantity' || field === 'unitPrice') {
+            updatedItem.totalPrice = updatedItem.quantity * updatedItem.unitPrice;
+          }
+
+          return updatedItem;
+        }
+        return item;
+      }));
+    }
   };
 
   const calculateSubtotal = () => {
@@ -605,6 +685,11 @@ const NewSale: React.FC = () => {
     return inventoryItem?.available_quantity || 0;
   };
 
+  const getAvailableQuantityByInventoryId = (inventoryId: string) => {
+    const inventoryItem = inventory.find(inv => inv.id === inventoryId);
+    return inventoryItem?.available_quantity || 0;
+  };
+
   const handleAdjustInventory = (item: InventoryItem) => {
     setSelectedInventoryItem(item);
     setShowAdjustModal(true);
@@ -861,15 +946,25 @@ const NewSale: React.FC = () => {
                       <td className="px-6 py-4">
                         <ProductSearchInput
                           inventory={inventory}
-                          value={item.skuId}
-                          onChange={(skuId, selectedItem) => handleItemChange(item.id, 'skuId', skuId, selectedItem)}
+                          value={item.inventoryId}
+                          onChange={(inventoryId, selectedItem) => handleItemChange(item.id, 'inventoryId', inventoryId, selectedItem)}
                           placeholder="Type to search products..."
                           className="text-sm"
                           onAdjustInventory={handleAdjustInventory}
                         />
+                        {/* Enhanced debug info */}
+                        {item.inventoryId && (
+                          <div className="text-xs text-gray-500 mt-1 space-y-1">
+                            <div>Inventory ID = {item.inventoryId}</div>
+                            <div>SKU ID = {item.skuId}</div>
+                            <div>Product = {item.productName}, SKU Code = {item.skuCode}</div>
+                            <div>Product ID = {item.productId}</div>
+                            <div>Item ID = {item.id}</div>
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {getAvailableQuantity(item.skuId)} {item.unitType === 'box' ? 'boxes' : 'kg'}
+                        {getAvailableQuantityByInventoryId(item.inventoryId)} {item.unitType === 'box' ? 'boxes' : 'kg'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input
@@ -1010,6 +1105,7 @@ const NewSale: React.FC = () => {
           onClose={() => setShowAdjustModal(false)}
           onSuccess={handleAdjustmentSuccess}
           inventoryItem={{
+            // selectedProductObjectID: selectedInventoryItem.id,
             productId: selectedInventoryItem.product_id,
             skuId: selectedInventoryItem.sku_id,
             productName: selectedInventoryItem.product_name,
