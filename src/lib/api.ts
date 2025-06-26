@@ -460,6 +460,59 @@ export async function createSalesOrder(orderData: any) {
   return order;
 }
 
+// Approve pending sales order - updates inventory and customer balance
+export async function approvePendingSalesOrder(orderId: string, newStatus: string = 'processing') {
+  // Get the pending order details
+  const { data: order, error: fetchError } = await supabase
+    .from('sales_orders')
+    .select(`
+      *,
+      sales_order_items(*)
+    `)
+    .eq('id', orderId)
+    .single();
+
+  if (fetchError) throw fetchError;
+  if (!order) throw new Error('Sales order not found');
+
+  if (order.status !== 'pending_approval') {
+    throw new Error('Order is not in pending approval status');
+  }
+
+  // Update inventory for each item
+  for (const item of order.sales_order_items) {
+    await updateInventoryAfterSale(
+      item.product_id,
+      item.sku_id,
+      safeNumericValue(item.quantity)
+    );
+  }
+
+  // Update customer balance for credit amount
+  if (order.payment_mode === 'credit' && order.customer_id) {
+    await updateCustomerBalance(
+      order.customer_id,
+      safeNumericValue(order.total_amount),
+      'add'
+    );
+  }
+
+  // Update order status
+  const { data: updatedOrder, error: updateError } = await supabase
+    .from('sales_orders')
+    .update({ 
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  if (updateError) throw updateError;
+
+  return updatedOrder;
+}
+
 // Update sales order
 export async function updateSalesOrder(orderId: string, orderData: any) {
   const { items, ...orderDetails } = orderData;
@@ -474,12 +527,28 @@ export async function updateSalesOrder(orderId: string, orderData: any) {
   if (fetchError) throw fetchError;
   if (!currentOrder) throw new Error('Sales order not found');
 
+  // If this is just a status/notes update for pending approval or cancelled orders,
+  // skip inventory and item processing
+  if (currentOrder.status === 'pending_approval' || currentOrder.status === 'cancelled') {
+    // Only update the order details (status, notes, etc.) without touching items or inventory
+    const { data: order, error: orderError } = await supabase
+      .from('sales_orders')
+      .update(orderDetails)
+      .eq('id', orderId)
+      .select()
+      .single();
+
+    if (orderError) throw orderError;
+    return order;
+  }
+
+  // For regular orders, proceed with full update including items and inventory
   // Calculate total amount with null safety
-  const totalAmount = items.reduce((sum: number, item: any) => {
+  const totalAmount = items ? items.reduce((sum: number, item: any) => {
     const quantity = safeNumericValue(item.quantity);
     const unitPrice = safeNumericValue(item.unitPrice);
     return sum + (quantity * unitPrice);
-  }, 0);
+  }, 0) : currentOrder.total_amount;
 
   // Update order
   const { data: order, error: orderError } = await supabase
@@ -494,48 +563,51 @@ export async function updateSalesOrder(orderId: string, orderData: any) {
 
   if (orderError) throw orderError;
 
-  // Delete existing items
-  const { error: deleteError } = await supabase
-    .from('sales_order_items')
-    .delete()
-    .eq('sales_order_id', orderId);
+  // Only process items if they are provided
+  if (items && items.length > 0) {
+    // Delete existing items
+    const { error: deleteError } = await supabase
+      .from('sales_order_items')
+      .delete()
+      .eq('sales_order_id', orderId);
 
-  if (deleteError) throw deleteError;
+    if (deleteError) throw deleteError;
 
-  // Insert new items with null safety
-  const orderItems = items.map((item: any) => ({
-    sales_order_id: orderId,
-    product_id: item.productId,
-    sku_id: item.skuId,
-    quantity: safeNumericValue(item.quantity),
-    unit_price: safeNumericValue(item.unitPrice),
-    total_price: safeNumericValue(item.quantity) * safeNumericValue(item.unitPrice)
-  }));
+    // Insert new items with null safety
+    const orderItems = items.map((item: any) => ({
+      sales_order_id: orderId,
+      product_id: item.productId,
+      sku_id: item.skuId,
+      quantity: safeNumericValue(item.quantity),
+      unit_price: safeNumericValue(item.unitPrice),
+      total_price: safeNumericValue(item.quantity) * safeNumericValue(item.unitPrice)
+    }));
 
-  const { error: itemsError } = await supabase
-    .from('sales_order_items')
-    .insert(orderItems);
+    const { error: itemsError } = await supabase
+      .from('sales_order_items')
+      .insert(orderItems);
 
-  if (itemsError) throw itemsError;
+    if (itemsError) throw itemsError;
 
-  // Update inventory for each item
-  for (const item of items) {
-    await updateInventoryAfterSale(
-      item.productId,
-      item.skuId,
-      safeNumericValue(item.quantity)
-    );
-  }
-
-  // Update customer balance if payment mode is credit
-  if (orderDetails.payment_mode === 'credit' && orderDetails.customer_id) {
-    const amountDifference = totalAmount - (currentOrder.total_amount || 0);
-    if (amountDifference !== 0) {
-      await updateCustomerBalance(
-        orderDetails.customer_id,
-        Math.abs(amountDifference),
-        amountDifference > 0 ? 'add' : 'subtract'
+    // Update inventory for each item
+    for (const item of items) {
+      await updateInventoryAfterSale(
+        item.productId,
+        item.skuId,
+        safeNumericValue(item.quantity)
       );
+    }
+
+    // Update customer balance if payment mode is credit
+    if (orderDetails.payment_mode === 'credit' && orderDetails.customer_id) {
+      const amountDifference = totalAmount - (currentOrder.total_amount || 0);
+      if (amountDifference !== 0) {
+        await updateCustomerBalance(
+          orderDetails.customer_id,
+          Math.abs(amountDifference),
+          amountDifference > 0 ? 'add' : 'subtract'
+        );
+      }
     }
   }
 
@@ -1502,10 +1574,11 @@ export async function cancelSalesOrder(orderId: string) {
 
   if (updateError) throw updateError;
 
-  // Restore inventory for each item
-  if (orderData.sales_order_items) {
+  // Only restore inventory if the order was processed (not pending approval)
+  if (orderData.status !== 'pending_approval' && orderData.sales_order_items) {
     for (const item of orderData.sales_order_items) {
-      await updateInventoryAfterSale(
+      // Restore inventory by adding back the quantity (opposite of updateInventoryAfterSale)
+      await restoreInventoryAfterCancellation(
         item.product_id,
         item.sku_id,
         safeNumericValue(item.quantity)
@@ -1513,8 +1586,8 @@ export async function cancelSalesOrder(orderId: string) {
     }
   }
 
-  // Update customer balance if payment mode was credit
-  if (orderData.payment_mode === 'credit' && orderData.customer_id) {
+  // Update customer balance if payment mode was credit and order was processed
+  if (orderData.payment_mode === 'credit' && orderData.customer_id && orderData.status !== 'pending_approval') {
     await updateCustomerBalance(
       orderData.customer_id,
       safeNumericValue(orderData.total_amount),
@@ -1523,6 +1596,82 @@ export async function cancelSalesOrder(orderId: string) {
   }
 
   return orderData;
+}
+
+// Restore inventory after cancellation/rejection
+async function restoreInventoryAfterCancellation(productId: string, skuId: string, quantity: number) {
+  // Get the current quantity
+  const { data: currentInventory, error: fetchError } = await supabase
+    .from('current_inventory')
+    .select('available_quantity, product_name, sku_code')
+    .match({ product_id: productId, sku_id: skuId })
+    .single();
+
+  if (fetchError) {
+    if (fetchError.code === 'PGRST116') {
+      // No inventory record found - this shouldn't happen for cancellations
+      throw new Error(`Product not found in inventory during restoration. Product ID: ${productId}, SKU ID: ${skuId}`);
+    }
+    throw fetchError;
+  }
+
+  const currentQuantity = currentInventory?.available_quantity || 0;
+  const newQuantity = currentQuantity + quantity; // Add back the quantity
+
+  // Update with the restored quantity
+  const { error: updateError } = await supabase
+    .from('current_inventory')
+    .update({
+      available_quantity: newQuantity,
+      updated_at: new Date().toISOString()
+    })
+    .match({ product_id: productId, sku_id: skuId });
+
+  if (updateError) throw updateError;
+
+  return {
+    productName: currentInventory.product_name,
+    skuCode: currentInventory.sku_code,
+    previousQuantity: currentQuantity,
+    newQuantity: newQuantity,
+    quantityRestored: quantity
+  };
+}
+
+// Reject pending sales order
+export async function rejectPendingSalesOrder(orderId: string, rejectionReason: string) {
+  // Get the pending order details
+  const { data: order, error: fetchError } = await supabase
+    .from('sales_orders')
+    .select(`
+      *,
+      sales_order_items(*)
+    `)
+    .eq('id', orderId)
+    .single();
+
+  if (fetchError) throw fetchError;
+  if (!order) throw new Error('Sales order not found');
+
+  // Update order status to cancelled with rejection reason
+  const { data: updatedOrder, error: updateError } = await supabase
+    .from('sales_orders')
+    .update({ 
+      status: 'cancelled',
+      notes: order.notes ? `${order.notes}\n\nRejected on ${new Date().toLocaleString()}: ${rejectionReason}` : `Rejected on ${new Date().toLocaleString()}: ${rejectionReason}`,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  if (updateError) throw updateError;
+
+  // For pending approval orders, inventory was never deducted, so no need to restore
+  // Customer balance was also never updated, so no need to adjust
+  // This is different from cancelling a processed order
+
+  return updatedOrder;
 }
 
 // Adjust inventory - mark as another SKU
@@ -1891,8 +2040,11 @@ export async function createSalesOrderWithMultiplePayments(orderData: any, payme
 
   console.log('Calculated total amount:', totalAmount);
 
-  // Status logic: counter orders are completed, outstation orders are dispatch_pending
-  const status = (!orderDetails.delivery_date) ? 'completed' : 'dispatch_pending';
+  // Status logic: 
+  // If explicitly set to pending_approval, use that
+  // Otherwise: counter orders are completed, outstation orders are dispatch_pending
+  const status = orderDetails.status === 'pending_approval' ? 'pending_approval' : 
+                (!orderDetails.delivery_date) ? 'completed' : 'dispatch_pending';
 
   // Calculate payment totals
   const totalPaidAmount = paymentMethods
@@ -2119,24 +2271,27 @@ export async function createSalesOrderWithMultiplePayments(orderData: any, payme
     if (extensionsError) throw extensionsError;
   }
 
-  // Update inventory for each item
-  for (const item of items) {
-    const productId = item.product_id || item.productId;
-    const skuId = item.sku_id || item.skuId;
-    await updateInventoryAfterSale(
-      productId,
-      skuId,
-      safeNumericValue(item.quantity)
-    );
-  }
+  // Only update inventory and customer balance if order is not pending approval
+  if (orderInsertData.status !== 'pending_approval') {
+    // Update inventory for each item
+    for (const item of items) {
+      const productId = item.product_id || item.productId;
+      const skuId = item.sku_id || item.skuId;
+      await updateInventoryAfterSale(
+        productId,
+        skuId,
+        safeNumericValue(item.quantity)
+      );
+    }
 
-  // Update customer balance for credit amount
-  if (hasCredit && orderDetails.customer_id) {
-    await updateCustomerBalance(
-      orderDetails.customer_id,
-      creditAmount,
-      'add'
-    );
+    // Update customer balance for credit amount
+    if (hasCredit && orderDetails.customer_id) {
+      await updateCustomerBalance(
+        orderDetails.customer_id,
+        creditAmount,
+        'add'
+      );
+    }
   }
 
   return order;

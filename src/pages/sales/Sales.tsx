@@ -48,11 +48,13 @@ const Sales: React.FC = () => {
     try {
       const data = await getSalesOrders();
       
-      // Add sale_type to each order
-      const salesWithType = (data || []).map(order => ({
-        ...order,
-        sale_type: order.delivery_date || order.delivery_address ? 'outstation' : 'counter'
-      }));
+      // Add sale_type to each order and exclude pending approval orders
+      const salesWithType = (data || [])
+        .filter(order => order.status !== 'pending_approval') // Exclude pending approval orders
+        .map(order => ({
+          ...order,
+          sale_type: order.delivery_date || order.delivery_address ? 'outstation' : 'counter'
+        }));
       
       setSales(salesWithType);
     } catch (error) {
@@ -102,6 +104,12 @@ const Sales: React.FC = () => {
         return 'bg-red-100 text-red-800';
       case 'draft':
         return 'bg-gray-100 text-gray-800';
+      case 'pending_approval':
+        return 'bg-orange-100 text-orange-800';
+      case 'dispatched':
+        return 'bg-blue-100 text-blue-800';
+      case 'delivered':
+        return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -117,6 +125,12 @@ const Sales: React.FC = () => {
         return 'Cancelled';
       case 'draft':
         return 'Draft';
+      case 'pending_approval':
+        return 'Pending Approval';
+      case 'dispatched':
+        return 'Dispatched';
+      case 'delivered':
+        return 'Delivered';
       default:
         return status.charAt(0).toUpperCase() + status.slice(1);
     }
@@ -154,7 +168,7 @@ const Sales: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
         <div className="flex items-center">
           <ShoppingCart className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 mr-2" />
-          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800">Sales Orders</h1>
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800">Sales Management</h1>
         </div>
         <button 
           onClick={() => navigate('/sales/new')}

@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { getCustomers, getAvailableInventory, createSalesOrderWithMultiplePayments, checkInventoryForSalesOrder } from '../../lib/api';
 import ProductSearchInput from '../../components/forms/ProductSearchInput';
 import AdjustInventoryModal from '../../components/modals/AdjustInventoryModal';
-import MultiplePaymentSection, { PaymentMethod } from '../../components/forms/MultiplePaymentSection';
+// import MultiplePaymentSection, { PaymentMethod } from '../../components/forms/MultiplePaymentSection';
 
 interface SalesOrderItem {
   id: string;
@@ -75,12 +75,18 @@ const NewSale: React.FC = () => {
 
   const [items, setItems] = useState<SalesOrderItem[]>([]);
   const [discountAmount, setDiscountAmount] = useState(0);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [paymentValidation, setPaymentValidation] = useState({ isValid: true, message: '' });
+  // const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  // const [paymentValidation, setPaymentValidation] = useState({ isValid: true, message: '' });
   const [showNegativeInventoryModal, setShowNegativeInventoryModal] = useState(false);
   const [negativeInventoryWarnings, setNegativeInventoryWarnings] = useState<any[]>([]);
   const [pendingOrderData, setPendingOrderData] = useState<any>(null);
-  const [pendingPaymentMethods, setPendingPaymentMethods] = useState<any[]>([]);
+  // const [pendingPaymentMethods, setPendingPaymentMethods] = useState<any[]>([]);
+  const [showCreditWarningModal, setShowCreditWarningModal] = useState(false);
+  const [creditWarningData, setCreditWarningData] = useState<{
+    availableCredit: number;
+    orderValue: number;
+    customerName: string;
+  } | null>(null);
   console.log(items)
   useEffect(() => {
     loadInitialData();
@@ -442,13 +448,13 @@ console.log('Selected item ID:', selectedItem?.id);
     return customers.find(c => c.id === formData.customerId);
   };
 
-  const handlePaymentMethodsChange = (methods: PaymentMethod[]) => {
-    setPaymentMethods(methods);
-  };
+  // const handlePaymentMethodsChange = (methods: PaymentMethod[]) => {
+  //   setPaymentMethods(methods);
+  // };
 
-  const handlePaymentValidationChange = (isValid: boolean, message?: string) => {
-    setPaymentValidation({ isValid, message: message || '' });
-  };
+  // const handlePaymentValidationChange = (isValid: boolean, message?: string) => {
+  //   setPaymentValidation({ isValid, message: message || '' });
+  // };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -475,10 +481,25 @@ console.log('Selected item ID:', selectedItem?.id);
       }
     }
 
-    // Check payment validation
-    if (!paymentValidation.isValid) {
-      toast.error(paymentValidation.message);
+    // Check customer credit limit
+    const customer = getSelectedCustomer();
+    if (!customer) {
+      toast.error('Please select a customer');
       return;
+    }
+
+    const totalAmount = calculateTotal();
+    const availableCredit = customer.credit_limit - customer.current_balance;
+    
+    if (totalAmount > availableCredit) {
+      // Show credit warning modal and stop execution
+      setCreditWarningData({
+        availableCredit,
+        orderValue: totalAmount,
+        customerName: customer.name
+      });
+      setShowCreditWarningModal(true);
+      return; // This stops the function execution
     }
 
     // Validate items
@@ -492,10 +513,22 @@ console.log('Selected item ID:', selectedItem?.id);
     setIsSubmitting(true);
 
     try {
+      // Create order directly with credit (only if credit is sufficient)
+      await createOrderWithCredit();
+    } catch (error) {
+      console.error('Error checking inventory or creating sales order:', error);
+      toast.error('Failed to create sales order. Please try again.');
+      setIsSubmitting(false);
+    }
+  };
+
+  const createOrderWithCredit = async () => {
+    try {
+      setIsSubmitting(true);
+      
       const subtotal = calculateSubtotal();
       const totalAmount = calculateTotal();
 
-      // Prepare items data with proper field mapping
       const itemsData = items.map(item => ({
         productId: item.productId,
         skuId: item.skuId,
@@ -511,7 +544,7 @@ console.log('Selected item ID:', selectedItem?.id);
       const warnings = await checkInventoryForSalesOrder(itemsData);
       
       if (warnings.length > 0) {
-        // Store the order data and payment methods for later use
+        // Store the order data for later use
         const orderData = {
           order_number: generateOrderNumber(),
           customer_id: formData.customerId,
@@ -519,8 +552,8 @@ console.log('Selected item ID:', selectedItem?.id);
           delivery_date: saleType === 'outstation' ? formData.deliveryDate : null,
           delivery_address: saleType === 'outstation' ? formData.deliveryAddress : null,
           payment_terms: formData.paymentTerms,
-          payment_mode: 'multiple',
-          payment_status: paymentMethods.some(p => p.type === 'credit') ? 'partial' : 'paid',
+          payment_mode: 'credit',
+          payment_status: 'unpaid',
           subtotal,
           tax_amount: 0,
           discount_amount: discountAmount,
@@ -530,27 +563,17 @@ console.log('Selected item ID:', selectedItem?.id);
           items: itemsData
         };
 
-        let finalPaymentMethods = paymentMethods;
-        if (paymentMethods.length === 0) {
-          finalPaymentMethods = [{
-            id: `payment_${Date.now()}`,
-            type: 'credit' as const,
-            amount: totalAmount
-          }];
-        }
-
         setPendingOrderData(orderData);
-        setPendingPaymentMethods(finalPaymentMethods);
         setNegativeInventoryWarnings(warnings);
         setShowNegativeInventoryModal(true);
         setIsSubmitting(false);
         return;
       }
 
-      // If no warnings, proceed with order creation
+      // Create order directly
       await proceedWithOrderCreation();
     } catch (error) {
-      console.error('Error checking inventory or creating sales order:', error);
+      console.error('Error creating sales order:', error);
       toast.error('Failed to create sales order. Please try again.');
       setIsSubmitting(false);
     }
@@ -561,7 +584,6 @@ console.log('Selected item ID:', selectedItem?.id);
       setIsSubmitting(true);
       
       let orderData = pendingOrderData;
-      let finalPaymentMethods = pendingPaymentMethods;
 
       // If no pending data (direct creation without warnings), prepare it
       if (!orderData) {
@@ -579,15 +601,6 @@ console.log('Selected item ID:', selectedItem?.id);
           totalPrice: item.totalPrice
         }));
 
-        finalPaymentMethods = paymentMethods;
-        if (paymentMethods.length === 0) {
-          finalPaymentMethods = [{
-            id: `payment_${Date.now()}`,
-            type: 'credit' as const,
-            amount: totalAmount
-          }];
-        }
-
         orderData = {
           order_number: generateOrderNumber(),
           customer_id: formData.customerId,
@@ -595,9 +608,9 @@ console.log('Selected item ID:', selectedItem?.id);
           delivery_date: saleType === 'outstation' ? formData.deliveryDate : null,
           delivery_address: saleType === 'outstation' ? formData.deliveryAddress : null,
           payment_terms: formData.paymentTerms,
-          payment_mode: 'multiple',
-          payment_status: finalPaymentMethods.some(p => p.type === 'credit') ? 'partial' : 'paid',
-          subtotal,
+          payment_mode: 'credit',
+          payment_status: 'unpaid',
+          subtotal: subtotal,
           tax_amount: 0,
           discount_amount: discountAmount,
           total_amount: totalAmount,
@@ -607,32 +620,21 @@ console.log('Selected item ID:', selectedItem?.id);
         };
       }
 
-      // Log the data being sent for debugging
-      console.log('Order data being sent:', {
-        orderData: orderData,
-        finalPaymentMethods: finalPaymentMethods,
-        formData: formData,
-        items: items
-      });
+      // Create sales order with credit payment
+      const paymentMethods = [{
+        id: `payment_${Date.now()}`,
+        type: 'credit' as const,
+        amount: orderData.total_amount
+      }];
 
-      await createSalesOrderWithMultiplePayments(orderData, finalPaymentMethods);
+      await createSalesOrderWithMultiplePayments(orderData, paymentMethods);
       
       toast.success('Sales order created successfully!');
       navigate('/sales');
     } catch (error) {
       console.error('Error creating sales order:', error);
       
-      // Enhanced error logging with more details
-      console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-      
       if (error instanceof Error) {
-        console.error('Error details:', {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        });
-        
-        // Show more specific error message
         if (error.message.includes('customer')) {
           toast.error('Customer validation failed. Please select a valid customer.');
         } else if (error.message.includes('product') || error.message.includes('SKU')) {
@@ -643,40 +645,70 @@ console.log('Selected item ID:', selectedItem?.id);
           toast.error(`Failed to create sales order: ${error.message}`);
         }
       } else {
-        // Handle non-Error objects (like Supabase errors)
-        console.error('Non-Error object details:', {
-          type: typeof error,
-          constructor: error?.constructor?.name,
-          keys: Object.keys(error || {}),
-          error: error
-        });
-        
-        // Try to extract error message from various possible structures
-        let errorMessage = 'Failed to create sales order. Please try again.';
-        
-        if (error && typeof error === 'object') {
-          const errorObj = error as any; // Type assertion for error object
-          if (errorObj.message) {
-            errorMessage = `Error: ${errorObj.message}`;
-          } else if (errorObj.error && errorObj.error.message) {
-            errorMessage = `Error: ${errorObj.error.message}`;
-          } else if (errorObj.details) {
-            errorMessage = `Error: ${errorObj.details}`;
-          } else if (errorObj.hint) {
-            errorMessage = `Error: ${errorObj.hint}`;
-          } else if (errorObj.code) {
-            errorMessage = `Database error (${errorObj.code}). Please check your data.`;
-          }
-        }
-        
-        toast.error(errorMessage);
+        toast.error('Failed to create sales order. Please try again.');
       }
     } finally {
       setIsSubmitting(false);
       // Clear pending data
       setPendingOrderData(null);
-      setPendingPaymentMethods([]);
       setNegativeInventoryWarnings([]);
+    }
+  };
+
+  const createPendingApprovalOrder = async () => {
+    try {
+      setIsSubmitting(true);
+      
+      const subtotal = calculateSubtotal();
+      const totalAmount = calculateTotal();
+
+      const itemsData = items.map(item => ({
+        productId: item.productId,
+        skuId: item.skuId,
+        productName: item.productName,
+        skuCode: item.skuCode,
+        quantity: item.quantity,
+        unitType: item.unitType,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice
+      }));
+
+      const orderData = {
+        order_number: generateOrderNumber(),
+        customer_id: formData.customerId,
+        order_date: formData.orderDate,
+        delivery_date: saleType === 'outstation' ? formData.deliveryDate : null,
+        delivery_address: saleType === 'outstation' ? formData.deliveryAddress : null,
+        payment_terms: formData.paymentTerms,
+        payment_mode: 'credit',
+        payment_status: 'unpaid',
+        subtotal,
+        tax_amount: 0,
+        discount_amount: discountAmount,
+        total_amount: totalAmount,
+        status: 'pending_approval', // Explicitly set status for pending approval
+        notes: formData.notes || null,
+        items: itemsData
+      };
+
+      // Create sales order with pending approval status
+      const paymentMethods = [{
+        id: `payment_${Date.now()}`,
+        type: 'credit' as const,
+        amount: totalAmount
+      }];
+
+      await createSalesOrderWithMultiplePayments(orderData, paymentMethods);
+      
+      toast.success('Sales order created and moved to pending approval!');
+      navigate('/sales');
+    } catch (error) {
+      console.error('Error creating pending approval order:', error);
+      toast.error('Failed to create sales order. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+      setShowCreditWarningModal(false);
+      setCreditWarningData(null);
     }
   };
 
@@ -1049,18 +1081,32 @@ console.log('Selected item ID:', selectedItem?.id);
             </div>
           </div>
 
-          {/* Multiple Payment Section */}
+          {/* Customer Credit Information */}
           {selectedCustomer && (
             <div className="border-t pt-6">
-              <MultiplePaymentSection
-                orderTotal={calculateTotal()}
-                customerId={formData.customerId}
-                customerCreditLimit={selectedCustomer.credit_limit}
-                customerCurrentBalance={selectedCustomer.current_balance}
-                paymentMethods={paymentMethods}
-                onPaymentMethodsChange={handlePaymentMethodsChange}
-                onValidationChange={handlePaymentValidationChange}
-              />
+              <h2 className="text-lg font-medium text-gray-900 mb-4">Customer Credit Information</h2>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Original Credit Limit:</span>
+                    <span className="font-medium">₹{selectedCustomer.credit_limit.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Current Outstanding:</span>
+                    <span className="font-medium">₹{selectedCustomer.current_balance.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Available Credit:</span>
+                    <span className={`font-medium ${(selectedCustomer.credit_limit - selectedCustomer.current_balance) >= calculateTotal() ? 'text-green-600' : 'text-red-600'}`}>
+                      ₹{(selectedCustomer.credit_limit - selectedCustomer.current_balance).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="border-t pt-2 flex justify-between">
+                    <span className="text-gray-600">Order Value:</span>
+                    <span className="font-medium text-blue-600">₹{calculateTotal().toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1090,7 +1136,7 @@ console.log('Selected item ID:', selectedItem?.id);
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || !paymentValidation.isValid}
+              disabled={isSubmitting}
               className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Creating Order...' : 'Create Sales Order'}
@@ -1200,7 +1246,6 @@ console.log('Selected item ID:', selectedItem?.id);
                     setShowNegativeInventoryModal(false);
                     setNegativeInventoryWarnings([]);
                     setPendingOrderData(null);
-                    setPendingPaymentMethods([]);
                   }}
                   className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
@@ -1216,6 +1261,94 @@ console.log('Selected item ID:', selectedItem?.id);
                   className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? 'Creating Order...' : 'Proceed with Negative Inventory'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Credit Warning Modal */}
+      {showCreditWarningModal && creditWarningData && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center mb-4">
+                <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                </div>
+                <div className="ml-4">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    Insufficient Credit Limit
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Customer does not have enough credit for this order
+                  </p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="font-medium text-gray-900">Customer:</span>
+                      <span className="text-gray-700">{creditWarningData.customerName}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="font-medium text-gray-900">Available Credit:</span>
+                      <span className="text-red-600 font-medium">₹{creditWarningData.availableCredit.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="font-medium text-gray-900">Order Value:</span>
+                      <span className="text-gray-700 font-medium">₹{creditWarningData.orderValue.toFixed(2)}</span>
+                    </div>
+                    <div className="border-t pt-2 flex justify-between items-center text-sm">
+                      <span className="font-medium text-gray-900">Credit Shortage:</span>
+                      <span className="text-red-600 font-bold">₹{(creditWarningData.orderValue - creditWarningData.availableCredit).toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <AlertTriangle className="h-5 w-5 text-blue-400" />
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-blue-800">
+                      What happens if you proceed?
+                    </h3>
+                    <div className="mt-2 text-sm text-blue-700">
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>The order will be moved to "Pending Approval" status</li>
+                        <li>It will appear in the Pending Approvals tab for review</li>
+                        <li>An authorized person can approve or reject the order</li>
+                        <li>Inventory will not be affected until the order is approved</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreditWarningModal(false);
+                    setCreditWarningData(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={createPendingApprovalOrder}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Creating Order...' : 'Move to Pending Approval'}
                 </button>
               </div>
             </div>

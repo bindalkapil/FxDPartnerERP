@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSidebar } from '../../contexts/SidebarContext';
-import { Truck, ClipboardList, Package, ShoppingCart, Truck as TruckLoading, Users, User, BookOpen, CreditCard, Settings, Home } from 'lucide-react';
+import { Truck, ClipboardList, Package, ShoppingCart, Truck as TruckLoading, Users, User, BookOpen, CreditCard, Settings, Home, Clock } from 'lucide-react';
 
 interface NavItemProps {
   to: string;
@@ -94,6 +94,7 @@ const Sidebar: React.FC = () => {
           
           {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Sales</div>}
           <NavItem to="/sales" icon={<ShoppingCart size={20} />} label="Sales" closeSidebar={closeSidebar} />
+          <NavItem to="/sales/pending-approvals" icon={<Clock size={20} />} label="Pending Approvals" closeSidebar={closeSidebar} />
           <NavItem to="/dispatch" icon={<TruckLoading size={20} />} label="Dispatch" closeSidebar={closeSidebar} />
           
           {isSidebarOpen && <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Financials</div>}

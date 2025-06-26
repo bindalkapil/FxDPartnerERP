@@ -25,6 +25,7 @@ import NewSale from './pages/sales/NewSale';
 import ViewSale from './pages/sales/ViewSale';
 import EditSale from './pages/sales/EditSale';
 import Dispatch from './pages/sales/Dispatch';
+import PendingApprovals from './pages/sales/PendingApprovals';
 import Suppliers from './pages/partners/Suppliers';
 import AddSupplier from './pages/partners/AddSupplier';
 import ViewSupplier from './pages/partners/ViewSupplier';
@@ -82,6 +83,7 @@ function App() {
               <Route path="sales/new" element={<NewSale />} />
               <Route path="sales/view/:id" element={<ViewSale />} />
               <Route path="sales/edit/:id" element={<EditSale />} />
+              <Route path="sales/pending-approvals" element={<PendingApprovals />} />
               <Route path="dispatch" element={<Dispatch />} />
               <Route path="suppliers" element={<Suppliers />} />
               <Route path="suppliers/new" element={<AddSupplier />} />
