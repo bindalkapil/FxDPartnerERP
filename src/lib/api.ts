@@ -1150,6 +1150,23 @@ export async function createPurchaseRecord(
     await updateSupplierBalance(validRecord.supplier_id, safeNumericValue(validRecord.total_amount), 'add');
   }
 
+  // Update vehicle arrival status to 'po-created' if vehicle_arrival_id is provided
+  if (validRecord.vehicle_arrival_id) {
+    const { error: updateError } = await supabase
+      .from('vehicle_arrivals')
+      .update({ 
+        status: 'po-created',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', validRecord.vehicle_arrival_id);
+
+    if (updateError) {
+      console.error('Error updating vehicle arrival status:', updateError);
+      // Don't throw error here as the purchase record was already created successfully
+      // Just log the error
+    }
+  }
+
   return recordData;
 }
 
