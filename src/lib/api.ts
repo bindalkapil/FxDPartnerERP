@@ -1323,10 +1323,31 @@ export async function getPayments() {
   return data;
 }
 
-export async function createPayment(payment: Tables['payments']['Insert']) {
+export async function createPayment(payment: Tables['payments']['Insert'], proofFile?: File) {
+  // Upload proof file if provided
+  let proofAttachmentUrl = null;
+  let proofAttachmentName = null;
+  
+  if (proofFile) {
+    try {
+      proofAttachmentUrl = await uploadPaymentProof(proofFile);
+      proofAttachmentName = proofFile.name;
+    } catch (error) {
+      console.warn('Failed to upload payment proof:', error);
+      // Continue without proof attachment rather than failing the entire payment
+    }
+  }
+
+  // Add proof attachment fields to payment data
+  const paymentData = {
+    ...payment,
+    proof_attachment_url: proofAttachmentUrl,
+    proof_attachment_name: proofAttachmentName
+  };
+
   const { data, error } = await supabase
     .from('payments')
-    .insert(payment)
+    .insert(paymentData)
     .select()
     .single();
   

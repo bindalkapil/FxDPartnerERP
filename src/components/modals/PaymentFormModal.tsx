@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, CreditCard, User, Calendar, FileText, DollarSign, Building, Receipt } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { createPayment, getCustomers, getSuppliers, getSalesOrders, getPurchaseRecords } from '../../lib/api';
+import FileUploadComponent from '../ui/FileUploadComponent';
 
 interface PaymentFormModalProps {
   isOpen: boolean;
@@ -58,6 +59,7 @@ const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
     status: 'completed',
     notes: ''
   });
+  const [proofFile, setProofFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -99,6 +101,7 @@ const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
       status: 'completed',
       notes: ''
     });
+    setProofFile(null);
   };
 
   const getModalTitle = () => {
@@ -279,7 +282,7 @@ const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
         notes: formData.notes || null
       };
 
-      await createPayment(paymentData);
+      await createPayment(paymentData, proofFile || undefined);
       
       toast.success(`${getModalTitle()} recorded successfully!`);
       onSave();
@@ -433,16 +436,35 @@ const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
                       </label>
                       <select
                         value={formData.mode}
-                        onChange={(e) => setFormData(prev => ({ ...prev, mode: e.target.value }))}
+                        onChange={(e) => {
+                          const newMode = e.target.value;
+                          setFormData(prev => ({ ...prev, mode: newMode }));
+                          // Clear proof file when switching to cash (except for expenses)
+                          if (newMode === 'cash' && paymentType !== 'expense') {
+                            setProofFile(null);
+                          }
+                        }}
                         className="block w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500"
                       >
                         <option value="cash">Cash</option>
                         <option value="bank_transfer">Bank Transfer</option>
                         <option value="upi">UPI</option>
                         <option value="cheque">Cheque</option>
-                        <option value="credit">Credit</option>
                       </select>
                     </div>
+
+                    {/* Attach Proof/Invoice - Only show for non-cash payments or expenses */}
+                    {(formData.mode !== 'cash' || paymentType === 'expense') && (
+                      <FileUploadComponent
+                        onFileSelect={(file) => setProofFile(file)}
+                        onFileRemove={() => setProofFile(null)}
+                        selectedFile={proofFile}
+                        accept="image/*,.pdf"
+                        maxSize={5}
+                        label={paymentType === 'expense' ? "Attach Invoice" : "Attach Payment Proof"}
+                        required={false}
+                      />
+                    )}
 
                     {/* Status */}
                     <div>

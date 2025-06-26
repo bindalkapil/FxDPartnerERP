@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Search, Filter, Plus, FileText, Trash2, Eye, TrendingUp, TrendingDown, DollarSign, Receipt, ChevronDown } from 'lucide-react';
+import { CreditCard, Search, Filter, Plus, FileText, Trash2, Eye, TrendingUp, TrendingDown, DollarSign, Receipt, ChevronDown, Paperclip } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getPayments, deletePayment } from '../../lib/api';
 import PaymentFormModal from '../../components/modals/PaymentFormModal';
@@ -18,6 +18,8 @@ interface Payment {
   mode: string;
   status: string;
   notes: string | null;
+  proof_attachment_url?: string | null;
+  proof_attachment_name?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -145,8 +147,6 @@ const Payments: React.FC = () => {
         return 'Cash';
       case 'cheque':
         return 'Cheque';
-      case 'credit':
-        return 'Credit';
       default:
         return mode.charAt(0).toUpperCase() + mode.slice(1);
     }
@@ -402,8 +402,15 @@ const Payments: React.FC = () => {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {getModeDisplay(payment.mode)}
+                    <div className="flex items-center space-x-2">
+                      <div className="text-sm text-gray-900">
+                        {getModeDisplay(payment.mode)}
+                      </div>
+                      {payment.proof_attachment_url && (
+                        <div title={`Proof attached: ${payment.proof_attachment_name || 'File'}`}>
+                          <Paperclip className="h-3 w-3 text-gray-500" />
+                        </div>
+                      )}
                     </div>
                     <span className={`inline-flex px-2 text-xs leading-5 font-semibold rounded-full ${getStatusColor(payment.status)}`}>
                       {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
